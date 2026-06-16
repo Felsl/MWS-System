@@ -128,14 +128,7 @@ CREATE TABLE customers (
     deleted_at TIMESTAMP NULL DEFAULT NULL
 ) ENGINE=InnoDB;
 
--- [ĐIỂM 3] Đã GIỮ LẠI bảng carriers để phục vụ luồng Shipments tích hợp cho cả SO và Transfer Orders
-CREATE TABLE carriers (
-    id VARCHAR(20) PRIMARY KEY,
-    code VARCHAR(50) UNIQUE NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    shipping_fee_rule TEXT, -- Lưu cấu hình JSON định mức tính phí ship
-    status VARCHAR(20) DEFAULT 'ACTIVE'
-) ENGINE=InnoDB;
+
 
 -- =========================================================================
 -- PHÂN HỆ 2: TÀI KHOẢN & PHÂN QUYỀN HỖN HỢP (USER, ROLE & PERMISSIONS)
@@ -369,6 +362,14 @@ CREATE TABLE transfer_orders (
     CONSTRAINT chk_diff_warehouse CHECK (from_warehouse_id <> to_warehouse_id)
 ) ENGINE=InnoDB;
 
+-- [ĐIỂM 3] Đã GIỮ LẠI bảng carriers để phục vụ luồng Shipments tích hợp cho cả SO và Transfer Orders
+CREATE TABLE carriers (
+    id VARCHAR(20) PRIMARY KEY,
+    code VARCHAR(50) UNIQUE NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    shipping_fee_rule TEXT, -- Lưu cấu hình JSON định mức tính phí ship
+    status VARCHAR(20) DEFAULT 'ACTIVE'
+) ENGINE=InnoDB;
 -- [ĐIỂM 3] Đã giữ lại và cấu hình bảng Shipments làm trung tâm quản lý giao vận 
 -- Kiện hàng xuất đi chặng ngoài cho cả 2 chứng từ gốc: SALES_ORDER và TRANSFER_ORDER
 CREATE TABLE shipments (

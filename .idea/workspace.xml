@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="171ee5f9-9f87-41c7-b7aa-8fb100f28d35" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/ports/IIdGenerator.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/ports/IPasswordHasher.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/ports/ITokenProvider.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/auth/GetCurrentUserUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/auth/LoginUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/permission/CreatePermissionUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/permission/DeletePermissionUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/permission/GetAllPermissionsUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/permission/UpdatePermissionUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/role/AssignPermissionsToRoleUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/role/CreateRoleUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/role/DeleteRoleUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/role/GetAllRolesUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/role/GetRoleByIdUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/role/UpdateRoleUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/user/AssignWarehouseAccessUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/user/CreateUserUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/user/DeleteUserUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/user/GetAllUsersUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/user/GetUserByIdUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/user/GetUserWarehouseAccessUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/user/UpdateUserUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/warehouse/BulkGenerateBinLocationsUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/warehouse/CreateWarehouseUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/warehouse/DeleteBinLocationUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/warehouse/DeleteWarehouseUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/warehouse/GetAllWarehousesAdminUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/warehouse/GetAllWarehousesUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/warehouse/GetBinLocationsByWarehouseUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/warehouse/GetWarehouseByIdUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/warehouse/UpdateWarehouseUseCase.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/model/BinLocation.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/model/Permission.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/model/Role.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/model/User.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/model/Warehouse.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/repository/IBinLocationRepository.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/repository/IPermissionRepository.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/repository/IRoleRepository.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/repository/IUserRepository.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/repository/IUserWarehouseAccessRepository.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/repository/IWarehouseRepository.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/service/PermissionDomainService.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/service/RoleDomainService.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/service/UserDomainService.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/service/WarehouseDomainService.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/config/AopConfig.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/config/CacheConfig.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/config/DomainServiceConfig.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/config/JwtConfig.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/config/SecurityConfig.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/entity/BinLocationDbEntity.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/entity/PermissionDbEntity.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/entity/RoleDbEntity.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/entity/RolePermissionDbEntity.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/entity/UserDbEntity.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/entity/UserWarehouseAccessDbEntity.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/entity/WarehouseDbEntity.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/mapper/BinLocationInfraMapper.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/mapper/PermissionInfraMapper.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/mapper/RoleInfraMapper.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/mapper/UserInfraMapper.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/mapper/WarehouseInfraMapper.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/binlocation/BinLocationRepositoryImpl.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/binlocation/JpaBinLocationRepository.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/permission/PermissionJpaRepository.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/permission/PermissionRepositoryImpl.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/role/JpaRolePermissionRepository.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/role/RoleJpaRepository.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/role/RoleRepositoryImpl.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/user/UserJpaRepository.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/user/UserRepositoryImpl.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/warehouse/JpaWarehouseRepository.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/warehouse/UserWarehouseJpaRepository.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/warehouse/UserWarehouseRepositoryImpl.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/warehouse/WarehouseRepositoryImpl.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/security/BCryptPasswordHasherAdapter.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/security/CustomUserDetailsService.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/security/JwtAuthenticationFilter.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/security/JwtTokenProvider.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/security/UserPrincipal.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/security/scope/WarehouseScopeAspect.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/security/scope/WarehouseScopeContext.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/security/scope/WarehouseScoped.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/service/IdGeneratorService.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/service/UlidIdGenerator.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/auth/LoginRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/permission/AssignPermissionsRequestDTO.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/permission/CreatePermissionRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/permission/UpdatePermissionRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/role/AssignPermissionRequestDTO.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/role/AssignPermissionsRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/role/CreateRoleRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/role/UpdateRoleRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/user/AssignWarehouseRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/user/ChangePasswordRequestDTO.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/user/CreateUserRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/user/UpdateUserRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/warehouse/AssignWarehouseRequestDTO.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/warehouse/BulkGenerateBinRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/warehouse/CreateWarehouseRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/warehouse/UpdateWarehouseRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/ErrorResponse.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/auth/AuthResponseDTO.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/auth/LoginResponse.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/permission/PermissionResponse.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/role/RoleResponse.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/user/UserResponse.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/warehouse/BinLocationResponse.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/warehouse/BulkGenerateResultResponse.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/warehouse/UserWarehouseResponseDTO.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/warehouse/WarehouseResponse.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/mapper/AuthWebMapper.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/mapper/PermissionWebMapper.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/mapper/RoleWebMapper.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/mapper/UserWebMapper.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/mapper/WarehouseWebMapper.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/AuthController.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/PermissionController.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/RoleController.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/UserController.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/WarehouseAccessController.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/WarehouseController.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/exception/BusinessException.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/exception/DuplicateResourceException.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/exception/ErrorResponse.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/exception/GlobalExceptionHandler.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/exception/ResourceNotFoundException.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/db/demo.sql" beforeDir="false" afterPath="$PROJECT_DIR$/db/demo.sql" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Class" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="MavenImportPreferences">
+    <option name="generalSettings">
+      <MavenGeneralSettings>
+        <option name="mavenHomeTypeForPersistence" value="WRAPPER" />
+      </MavenGeneralSettings>
+    </option>
+  </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 4,
+  "fromUser": false
+}]]></component>
+  <component name="ProjectId" id="3Eu4PUkBMXuyOawA75Nsn8dCHJp" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Maven.mws [clean].executor": "Run",
+    "Maven.mws [compile].executor": "Run",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "Spring Boot.MWS.executor": "Run",
+    "codeWithMe.voiceChat.enabledByDefault": "false",
+    "git-widget-placeholder": "main",
+    "kotlin-language-version-configured": "true",
+    "last_opened_file_path": "D:/MWS system/backend/src/main/java/org/lvtn/mws/interfaces/rest",
+    "node.js.detected.package.eslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm"
+  }
+}]]></component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="D:\MWS system\backend\src\main\java\org\lvtn\mws\interfaces\rest" />
+      <recent name="D:\MWS system\backend\src\main\java\org\lvtn\mws\interfaces" />
+      <recent name="D:\MWS system\backend\src\main\java\org\lvtn\mws\infrastructure" />
+      <recent name="D:\MWS system\backend\src\main\java\org\lvtn\mws\domain" />
+      <recent name="D:\MWS system\backend\src\main\java\org\lvtn\mws\application\usecase\warehouse" />
+    </key>
+  </component>
+  <component name="RunManager">
+    <configuration name="MWS" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+      <module name="mws" />
+      <option name="SPRING_BOOT_MAIN_CLASS" value="org.lvtn.mws.MwsApplication" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="171ee5f9-9f87-41c7-b7aa-8fb100f28d35" name="Changes" comment="" />
+      <created>1781015097906</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1781015097906</updated>
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+</project>
