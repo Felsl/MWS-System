@@ -52,4 +52,65 @@ public class DomainServiceConfig {
             IProductRepository productRepository) {
         return new InventoryDomainService(inventoryRepository, batchRepository, productRepository);
     }
+
+    // ── Module Sales Order / Picking / Shipment ──────────────────────────────
+
+    @Bean
+    public SalesOrderDomainService salesOrderDomainService(
+            ISalesOrderRepository salesOrderRepository,
+            IInventoryRepository inventoryRepository,
+            IIdGenerator idGenerator,
+            ISalesOrderNumberGenerator salesOrderNumberGenerator) {
+        return new SalesOrderDomainService(
+                salesOrderRepository, inventoryRepository, idGenerator, salesOrderNumberGenerator);
+    }
+
+    @Bean
+    public PickingDomainService pickingDomainService(
+            IPickingListRepository pickingListRepository,
+            ISalesOrderRepository salesOrderRepository,
+            IInventoryBatchRepository inventoryBatchRepository,
+            IStockMovementRepository stockMovementRepository,
+            IIdGenerator idGenerator) {
+        return new PickingDomainService(
+                pickingListRepository, salesOrderRepository, inventoryBatchRepository,
+                stockMovementRepository, idGenerator);
+    }
+
+    @Bean
+    public ShipmentDomainService shipmentDomainService(
+            IShipmentRepository shipmentRepository,
+            ISalesOrderRepository salesOrderRepository,
+            IPickingListRepository pickingListRepository,
+            IIdGenerator idGenerator,
+            IShipmentNumberGenerator shipmentNumberGenerator) {
+        return new ShipmentDomainService(
+                shipmentRepository, salesOrderRepository, pickingListRepository,
+                idGenerator, shipmentNumberGenerator);
+    }
+
+    @Bean
+    public PurchaseOrderDomainService purchaseOrderDomainService(
+            IPurchaseOrderRepository poRepository,
+            IPurchaseOrderDetailRepository poDetailRepository,
+            IIdGenerator idGenerator) {
+        return new PurchaseOrderDomainService(poRepository, poDetailRepository, idGenerator);
+    }
+
+    @Bean
+    public GoodsReceiptDomainService goodsReceiptDomainService(
+            IGoodsReceiptRepository grnRepository,
+            IGoodsReceiptDetailRepository grnDetailRepository,
+            IPurchaseOrderRepository poRepository,
+            IPurchaseOrderDetailRepository poDetailRepository,
+            IStockMovementRepository stockMovementRepository,
+            InventoryDomainService inventoryDomainService,
+            IInventoryRepository inventoryRepository,
+            IInventoryBatchRepository batchRepository,
+            IIdGenerator idGenerator) {
+        return new GoodsReceiptDomainService(
+                grnRepository, grnDetailRepository, poRepository, poDetailRepository,
+                stockMovementRepository, inventoryDomainService, inventoryRepository,
+                batchRepository, idGenerator);
+    }
 }

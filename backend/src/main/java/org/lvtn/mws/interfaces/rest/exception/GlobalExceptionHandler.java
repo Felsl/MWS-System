@@ -1,9 +1,6 @@
 package org.lvtn.mws.interfaces.rest.exception;
 
-import lombok.extern.slf4j.Slf4j;
-import org.lvtn.mws.domain.model.InsufficientStockException;
 import org.lvtn.mws.interfaces.dto.response.ErrorResponse;
-import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -13,105 +10,53 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.stream.Collectors;
 
-@Slf4j
+/**
+ * Translates exceptions raised by the inbound module into consistent HTTP responses.
+ *   - IllegalArgumentException / IllegalStateException -> 400 (business rule violations,
+ *     e.g. over-receiving, receiving against a non-APPROVED PO)
+ *   - MethodArgumentNotValidException                 -> 400 (request validation)
+ *   - AccessDeniedException                           -> 403 (missing INBOUND_APPROVE_PO)
+ *   - any other Exception                             -> 500
+ */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     @ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
-    public ResponseEntity<ErrorResponse> handleBusinessExceptions(RuntimeException ex) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
-                ErrorResponse.builder()
-                        .timestamp(LocalDateTime.now())
-                        .status(HttpStatus.BAD_REQUEST.value())
-                        .error(HttpStatus.BAD_REQUEST.getReasonPhrase())
-                        .message(ex.getMessage())
-                        .build());
-    }
-
-    @ExceptionHandler(InsufficientStockException.class)
-    public ResponseEntity<ErrorResponse> handleInsufficientStock(InsufficientStockException ex) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(
-                ErrorResponse.builder()
-                        .timestamp(LocalDateTime.now())
-                        .status(HttpStatus.CONFLICT.value())
-                        .error(HttpStatus.CONFLICT.getReasonPhrase())
-                        .message(ex.getMessage())
-                        .build());
-    }
-
-    /**
-     * Optimistic locking: after 3 retries still fails → return 409 Conflict.
-     */
-    @ExceptionHandler(OptimisticLockingFailureException.class)
-    public ResponseEntity<ErrorResponse> handleOptimisticLocking(OptimisticLockingFailureException ex) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(
-                ErrorResponse.builder()
-                        .timestamp(LocalDateTime.now())
-                        .status(HttpStatus.CONFLICT.value())
-                        .error(HttpStatus.CONFLICT.getReasonPhrase())
-                        .message("Dữ liệu tồn kho vừa được cập nhật bởi một giao dịch khác. Vui lòng thử lại.")
-                        .build());
-    }
-
-    @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<ErrorResponse> handleRuntimeException(RuntimeException ex) {
-        if (ex.getMessage() != null && ex.getMessage().contains("not found")) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(
-                    ErrorResponse.builder()
-                            .timestamp(LocalDateTime.now())
-                            .status(HttpStatus.NOT_FOUND.value())
-                            .error(HttpStatus.NOT_FOUND.getReasonPhrase())
-                            .message(ex.getMessage())
-                            .build());
-        }
-        log.error("Unhandled RuntimeException: ", ex);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
-                ErrorResponse.builder()
-                        .timestamp(LocalDateTime.now())
-                        .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
-                        .error(HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase())
-                        .message("Internal server error")
-                        .build());
+    public ResponseEntity<ErrorResponse> handleBusinessRule(RuntimeException ex) {
+        return build(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex) {
-        Map<String, String> errors = new HashMap<>();
-        for (FieldError error : ex.getBindingResult().getFieldErrors()) {
-            errors.put(error.getField(), error.getDefaultMessage());
-        }
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
-                ErrorResponse.builder()
-                        .timestamp(LocalDateTime.now())
-                        .status(HttpStatus.BAD_REQUEST.value())
-                        .error("Validation Error")
-                        .message("Invalid input: " + errors)
-                        .build());
+    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
+        String message = ex.getBindingResult().getFieldErrors().stream()
+                .map(this::formatFieldError)
+                .collect(Collectors.joining("; "));
+        return build(HttpStatus.BAD_REQUEST, message);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ErrorResponse> handleAccessDeniedException(AccessDeniedException ex) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(
-                ErrorResponse.builder()
-                        .timestamp(LocalDateTime.now())
-                        .status(HttpStatus.FORBIDDEN.value())
-                        .error(HttpStatus.FORBIDDEN.getReasonPhrase())
-                        .message("Access denied")
-                        .build());
+    public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex) {
+        return build(HttpStatus.FORBIDDEN, "Bạn không có quyền thực hiện thao tác này");
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGlobalException(Exception ex) {
-        log.error("Unexpected error: ", ex);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
-                ErrorResponse.builder()
-                        .timestamp(LocalDateTime.now())
-                        .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
-                        .error(HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase())
-                        .message("An unexpected error occurred")
-                        .build());
+    public ResponseEntity<ErrorResponse> handleUnexpected(Exception ex) {
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, "Đã xảy ra lỗi hệ thống");
+    }
+
+    private String formatFieldError(FieldError error) {
+        return error.getField() + ": " + error.getDefaultMessage();
+    }
+
+    private ResponseEntity<ErrorResponse> build(HttpStatus status, String message) {
+        ErrorResponse body = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(status.value())
+                .error(status.getReasonPhrase())
+                .message(message)
+                .build();
+        return ResponseEntity.status(status).body(body);
     }
 }
