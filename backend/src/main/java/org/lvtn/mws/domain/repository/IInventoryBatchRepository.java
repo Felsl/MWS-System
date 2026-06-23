@@ -1,7 +1,6 @@
 package org.lvtn.mws.domain.repository;
 
 import org.lvtn.mws.domain.model.InventoryBatch;
-import org.lvtn.mws.domain.model.InventoryBatch.Status;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -18,5 +17,9 @@ public interface IInventoryBatchRepository {
     List<InventoryBatch> findExpiredActiveBatches(LocalDate today);
 
     List<InventoryBatch> findByProductIdAndWarehouseId(String productId, String warehouseId);
+
+    /** [GIAI ĐOẠN 6] Toàn bộ lô của một kho — phục vụ chụp ảnh tồn (snapshot) khi bắt đầu kiểm kê. */
+    List<InventoryBatch> findByWarehouseId(String warehouseId);
+
     void saveAll(List<InventoryBatch> batches);
 }

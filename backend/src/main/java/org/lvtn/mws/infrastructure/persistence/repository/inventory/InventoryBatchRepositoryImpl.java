@@ -51,6 +51,12 @@ public class InventoryBatchRepositoryImpl implements IInventoryBatchRepository {
     }
 
     @Override
+    public List<InventoryBatch> findByWarehouseId(String warehouseId) {
+        return jpa.findByWarehouseId(warehouseId).stream()
+                .map(mapper::toDomain).collect(Collectors.toList());
+    }
+
+    @Override
     public void saveAll(List<InventoryBatch> batches) {
         jpa.saveAll(batches.stream().map(mapper::toEntity).collect(Collectors.toList()));
     }

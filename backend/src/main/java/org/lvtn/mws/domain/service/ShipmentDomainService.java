@@ -9,6 +9,8 @@ import org.lvtn.mws.domain.repository.ISalesOrderRepository;
 import org.lvtn.mws.domain.repository.IShipmentNumberGenerator;
 import org.lvtn.mws.domain.repository.IShipmentRepository;
 
+import java.util.List;
+
 /**
  * Nghiệp vụ Vận đơn (luồng Sales Order). Thuần Java.
  * Việc khấu trừ tồn kho vật lý + ghi thẻ kho được thực hiện bởi listener của
@@ -77,6 +79,11 @@ public class ShipmentDomainService {
         Shipment s = getById(shipmentId);
         s.deliver();
         return shipmentRepository.save(s);
+    }
+
+    /** Danh sách toàn bộ vận đơn (đọc). */
+    public List<Shipment> findAll() {
+        return shipmentRepository.findAll();
     }
 
     public Shipment getById(String id) {

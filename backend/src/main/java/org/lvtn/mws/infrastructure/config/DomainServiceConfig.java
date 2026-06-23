@@ -87,30 +87,32 @@ public class DomainServiceConfig {
         return new ShipmentDomainService(
                 shipmentRepository, salesOrderRepository, pickingListRepository,
                 idGenerator, shipmentNumberGenerator);
-    }
+    }    // ── Giai đoạn 6: Kiểm kê & Điều chỉnh ────────────────────────────────────
 
     @Bean
-    public PurchaseOrderDomainService purchaseOrderDomainService(
-            IPurchaseOrderRepository poRepository,
-            IPurchaseOrderDetailRepository poDetailRepository,
+    public StocktakeDomainService stocktakeDomainService(
+            IStocktakeSessionRepository stocktakeSessionRepository,
+            IStocktakeDetailRepository stocktakeDetailRepository,
+            IInventoryBatchRepository inventoryBatchRepository,
             IIdGenerator idGenerator) {
-        return new PurchaseOrderDomainService(poRepository, poDetailRepository, idGenerator);
+        return new StocktakeDomainService(
+                stocktakeSessionRepository, stocktakeDetailRepository,
+                inventoryBatchRepository, idGenerator);
     }
 
     @Bean
-    public GoodsReceiptDomainService goodsReceiptDomainService(
-            IGoodsReceiptRepository grnRepository,
-            IGoodsReceiptDetailRepository grnDetailRepository,
-            IPurchaseOrderRepository poRepository,
-            IPurchaseOrderDetailRepository poDetailRepository,
-            IStockMovementRepository stockMovementRepository,
-            InventoryDomainService inventoryDomainService,
+    public AdjustmentDomainService adjustmentDomainService(
+            IAdjustmentVoucherRepository adjustmentVoucherRepository,
+            IStocktakeSessionRepository stocktakeSessionRepository,
+            IStocktakeDetailRepository stocktakeDetailRepository,
             IInventoryRepository inventoryRepository,
-            IInventoryBatchRepository batchRepository,
-            IIdGenerator idGenerator) {
-        return new GoodsReceiptDomainService(
-                grnRepository, grnDetailRepository, poRepository, poDetailRepository,
-                stockMovementRepository, inventoryDomainService, inventoryRepository,
-                batchRepository, idGenerator);
+            IInventoryBatchRepository inventoryBatchRepository,
+            IStockMovementRepository stockMovementRepository,
+            IIdGenerator idGenerator,
+            IAdjustmentVoucherNumberGenerator adjustmentVoucherNumberGenerator) {
+        return new AdjustmentDomainService(
+                adjustmentVoucherRepository, stocktakeSessionRepository, stocktakeDetailRepository,
+                inventoryRepository, inventoryBatchRepository, stockMovementRepository,
+                idGenerator, adjustmentVoucherNumberGenerator);
     }
 }

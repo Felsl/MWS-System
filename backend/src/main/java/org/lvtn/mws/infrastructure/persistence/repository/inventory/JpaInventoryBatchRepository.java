@@ -1,7 +1,6 @@
 package org.lvtn.mws.infrastructure.persistence.repository.inventory;
 
 import org.lvtn.mws.infrastructure.persistence.entity.InventoryBatchEntity;
-import org.lvtn.mws.domain.model.InventoryBatch.Status;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -28,4 +27,7 @@ public interface JpaInventoryBatchRepository extends JpaRepository<InventoryBatc
     List<InventoryBatchEntity> findExpiredActiveBatches(@Param("today") LocalDate today);
 
     List<InventoryBatchEntity> findByProductIdAndWarehouseId(String productId, String warehouseId);
+
+    /** [GIAI ĐOẠN 6] Toàn bộ lô của một kho — chụp ảnh tồn khi bắt đầu kiểm kê. */
+    List<InventoryBatchEntity> findByWarehouseId(String warehouseId);
 }

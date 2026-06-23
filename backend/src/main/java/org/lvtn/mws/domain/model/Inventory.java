@@ -32,18 +32,36 @@ public class Inventory {
 
     // ── Business behaviour ───────────────────────────────────────────────────
 
-    /**
-     * Increase quantity (on goods receipt).
-     */
+    /** Increase quantity (on goods receipt). */
     public void addStock(int qty) {
         if (qty <= 0) throw new IllegalArgumentException("Số lượng nhập phải lớn hơn 0");
         this.quantity += qty;
     }
 
     /**
-     * Reserve stock for a pending SO / Transfer Order.
-     * Throws InsufficientStockException if available stock < qty.
+     * [GIAI ĐOẠN 6] Tăng tồn tổng do điều chỉnh kiểm kê (thừa hàng).
+     * Tách riêng addStock để rõ ngữ nghĩa "điều chỉnh".
      */
+    public void increaseQuantity(int qty) {
+        if (qty <= 0) throw new IllegalArgumentException("Số lượng điều chỉnh tăng phải lớn hơn 0");
+        this.quantity += qty;
+    }
+
+    /**
+     * [GIAI ĐOẠN 6] Giảm tồn tổng do điều chỉnh kiểm kê (thiếu hàng).
+     * Chỉ chạm 'quantity', không đụng 'reservedQuantity'; đảm bảo quantity - qty >= reserved
+     * để không vi phạm ràng buộc chk_inv_logical (quantity >= reserved_quantity).
+     */
+    public void decreaseQuantity(int qty) {
+        if (qty <= 0) throw new IllegalArgumentException("Số lượng điều chỉnh giảm phải lớn hơn 0");
+        if (this.quantity - qty < this.reservedQuantity) {
+            throw new IllegalStateException(
+                    "Không thể giảm tồn xuống dưới phần đang giữ chỗ (reserved=" + reservedQuantity
+                            + ", quantity=" + quantity + ", giảm=" + qty + ")");
+        }
+        this.quantity -= qty;
+    }
+
     public void reserve(int qty) {
         if (qty <= 0) throw new IllegalArgumentException("Số lượng giữ chỗ phải lớn hơn 0");
         if (availableQuantity() < qty) {
@@ -53,9 +71,6 @@ public class Inventory {
         this.reservedQuantity += qty;
     }
 
-    /**
-     * Release previously reserved stock (order cancelled / rejected).
-     */
     public void release(int qty) {
         if (qty <= 0) throw new IllegalArgumentException("Số lượng giải phóng phải lớn hơn 0");
         if (this.reservedQuantity < qty) {
@@ -64,10 +79,6 @@ public class Inventory {
         this.reservedQuantity -= qty;
     }
 
-    /**
-     * Commit physical deduction (goods actually leave warehouse).
-     * Decreases both quantity and reservedQuantity simultaneously.
-     */
     public void commitDeduction(int qty) {
         if (qty <= 0) throw new IllegalArgumentException("Số lượng xuất phải lớn hơn 0");
         if (this.quantity < qty) {
@@ -84,8 +95,6 @@ public class Inventory {
     public int availableQuantity() {
         return this.quantity - this.reservedQuantity;
     }
-
-    // ── Getters ──────────────────────────────────────────────────────────────
 
     public String getProductId()       { return productId; }
     public String getWarehouseId()     { return warehouseId; }

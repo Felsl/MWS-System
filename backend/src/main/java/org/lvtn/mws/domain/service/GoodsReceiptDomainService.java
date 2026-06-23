@@ -3,6 +3,7 @@ package org.lvtn.mws.domain.service;
 import org.lvtn.mws.domain.model.GoodsReceipt;
 import org.lvtn.mws.domain.model.GoodsReceiptDetail;
 import org.lvtn.mws.domain.model.GoodsReceiptLineCommand;
+import org.lvtn.mws.domain.model.Inventory;
 import org.lvtn.mws.domain.model.InventoryBatch;
 import org.lvtn.mws.domain.model.PurchaseOrder;
 import org.lvtn.mws.domain.model.PurchaseOrderDetail;
@@ -165,7 +166,12 @@ public class GoodsReceiptDomainService {
             if (!exists) {
                 inventoryDomainService.initInventory(detail.getProductId(), grn.getWarehouseId());
             }
+            // [GIAI ĐOẠN 6] chụp tồn tổng trước/sau để ghi thẻ kho khớp DDL stock_movements.
+            int quantityBefore = inventoryRepository
+                    .findByProductIdAndWarehouseId(detail.getProductId(), grn.getWarehouseId())
+                    .map(Inventory::getQuantity).orElse(0);
             inventoryDomainService.addStock(detail.getProductId(), grn.getWarehouseId(), detail.getQuantity());
+            int quantityAfter = quantityBefore + detail.getQuantity();
 
             // 3) Upsert physical batch at the bin (uq_product_batch_location).
             String batchId = upsertBatch(detail, grn.getWarehouseId());
@@ -175,12 +181,15 @@ public class GoodsReceiptDomainService {
                     .id(idGenerator.generate())
                     .productId(detail.getProductId())
                     .warehouseId(grn.getWarehouseId())
-                    .binLocationId(detail.getBinLocationId())
                     .batchId(batchId)
                     .movementType(StockMovement.MovementType.IN)
-                    .quantity(detail.getQuantity())
-                    .referenceType(StockMovement.ReferenceType.GOODS_RECEIPT)
+                    .quantityChange(detail.getQuantity())
+                    .quantityBefore(quantityBefore)
+                    .quantityAfter(quantityAfter)
+                    .referenceType("GOODS_RECEIPT")
                     .referenceId(grn.getId())
+                    .note("Nhập kho từ phiếu " + grn.getGrnNumber())
+                    .createdBy(grn.getReceivedBy())
                     .build();
             stockMovementRepository.save(movement);
         }

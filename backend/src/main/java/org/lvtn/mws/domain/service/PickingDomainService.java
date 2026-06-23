@@ -225,6 +225,11 @@ public class PickingDomainService {
         return pickingRepository.save(pl);
     }
 
+    /** Danh sách toàn bộ lệnh gom hàng (đọc). */
+    public List<PickingList> findAll() {
+        return pickingRepository.findAll();
+    }
+
     public PickingList getById(String id) {
         return pickingRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy lệnh gom hàng: " + id));

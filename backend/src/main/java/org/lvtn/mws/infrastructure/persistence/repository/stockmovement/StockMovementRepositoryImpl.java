@@ -2,7 +2,6 @@ package org.lvtn.mws.infrastructure.persistence.repository.stockmovement;
 
 import lombok.RequiredArgsConstructor;
 import org.lvtn.mws.domain.model.StockMovement;
-import org.lvtn.mws.domain.model.StockMovement.ReferenceType;
 import org.lvtn.mws.domain.repository.IStockMovementRepository;
 import org.lvtn.mws.infrastructure.persistence.mapper.StockMovementInfraMapper;
 import org.springframework.stereotype.Repository;
@@ -23,7 +22,13 @@ public class StockMovementRepositoryImpl implements IStockMovementRepository {
 
     @Override
     public List<StockMovement> findByReference(String referenceType, String referenceId) {
-        return jpa.findByReferenceTypeAndReferenceId(ReferenceType.valueOf(referenceType), referenceId)
+        return jpa.findByReferenceTypeAndReferenceId(referenceType, referenceId)
+                .stream().map(mapper::toDomain).toList();
+    }
+
+    @Override
+    public List<StockMovement> findByProductId(String productId) {
+        return jpa.findByProductIdOrderByCreatedAtDesc(productId)
                 .stream().map(mapper::toDomain).toList();
     }
 }
