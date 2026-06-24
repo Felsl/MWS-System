@@ -7,7 +7,6 @@ import org.lvtn.mws.domain.repository.IInventoryBatchRepository;
 import org.lvtn.mws.domain.repository.IInventoryRepository;
 import org.lvtn.mws.domain.repository.IPurchaseOrderDetailRepository;
 import org.lvtn.mws.domain.repository.IPurchaseOrderRepository;
-import org.lvtn.mws.domain.repository.IStockMovementRepository;
 import org.lvtn.mws.domain.service.GoodsReceiptDomainService;
 import org.lvtn.mws.domain.service.InventoryDomainService;
 import org.lvtn.mws.domain.service.PurchaseOrderDomainService;
@@ -36,14 +35,13 @@ public class InboundDomainServiceConfig {
             IGoodsReceiptDetailRepository grnDetailRepository,
             IPurchaseOrderRepository poRepository,
             IPurchaseOrderDetailRepository poDetailRepository,
-            IStockMovementRepository stockMovementRepository,
             InventoryDomainService inventoryDomainService,
             IInventoryRepository inventoryRepository,
             IInventoryBatchRepository batchRepository,
             IIdGenerator idGenerator) {
         return new GoodsReceiptDomainService(
                 grnRepository, grnDetailRepository, poRepository, poDetailRepository,
-                stockMovementRepository, inventoryDomainService, inventoryRepository,
+                inventoryDomainService, inventoryRepository,
                 batchRepository, idGenerator);
     }
 }

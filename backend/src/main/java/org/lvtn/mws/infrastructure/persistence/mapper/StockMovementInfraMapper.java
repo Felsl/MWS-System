@@ -18,6 +18,7 @@ public interface StockMovementInfraMapper {
         e.setProductId(m.getProductId());
         e.setWarehouseId(m.getWarehouseId());
         e.setBatchId(m.getBatchId());
+        e.setBinLocationId(m.getBinLocationId());
         e.setMovementType(m.getMovementType());
         e.setQuantityChange(m.getQuantityChange());
         e.setQuantityBefore(m.getQuantityBefore());
@@ -37,6 +38,7 @@ public interface StockMovementInfraMapper {
                 .productId(e.getProductId())
                 .warehouseId(e.getWarehouseId())
                 .batchId(e.getBatchId())
+                .binLocationId(e.getBinLocationId())
                 .movementType(e.getMovementType())
                 .quantityChange(e.getQuantityChange())
                 .quantityBefore(e.getQuantityBefore())

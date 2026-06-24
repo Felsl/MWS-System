@@ -168,6 +168,7 @@ public class PickingDomainService {
         // (2) Ghi thẻ kho ADJUST cho phần lệch
         StockMovement adjust = StockMovement.adjustmentForShortPick(
                 idGenerator.generate(), productId, scanned.getWarehouseId(), scanned.getId(),
+                scanned.getBinLocationId(),
                 shortfall, scanned.getQuantity(), pl.getId(), reason, confirmedBy);
         stockMovementRepository.save(adjust);
 

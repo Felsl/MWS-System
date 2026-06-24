@@ -26,6 +26,15 @@ public interface JpaInventoryBatchRepository extends JpaRepository<InventoryBatc
            "WHERE b.status = 'ACTIVE' AND b.expiryDate < :today")
     List<InventoryBatchEntity> findExpiredActiveBatches(@Param("today") LocalDate today);
 
+    /** [GIAI ĐOẠN 7] Lô ACTIVE còn hàng, SẮP hết hạn: today <= expiry_date <= threshold. */
+    @Query("SELECT b FROM InventoryBatchEntity b " +
+           "WHERE b.status = 'ACTIVE' AND b.quantity > 0 " +
+           "  AND b.expiryDate IS NOT NULL " +
+           "  AND b.expiryDate >= :today AND b.expiryDate <= :threshold " +
+           "ORDER BY b.expiryDate ASC")
+    List<InventoryBatchEntity> findNearExpiryActiveBatches(@Param("today") LocalDate today,
+                                                           @Param("threshold") LocalDate threshold);
+
     List<InventoryBatchEntity> findByProductIdAndWarehouseId(String productId, String warehouseId);
 
     /** [GIAI ĐOẠN 6] Toàn bộ lô của một kho — chụp ảnh tồn khi bắt đầu kiểm kê. */

@@ -11,4 +11,5 @@ import java.util.List;
 public interface JpaStockMovementRepository extends JpaRepository<StockMovementEntity, String> {
     List<StockMovementEntity> findByReferenceTypeAndReferenceId(String referenceType, String referenceId);
     List<StockMovementEntity> findByProductIdOrderByCreatedAtDesc(String productId);
+    List<StockMovementEntity> findByProductIdAndWarehouseIdOrderByCreatedAtDesc(String productId, String warehouseId);
 }

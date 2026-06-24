@@ -2,6 +2,7 @@ package org.lvtn.mws.infrastructure.event;
 
 import lombok.RequiredArgsConstructor;
 import org.lvtn.mws.application.event.ShipmentShippedEvent;
+import org.lvtn.mws.application.event.StockMovementEvent;
 import org.lvtn.mws.domain.model.Inventory;
 import org.lvtn.mws.domain.model.InventoryBatch;
 import org.lvtn.mws.domain.model.PickingList;
@@ -13,20 +14,20 @@ import org.lvtn.mws.domain.repository.IInventoryBatchRepository;
 import org.lvtn.mws.domain.repository.IInventoryRepository;
 import org.lvtn.mws.domain.repository.IPickingListRepository;
 import org.lvtn.mws.domain.repository.ISalesOrderRepository;
-import org.lvtn.mws.domain.repository.IStockMovementRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /**
- * COMMIT OUTBOUND TRANSACTION — khấu trừ song tầng + ghi thẻ kho khi vận đơn SHIPPING.
+ * COMMIT OUTBOUND TRANSACTION — khấu trừ tồn song tầng khi vận đơn SHIPPING.
  *
- * Dùng @EventListener (đồng bộ) nên chạy trong CÙNG transaction của ShipShipmentUseCase:
- * bất kỳ exception nào ở đây cũng rollback cả việc đổi trạng thái vận đơn.
+ * Dùng @EventListener (ĐỒNG BỘ) nên chạy trong CÙNG transaction của ShipShipmentUseCase:
+ * bất kỳ exception nào ở khâu KHẤU TRỪ đều rollback cả việc đổi trạng thái vận đơn.
  *
- * GIẢ ĐỊNH API model InventoryBatch (module Giai đoạn 2):
- *   - int  getQuantity()
- *   - void deduct(int qty)        // trừ số lượng lô (kiểm tra ACTIVE, thiếu thì ném InsufficientStockException)
- * Khi quantity về 0, lô hết hàng tự nhiên (isAvailable()=false), không có status EMPTY.
+ * [GIAI ĐOẠN 7] Việc GHI THẺ KHO không còn thực hiện đồng bộ tại đây nữa. Thay vào đó, sau khi
+ * khấu trừ xong (trong transaction), phát {@link StockMovementEvent} mang bản ghi đã dựng sẵn;
+ * StockMovementAuditListener (AFTER_COMMIT) sẽ ghi thẻ kho khi transaction commit 100%
+ * và SafetyStockAlertListener kiểm tra cảnh báo tồn an toàn.
  */
 @Component
 @RequiredArgsConstructor
@@ -34,10 +35,10 @@ public class StockMovementListener {
 
     private final IInventoryRepository inventoryRepository;
     private final IInventoryBatchRepository inventoryBatchRepository;
-    private final IStockMovementRepository stockMovementRepository;
     private final IPickingListRepository pickingListRepository;
     private final ISalesOrderRepository salesOrderRepository;
     private final IIdGenerator idGenerator;
+    private final ApplicationEventPublisher eventPublisher;
 
     @EventListener
     public void onShipmentShipped(ShipmentShippedEvent event) {
@@ -65,17 +66,18 @@ public class StockMovementListener {
             batch.deduct(picked); // giảm tồn lô; hết hàng -> isAvailable()=false, FEFO sau bỏ qua
             inventoryBatchRepository.save(batch);
 
-            // 3) Ghi thẻ kho phục vụ truy vết (Audit Trail)
+            // 3) Dựng thẻ kho và phát sự kiện (ghi thật ở AFTER_COMMIT). Kèm binLocationId của lô.
             StockMovement movement = StockMovement.outboundForSalesOrder(
                     idGenerator.generate(),
                     detail.getProductId(),
                     event.warehouseId(),
                     detail.getActualBatchId(),
+                    batch.getBinLocationId(),
                     picked,
                     quantityBefore,
                     event.salesOrderId(),
                     event.actorUserId());
-            stockMovementRepository.save(movement);
+            eventPublisher.publishEvent(new StockMovementEvent(movement));
         }
 
         // 4) Nâng cấp trạng thái đơn gốc: SHIPPED

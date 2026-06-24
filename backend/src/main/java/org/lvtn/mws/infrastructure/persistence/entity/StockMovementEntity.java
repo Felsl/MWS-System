@@ -29,6 +29,10 @@ public class StockMovementEntity {
     @Column(name = "batch_id", length = 20)
     private String batchId;
 
+    // [GIAI ĐOẠN 7] Re-add: ô kệ phát sinh biến động (yêu cầu ALTER TABLE thêm cột bin_location_id).
+    @Column(name = "bin_location_id", length = 20)
+    private String binLocationId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "movement_type", length = 30, nullable = false)
     private MovementType movementType;

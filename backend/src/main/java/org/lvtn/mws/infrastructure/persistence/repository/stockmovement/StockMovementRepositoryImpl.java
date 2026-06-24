@@ -31,4 +31,10 @@ public class StockMovementRepositoryImpl implements IStockMovementRepository {
         return jpa.findByProductIdOrderByCreatedAtDesc(productId)
                 .stream().map(mapper::toDomain).toList();
     }
+
+    @Override
+    public List<StockMovement> findByProductIdAndWarehouseId(String productId, String warehouseId) {
+        return jpa.findByProductIdAndWarehouseIdOrderByCreatedAtDesc(productId, warehouseId)
+                .stream().map(mapper::toDomain).toList();
+    }
 }

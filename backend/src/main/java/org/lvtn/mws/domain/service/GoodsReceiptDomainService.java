@@ -1,6 +1,7 @@
 package org.lvtn.mws.domain.service;
 
 import org.lvtn.mws.domain.model.GoodsReceipt;
+import org.lvtn.mws.domain.model.GoodsReceiptCompletion;
 import org.lvtn.mws.domain.model.GoodsReceiptDetail;
 import org.lvtn.mws.domain.model.GoodsReceiptLineCommand;
 import org.lvtn.mws.domain.model.Inventory;
@@ -15,7 +16,6 @@ import org.lvtn.mws.domain.repository.IInventoryBatchRepository;
 import org.lvtn.mws.domain.repository.IInventoryRepository;
 import org.lvtn.mws.domain.repository.IPurchaseOrderDetailRepository;
 import org.lvtn.mws.domain.repository.IPurchaseOrderRepository;
-import org.lvtn.mws.domain.repository.IStockMovementRepository;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,7 +34,6 @@ public class GoodsReceiptDomainService {
     private final IGoodsReceiptDetailRepository grnDetailRepository;
     private final IPurchaseOrderRepository poRepository;
     private final IPurchaseOrderDetailRepository poDetailRepository;
-    private final IStockMovementRepository stockMovementRepository;
     private final InventoryDomainService inventoryDomainService;
     private final IInventoryRepository inventoryRepository;
     private final IInventoryBatchRepository batchRepository;
@@ -44,7 +43,6 @@ public class GoodsReceiptDomainService {
                                      IGoodsReceiptDetailRepository grnDetailRepository,
                                      IPurchaseOrderRepository poRepository,
                                      IPurchaseOrderDetailRepository poDetailRepository,
-                                     IStockMovementRepository stockMovementRepository,
                                      InventoryDomainService inventoryDomainService,
                                      IInventoryRepository inventoryRepository,
                                      IInventoryBatchRepository batchRepository,
@@ -53,7 +51,6 @@ public class GoodsReceiptDomainService {
         this.grnDetailRepository     = grnDetailRepository;
         this.poRepository            = poRepository;
         this.poDetailRepository      = poDetailRepository;
-        this.stockMovementRepository = stockMovementRepository;
         this.inventoryDomainService  = inventoryDomainService;
         this.inventoryRepository     = inventoryRepository;
         this.batchRepository         = batchRepository;
@@ -143,11 +140,12 @@ public class GoodsReceiptDomainService {
      * transaction (applied by the UseCase via @Transactional):
      *   PO cumulative update -> inventory total -> inventory_batches -> stock_movements -> close PO.
      */
-    public GoodsReceipt complete(String grnId) {
+    public GoodsReceiptCompletion complete(String grnId) {
         GoodsReceipt grn = findById(grnId);
         grn.complete(); // PENDING -> COMPLETED (guards duplicate completion)
 
         List<GoodsReceiptDetail> details = grnDetailRepository.findByGrnId(grnId);
+        List<StockMovement> movements = new java.util.ArrayList<>(); // [GĐ7] dựng, phát event AFTER_COMMIT
 
         for (GoodsReceiptDetail detail : details) {
             // 1) Cumulative progress on the source PO line.
@@ -182,6 +180,7 @@ public class GoodsReceiptDomainService {
                     .productId(detail.getProductId())
                     .warehouseId(grn.getWarehouseId())
                     .batchId(batchId)
+                    .binLocationId(detail.getBinLocationId())
                     .movementType(StockMovement.MovementType.IN)
                     .quantityChange(detail.getQuantity())
                     .quantityBefore(quantityBefore)
@@ -191,7 +190,7 @@ public class GoodsReceiptDomainService {
                     .note("Nhập kho từ phiếu " + grn.getGrnNumber())
                     .createdBy(grn.getReceivedBy())
                     .build();
-            stockMovementRepository.save(movement);
+            movements.add(movement);
         }
 
         // Auto-close the PO when every line has been fully received.
@@ -207,7 +206,8 @@ public class GoodsReceiptDomainService {
             }
         }
 
-        return grnRepository.save(grn);
+        GoodsReceipt saved = grnRepository.save(grn);
+        return new GoodsReceiptCompletion(saved, movements);
     }
 
     /**

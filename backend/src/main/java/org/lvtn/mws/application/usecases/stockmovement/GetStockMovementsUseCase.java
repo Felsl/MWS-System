@@ -20,6 +20,10 @@ public class GetStockMovementsUseCase {
         return stockMovementRepository.findByProductId(productId);
     }
 
+    public List<StockMovement> byProductAndWarehouse(String productId, String warehouseId) {
+        return stockMovementRepository.findByProductIdAndWarehouseId(productId, warehouseId);
+    }
+
     public List<StockMovement> byReference(String referenceType, String referenceId) {
         return stockMovementRepository.findByReference(referenceType, referenceId);
     }

@@ -492,6 +492,7 @@ CREATE TABLE stock_movements (
     product_id VARCHAR(20) NOT NULL,
     warehouse_id VARCHAR(20) NOT NULL,
     batch_id VARCHAR(20) NULL,
+    bin_location_id VARCHAR(20) NULL, -- [GIAI ĐOẠN 7] ô kệ phát sinh biến động (truy vết vị trí)
     movement_type VARCHAR(30) NOT NULL, -- INBOUND, OUTBOUND, INTERNAL_TRANSFER, ADJUST
     quantity_change INT NOT NULL,
     quantity_before INT NOT NULL,
@@ -503,7 +504,8 @@ CREATE TABLE stock_movements (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (product_id) REFERENCES products(id),
     FOREIGN KEY (warehouse_id) REFERENCES warehouses(id),
-    FOREIGN KEY (batch_id) REFERENCES inventory_batches(id)
+    FOREIGN KEY (batch_id) REFERENCES inventory_batches(id),
+    FOREIGN KEY (bin_location_id) REFERENCES bin_locations(id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE notifications (
@@ -538,3 +540,18 @@ CREATE INDEX idx_movements_reference ON stock_movements(reference_type, referenc
 CREATE INDEX idx_batches_lookup ON inventory_batches(product_id, warehouse_id, expiry_date, status);
 CREATE INDEX idx_movements_date ON stock_movements(created_at);
 CREATE INDEX idx_notifications_user_read ON notifications(user_id, is_read);
+-- =====================================================================
+-- [GIAI ĐOẠN 7] Seed quyền cho Audit & Notification (idempotent).
+-- (Các gán role sẽ no-op nếu chưa seed roles — seed roles ở script riêng của bạn.)
+-- =====================================================================
+INSERT IGNORE INTO permissions (id, code, name, module) VALUES
+    ('PERM_AUDIT_VIEW', 'AUDIT_VIEW_MOVEMENTS', 'Xem thẻ kho (audit trail)', 'AUDIT'),
+    ('PERM_NOTIF_READ', 'NOTIF_READ',           'Đọc thông báo',             'NOTIFICATION'),
+    ('PERM_NOTIF_WH',   'NOTIF_WH_RECEIVE',      'Nhận cảnh báo vận hành kho','NOTIFICATION');
+
+INSERT IGNORE INTO role_permissions (role_id, permission_id)
+SELECT r.id, 'PERM_AUDIT_VIEW' FROM roles r WHERE r.code IN ('ADMIN', 'WH_MANAGER');
+INSERT IGNORE INTO role_permissions (role_id, permission_id)
+SELECT r.id, 'PERM_NOTIF_WH' FROM roles r WHERE r.code = 'WH_MANAGER';
+INSERT IGNORE INTO role_permissions (role_id, permission_id)
+SELECT r.id, 'PERM_NOTIF_READ' FROM roles r;

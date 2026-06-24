@@ -16,6 +16,9 @@ public interface IInventoryBatchRepository {
     /** For nightly cron: batches still ACTIVE but expiry_date < today */
     List<InventoryBatch> findExpiredActiveBatches(LocalDate today);
 
+    /** [GIAI ĐOẠN 7] Lô ACTIVE còn hàng & SẮP hết hạn trong khoảng [today, threshold]. */
+    List<InventoryBatch> findNearExpiryActiveBatches(LocalDate today, LocalDate threshold);
+
     List<InventoryBatch> findByProductIdAndWarehouseId(String productId, String warehouseId);
 
     /** [GIAI ĐOẠN 6] Toàn bộ lô của một kho — phục vụ chụp ảnh tồn (snapshot) khi bắt đầu kiểm kê. */

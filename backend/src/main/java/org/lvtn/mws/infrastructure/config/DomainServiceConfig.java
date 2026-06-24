@@ -115,4 +115,10 @@ public class DomainServiceConfig {
                 inventoryRepository, inventoryBatchRepository, stockMovementRepository,
                 idGenerator, adjustmentVoucherNumberGenerator);
     }
+
+    @Bean
+    public NotificationDomainService notificationDomainService(IIdGenerator idGenerator) {
+        return new NotificationDomainService(idGenerator);
+    }
+
 }

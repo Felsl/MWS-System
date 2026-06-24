@@ -12,7 +12,7 @@ public interface StockMovementWebMapper {
     default StockMovementResponse toResponse(StockMovement m) {
         if (m == null) return null;
         return new StockMovementResponse(
-                m.getId(), m.getProductId(), m.getWarehouseId(), m.getBatchId(),
+                m.getId(), m.getProductId(), m.getWarehouseId(), m.getBatchId(), m.getBinLocationId(),
                 m.getMovementType() == null ? null : m.getMovementType().name(),
                 m.getQuantityChange(), m.getQuantityBefore(), m.getQuantityAfter(),
                 m.getReferenceType(), m.getReferenceId(), m.getNote(),

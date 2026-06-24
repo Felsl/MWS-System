@@ -7,6 +7,7 @@ public record StockMovementResponse(
         String productId,
         String warehouseId,
         String batchId,
+        String binLocationId,
         String movementType,
         int quantityChange,
         int quantityBefore,
