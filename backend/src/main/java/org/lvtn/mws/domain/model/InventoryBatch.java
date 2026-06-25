@@ -18,6 +18,7 @@ public class InventoryBatch {
     private LocalDate manufacturedDate;
     private Status status;
     private final LocalDateTime createdAt;
+    private int version;
 
     private InventoryBatch(Builder b) {
         this.id              = Objects.requireNonNull(b.id,            "Batch id is required");
@@ -30,6 +31,7 @@ public class InventoryBatch {
         this.manufacturedDate= b.manufacturedDate;
         this.status          = b.status != null ? b.status : Status.ACTIVE;
         this.createdAt       = b.createdAt != null ? b.createdAt : LocalDateTime.now();
+        this.version         = b.version;
     }
 
     public static class Builder {
@@ -38,6 +40,7 @@ public class InventoryBatch {
         private LocalDate expiryDate, manufacturedDate;
         private Status status;
         private LocalDateTime createdAt;
+        private int version = 0;
 
         public Builder id(String v)               { this.id = v; return this; }
         public Builder productId(String v)        { this.productId = v; return this; }
@@ -49,6 +52,7 @@ public class InventoryBatch {
         public Builder manufacturedDate(LocalDate v){ this.manufacturedDate = v; return this; }
         public Builder status(Status v)           { this.status = v; return this; }
         public Builder createdAt(LocalDateTime v) { this.createdAt = v; return this; }
+        public Builder version(int v)             { this.version = v; return this; }
         public InventoryBatch build()             { return new InventoryBatch(this); }
     }
 
@@ -85,4 +89,5 @@ public class InventoryBatch {
     public LocalDate getManufacturedDate() { return manufacturedDate; }
     public Status getStatus()           { return status; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+    public int getVersion()             { return version; }
 }

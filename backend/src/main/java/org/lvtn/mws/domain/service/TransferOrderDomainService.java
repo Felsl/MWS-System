@@ -129,7 +129,7 @@ public class TransferOrderDomainService {
     // I.2 GỬI DUYỆT + GIỮ CHỖ ẢO KHO NGUỒN
     // ──────────────────────────────────────────────────────────────────────────
 
-    /** DRAFT -> REQUESTED. Tăng reserved_quantity ở kho nguồn để khoá hàng. */
+    /** DRAFT -> PENDING_APPROVAL. Tăng reserved_quantity ở kho nguồn để khoá hàng. */
     public TransferOrder requestTransferApproval(String transferId) {
         TransferOrder order = findById(transferId);
 
@@ -150,10 +150,56 @@ public class TransferOrderDomainService {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
+    // HUỶ / TỪ CHỐI — đối xứng với GỬI DUYỆT: trả lại reserved_quantity kho nguồn
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Huỷ phiếu điều chuyển. Nếu phiếu đã giữ chỗ ảo (PENDING_APPROVAL/APPROVED) thì
+     * nhả lại reserved_quantity ở kho nguồn để hàng quay về khả dụng.
+     * Domain model TransferOrder.cancel() đã chặn huỷ khi IN_TRANSIT/COMPLETED.
+     */
+    public TransferOrder cancelTransfer(String transferId) {
+        TransferOrder order = findById(transferId);
+        releaseSourceReservationIfHeld(order);
+        order.cancel();
+        return transferRepository.save(order);
+    }
+
+    /**
+     * Từ chối duyệt phiếu (chỉ từ PENDING_APPROVAL). Vì lúc gửi duyệt đã giữ chỗ ảo,
+     * từ chối phải nhả lại reserved_quantity ở kho nguồn.
+     */
+    public TransferOrder rejectTransfer(String transferId, String rejectedBy) {
+        TransferOrder order = findById(transferId);
+        releaseSourceReservationIfHeld(order);
+        order.reject(rejectedBy);
+        return transferRepository.save(order);
+    }
+
+    /** Nhả reserved_quantity kho nguồn nếu phiếu đang ở trạng thái đã giữ chỗ ảo. */
+    private void releaseSourceReservationIfHeld(TransferOrder order) {
+        boolean wasReserved = order.getStatus() == TransferOrder.Status.PENDING_APPROVAL
+                || order.getStatus() == TransferOrder.Status.APPROVED;
+        if (!wasReserved) return;
+
+        Map<String, Integer> qtyByProduct = aggregateBy(order.getDetails(),
+                TransferOrderDetail::getProductId, TransferOrderDetail::getQuantity);
+
+        for (Map.Entry<String, Integer> e : qtyByProduct.entrySet()) {
+            inventoryRepository
+                    .findByProductIdAndWarehouseId(e.getKey(), order.getFromWarehouseId())
+                    .ifPresent(inv -> {
+                        inv.release(e.getValue());
+                        inventoryRepository.save(inv);
+                    });
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
     // II.1 DUYỆT + FEFO (gán lô + ô kệ nguồn, chưa trừ kho vật lý)
     // ──────────────────────────────────────────────────────────────────────────
 
-    /** REQUESTED -> APPROVED. Chạy FEFO, gán batchId + fromBinLocationId (tách dòng theo lô). */
+    /** PENDING_APPROVAL -> APPROVED. Chạy FEFO, gán batchId + fromBinLocationId (tách dòng theo lô). */
     public TransferOrder approveTransferOrder(String transferId, String approvedBy) {
         TransferOrder order = findById(transferId);
 

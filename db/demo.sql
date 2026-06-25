@@ -207,6 +207,7 @@ CREATE TABLE inventory_batches (
     expiry_date DATE NULL, -- Tiêu chí chạy lọc thuật toán FEFO
     manufactured_date DATE NULL,
     status VARCHAR(30) DEFAULT 'ACTIVE', -- ACTIVE, HOLD, EXPIRED
+    version INT NOT NULL DEFAULT 0, -- Optimistic Locking: chống tranh chấp putaway/picking/adjustment trên cùng lô
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (product_id) REFERENCES products(id),
     FOREIGN KEY (warehouse_id) REFERENCES warehouses(id),

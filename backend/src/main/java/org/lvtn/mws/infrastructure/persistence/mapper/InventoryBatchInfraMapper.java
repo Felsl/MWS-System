@@ -20,6 +20,7 @@ public interface InventoryBatchInfraMapper {
         e.setManufacturedDate(domain.getManufacturedDate());
         e.setStatus(domain.getStatus());
         e.setCreatedAt(domain.getCreatedAt());
+        e.setVersion(domain.getVersion());
         return e;
     }
 
@@ -36,6 +37,7 @@ public interface InventoryBatchInfraMapper {
                 .manufacturedDate(e.getManufacturedDate())
                 .status(e.getStatus())
                 .createdAt(e.getCreatedAt())
+                .version(e.getVersion())
                 .build();
     }
 }

@@ -45,4 +45,13 @@ public class InventoryBatchEntity {
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
+
+    /**
+     * Optimistic locking: Hibernate auto-increments on every UPDATE.
+     * Bảo vệ batch khỏi tranh chấp khi putaway (nhập), picking (xuất) và
+     * adjustment (kiểm kê) cùng cộng/trừ một lô tại cùng một ô kệ.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private int version;
 }

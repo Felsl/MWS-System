@@ -21,6 +21,9 @@ public class JwtTokenProvider implements ITokenProvider {
     @Value("${jwt.expiration-ms}")
     private long jwtExpirationMs;
 
+    @Value("${jwt.refresh-expiration-ms}")
+    private long jwtRefreshExpirationMs;
+
     private Key getSigningKey() {
         return Keys.hmacShaKeyFor(jwtSecret.getBytes());
     }
@@ -35,10 +38,31 @@ public class JwtTokenProvider implements ITokenProvider {
                 .claim("userId",      userId)
                 .claim("role",        roleCode)
                 .claim("permissions", permissions)
+                .claim("type",        "access")
                 .setIssuedAt(now)
                 .setExpiration(expiry)
                 .signWith(getSigningKey(), SignatureAlgorithm.HS256)
                 .compact();
+    }
+
+    @Override
+    public String generateRefreshToken(String userId, String username) {
+        Date now    = new Date();
+        Date expiry = new Date(now.getTime() + jwtRefreshExpirationMs);
+
+        return Jwts.builder()
+                .setSubject(username)
+                .claim("userId", userId)
+                .claim("type",   "refresh")
+                .setIssuedAt(now)
+                .setExpiration(expiry)
+                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    @Override
+    public String extractTokenType(String token) {
+        return getClaims(token).get("type", String.class);
     }
 
     @Override

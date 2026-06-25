@@ -3,11 +3,13 @@ package org.lvtn.mws.interfaces.rest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.lvtn.mws.application.usecases.transfer.ApproveTransferOrderUseCase;
+import org.lvtn.mws.application.usecases.transfer.CancelTransferOrderUseCase;
 import org.lvtn.mws.application.usecases.transfer.CompleteTransferReceiptUseCase;
 import org.lvtn.mws.application.usecases.transfer.CreateTransferOrderUseCase;
 import org.lvtn.mws.application.usecases.transfer.DispatchTransferShipmentUseCase;
 import org.lvtn.mws.application.usecases.transfer.GetAllTransferOrdersUseCase;
 import org.lvtn.mws.application.usecases.transfer.GetTransferOrderByIdUseCase;
+import org.lvtn.mws.application.usecases.transfer.RejectTransferOrderUseCase;
 import org.lvtn.mws.application.usecases.transfer.RequestTransferApprovalUseCase;
 import org.lvtn.mws.domain.model.Shipment;
 import org.lvtn.mws.domain.model.TransferOrder;
@@ -15,6 +17,7 @@ import org.lvtn.mws.interfaces.dto.request.transfer.ApproveTransferRequest;
 import org.lvtn.mws.interfaces.dto.request.transfer.CompleteReceiptRequest;
 import org.lvtn.mws.interfaces.dto.request.transfer.CreateTransferOrderRequest;
 import org.lvtn.mws.interfaces.dto.request.transfer.DispatchTransferRequest;
+import org.lvtn.mws.interfaces.dto.request.transfer.RejectTransferRequest;
 import org.lvtn.mws.interfaces.dto.response.transfer.ShipmentResponse;
 import org.lvtn.mws.interfaces.dto.response.transfer.TransferOrderResponse;
 import org.lvtn.mws.interfaces.mapper.TransferWebMapper;
@@ -31,7 +34,7 @@ import java.util.List;
 
 /**
  * REST API điều chuyển nội bộ. Vòng đời:
- * create(DRAFT) -> request-approval(REQUESTED) -> approve(APPROVED, FEFO)
+ * create(DRAFT) -> request-approval(PENDING_APPROVAL) -> approve(APPROVED, FEFO)
  * -> dispatch(IN_TRANSIT, tạo shipment + trừ kho nguồn) -> complete(COMPLETED, cộng kho đích).
  * Lỗi nghiệp vụ (IllegalArgument/IllegalState/InsufficientStock) do GlobalExceptionHandler
  * dùng chung của dự án xử lý -> trả 400.
@@ -44,6 +47,8 @@ public class TransferOrderController {
     private final CreateTransferOrderUseCase createTransferOrderUseCase;
     private final RequestTransferApprovalUseCase requestTransferApprovalUseCase;
     private final ApproveTransferOrderUseCase approveTransferOrderUseCase;
+    private final RejectTransferOrderUseCase rejectTransferOrderUseCase;
+    private final CancelTransferOrderUseCase cancelTransferOrderUseCase;
     private final DispatchTransferShipmentUseCase dispatchTransferShipmentUseCase;
     private final CompleteTransferReceiptUseCase completeTransferReceiptUseCase;
     private final GetTransferOrderByIdUseCase getTransferOrderByIdUseCase;
@@ -61,18 +66,33 @@ public class TransferOrderController {
         return ResponseEntity.status(HttpStatus.CREATED).body(webMapper.toResponse(order));
     }
 
-    /** I.2 Gửi duyệt + giữ chỗ ảo kho nguồn (DRAFT -> REQUESTED). */
+    /** I.2 Gửi duyệt + giữ chỗ ảo kho nguồn (DRAFT -> PENDING_APPROVAL). */
     @PostMapping("/{id}/request-approval")
     public ResponseEntity<TransferOrderResponse> requestApproval(@PathVariable("id") String id) {
         TransferOrder order = requestTransferApprovalUseCase.execute(id);
         return ResponseEntity.ok(webMapper.toResponse(order));
     }
 
-    /** II.1 Duyệt + FEFO gán lô/ô kệ nguồn (REQUESTED -> APPROVED). */
+    /** II.1 Duyệt + FEFO gán lô/ô kệ nguồn (PENDING_APPROVAL -> APPROVED). */
     @PostMapping("/{id}/approve")
     public ResponseEntity<TransferOrderResponse> approve(@PathVariable("id") String id,
                                                          @Valid @RequestBody ApproveTransferRequest request) {
         TransferOrder order = approveTransferOrderUseCase.execute(id, request.getApprovedBy());
+        return ResponseEntity.ok(webMapper.toResponse(order));
+    }
+
+    /** Từ chối duyệt (PENDING_APPROVAL -> REJECTED). Nhả lại hàng giữ chỗ kho nguồn. */
+    @PostMapping("/{id}/reject")
+    public ResponseEntity<TransferOrderResponse> reject(@PathVariable("id") String id,
+                                                        @Valid @RequestBody RejectTransferRequest request) {
+        TransferOrder order = rejectTransferOrderUseCase.execute(id, request.getRejectedBy());
+        return ResponseEntity.ok(webMapper.toResponse(order));
+    }
+
+    /** Huỷ phiếu (DRAFT/PENDING_APPROVAL/APPROVED -> CANCELLED). Nhả lại hàng giữ chỗ nếu có. */
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<TransferOrderResponse> cancel(@PathVariable("id") String id) {
+        TransferOrder order = cancelTransferOrderUseCase.execute(id);
         return ResponseEntity.ok(webMapper.toResponse(order));
     }
 

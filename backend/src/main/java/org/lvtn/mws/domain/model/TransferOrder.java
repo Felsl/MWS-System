@@ -9,14 +9,14 @@ import java.util.Objects;
  * Aggregate root cho luồng điều chuyển nội bộ (Internal Transfer).
  * Thuần Java — không phụ thuộc bất kỳ framework nào ngoài JDK.
  *
- * Vòng đời: DRAFT -> REQUESTED -> APPROVED -> IN_TRANSIT -> COMPLETED
+ * Vòng đời: DRAFT -> PENDING_APPROVAL -> APPROVED -> IN_TRANSIT -> COMPLETED
  * (rẽ nhánh: REJECTED / CANCELLED)
  */
 public class TransferOrder {
 
     public enum Status {
         DRAFT,        // vừa lập phiếu
-        REQUESTED,    // đã gửi duyệt + đã giữ chỗ ảo ở kho nguồn
+        PENDING_APPROVAL,    // đã gửi duyệt + đã giữ chỗ ảo ở kho nguồn
         APPROVED,     // quản lý duyệt + đã chạy FEFO gán lô/ô kệ nguồn
         IN_TRANSIT,   // xe đã rời kho nguồn, hàng đang đi đường
         COMPLETED,    // kho đích đã nhận + đối soát xong
@@ -84,22 +84,22 @@ public class TransferOrder {
 
     // ── Business behaviour (chuyển trạng thái) ───────────────────────────────
 
-    /** DRAFT -> REQUESTED (sau khi đã giữ chỗ ảo ở kho nguồn). */
+    /** DRAFT -> PENDING_APPROVAL (sau khi đã giữ chỗ ảo ở kho nguồn). */
     public void requestApproval() {
         ensure(Status.DRAFT, "Chỉ phiếu ở trạng thái DRAFT mới được gửi duyệt");
         if (details.isEmpty()) {
             throw new IllegalStateException("Phiếu điều chuyển không có dòng hàng nào");
         }
-        this.status = Status.REQUESTED;
+        this.status = Status.PENDING_APPROVAL;
         touch();
     }
 
     /**
-     * REQUESTED -> APPROVED. Thay danh sách detail bằng danh sách đã chạy FEFO
+     * PENDING_APPROVAL -> APPROVED. Thay danh sách detail bằng danh sách đã chạy FEFO
      * (đã gán batchId + fromBinLocationId, có thể đã tách dòng theo nhiều lô).
      */
     public void approve(String approvedBy, List<TransferOrderDetail> allocatedDetails) {
-        ensure(Status.REQUESTED, "Chỉ phiếu ở trạng thái REQUESTED mới được duyệt");
+        ensure(Status.PENDING_APPROVAL, "Chỉ phiếu ở trạng thái PENDING_APPROVAL mới được duyệt");
         Objects.requireNonNull(approvedBy, "Người duyệt không được trống");
         if (allocatedDetails == null || allocatedDetails.isEmpty()) {
             throw new IllegalStateException("Không phân bổ được lô hàng (FEFO) cho phiếu");
@@ -127,7 +127,7 @@ public class TransferOrder {
     }
 
     public void reject(String by) {
-        ensure(Status.REQUESTED, "Chỉ phiếu chờ duyệt mới được từ chối");
+        ensure(Status.PENDING_APPROVAL, "Chỉ phiếu chờ duyệt mới được từ chối");
         this.status = Status.REJECTED;
         this.approvedBy = by;
         this.approvedAt = LocalDateTime.now();

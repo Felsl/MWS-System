@@ -72,6 +72,13 @@ public class UserDomainService {
         userRepository.save(user);
     }
 
+    /** Đổi mật khẩu: nhận mật khẩu MỚI đã được hash sẵn ở tầng UseCase. */
+    public User changePassword(String id, String encodedNewPassword) {
+        User user = findById(id);
+        user.changePassword(encodedNewPassword);
+        return userRepository.save(user);
+    }
+
     public void validateWarehouseExists(String warehouseId) {
         if (!warehouseRepository.existsById(warehouseId)) {
             throw new RuntimeException("Warehouse not found: " + warehouseId);
