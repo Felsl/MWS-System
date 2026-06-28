@@ -32,6 +32,11 @@ public class ShipmentRepositoryImpl implements IShipmentRepository {
     }
 
     @Override
+    public Optional<Shipment> findByTransferOrderId(String transferOrderId) {
+        return jpa.findByTransferOrderId(transferOrderId).map(mapper::toDomain);
+    }
+
+    @Override
     public List<Shipment> findAll() {
         return jpa.findAll().stream().map(mapper::toDomain).toList();
     }

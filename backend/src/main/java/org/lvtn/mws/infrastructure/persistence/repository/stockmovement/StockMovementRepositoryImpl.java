@@ -21,6 +21,12 @@ public class StockMovementRepositoryImpl implements IStockMovementRepository {
     }
 
     @Override
+    public void appendAll(List<StockMovement> movements) {
+        if (movements == null || movements.isEmpty()) return;
+        jpa.saveAll(movements.stream().map(mapper::toEntity).toList());
+    }
+
+    @Override
     public List<StockMovement> findByReference(String referenceType, String referenceId) {
         return jpa.findByReferenceTypeAndReferenceId(referenceType, referenceId)
                 .stream().map(mapper::toDomain).toList();

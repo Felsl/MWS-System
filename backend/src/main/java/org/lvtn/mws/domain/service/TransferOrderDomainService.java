@@ -35,6 +35,8 @@ import java.util.Map;
 public class TransferOrderDomainService {
 
     private static final String REF_TYPE = "TRANSFER_ORDER";
+    /** Tác nhân ghi thẻ kho cho biến động điều chuyển (chưa thread user context vào hàm complete). */
+    private static final String MOVEMENT_ACTOR = "SYSTEM";
 
     private final ITransferOrderRepository transferRepository;
     private final IShipmentRepository shipmentRepository;
@@ -416,9 +418,10 @@ public class TransferOrderDomainService {
                     .productId(d.getProductId())
                     .batchId(d.getBatchId())
                     .movementType(StockMovement.MovementType.TRANSFER_OUT)
-                    .quantity(-d.getQuantity())
+                    .quantityChange(-d.getQuantity())
                     .referenceType(REF_TYPE)
                     .referenceId(order.getId())
+                    .createdBy(MOVEMENT_ACTOR)
                     .build());
             movements.add(new StockMovement.Builder()
                     .id(idGenerator.generate())
@@ -426,9 +429,10 @@ public class TransferOrderDomainService {
                     .productId(d.getProductId())
                     .batchId(d.getBatchId())
                     .movementType(StockMovement.MovementType.TRANSFER_IN)
-                    .quantity(d.getQuantityReceived())
+                    .quantityChange(d.getQuantityReceived())
                     .referenceType(REF_TYPE)
                     .referenceId(order.getId())
+                    .createdBy(MOVEMENT_ACTOR)
                     .build());
         }
         stockMovementRepository.appendAll(movements);

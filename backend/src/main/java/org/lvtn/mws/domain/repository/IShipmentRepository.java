@@ -9,6 +9,7 @@ public interface IShipmentRepository {
     Shipment save(Shipment shipment);
     Optional<Shipment> findById(String id);
     Optional<Shipment> findBySalesOrderId(String salesOrderId);
+    Optional<Shipment> findByTransferOrderId(String transferOrderId);
     List<Shipment> findAll();
     boolean existsByShipmentNumber(String shipmentNumber);
 }
