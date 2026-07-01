@@ -4,7 +4,24 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="171ee5f9-9f87-41c7-b7aa-8fb100f28d35" name="Changes" comment="" />
+    <list default="true" id="171ee5f9-9f87-41c7-b7aa-8fb100f28d35" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/security/CustomUserDetailsService.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/security/CustomUserDetailsService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/AdjustmentController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/AdjustmentController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/CarrierController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/CarrierController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/CustomerController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/CustomerController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/GoodsReceiptController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/GoodsReceiptController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/InventoryController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/InventoryController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/PickingListController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/PickingListController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/ProductCategoryController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/ProductCategoryController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/ProductController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/ProductController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/PurchaseOrderController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/PurchaseOrderController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/SalesOrderController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/SalesOrderController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/ShipmentController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/ShipmentController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/StocktakeController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/StocktakeController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/SupplierController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/SupplierController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/TransferOrderController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/TransferOrderController.java" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />

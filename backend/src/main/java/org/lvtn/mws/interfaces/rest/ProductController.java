@@ -9,10 +9,12 @@ import org.lvtn.mws.interfaces.mapper.ProductWebMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 @RestController
 @RequestMapping("/api/v1/products")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('MASTER_PRODUCT_VIEW')")
 public class ProductController {
 
     private final CreateProductUseCase createUseCase;
@@ -23,6 +25,7 @@ public class ProductController {
     private final SearchProductsUseCase searchUseCase;
     private final ProductWebMapper mapper;
 
+    @PreAuthorize("hasAuthority('MASTER_PRODUCT_MANAGE')")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ProductResponse create(@Valid @RequestBody ProductRequest req) {
@@ -46,6 +49,7 @@ public class ProductController {
         return mapper.toResponseList(getAllUseCase.execute());
     }
 
+    @PreAuthorize("hasAuthority('MASTER_PRODUCT_MANAGE')")
     @PutMapping("/{id}")
     public ProductResponse update(@PathVariable String id, @Valid @RequestBody ProductRequest req) {
         return mapper.toResponse(updateUseCase.execute(
@@ -55,6 +59,7 @@ public class ProductController {
                 req.getVolume(), req.isHazardousFlag()));
     }
 
+    @PreAuthorize("hasAuthority('MASTER_PRODUCT_MANAGE')")
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable String id) {

@@ -28,6 +28,7 @@ import jakarta.validation.Valid;
 @RestController
 @RequestMapping("/api/v1/purchase-orders")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('INBOUND_VIEW_PO')")
 public class PurchaseOrderController {
 
     private final CreatePurchaseOrderUseCase createUseCase;
@@ -39,6 +40,7 @@ public class PurchaseOrderController {
     private final GetPurchaseOrderDetailsUseCase getDetailsUseCase;
     private final PurchaseOrderWebMapper webMapper;
 
+    @PreAuthorize("hasAuthority('INBOUND_CREATE_PO')")
     @PostMapping
     public ResponseEntity<PurchaseOrderResponse> create(
             @Valid @RequestBody CreatePurchaseOrderRequest request,
@@ -52,11 +54,13 @@ public class PurchaseOrderController {
         return ResponseEntity.status(HttpStatus.CREATED).body(buildResponse(po));
     }
 
+    @PreAuthorize("hasAuthority('INBOUND_CREATE_PO')")
     @PostMapping("/{id}/submit-review")
     public ResponseEntity<PurchaseOrderResponse> submitForReview(@PathVariable String id) {
         return ResponseEntity.ok(buildResponse(submitForReviewUseCase.execute(id)));
     }
 
+    @PreAuthorize("hasAuthority('INBOUND_CREATE_PO')")
     @PostMapping("/{id}/submit-approval")
     public ResponseEntity<PurchaseOrderResponse> submitForApproval(@PathVariable String id) {
         return ResponseEntity.ok(buildResponse(submitForApprovalUseCase.execute(id)));
@@ -71,6 +75,7 @@ public class PurchaseOrderController {
         return ResponseEntity.ok(buildResponse(approveUseCase.execute(id, approvedBy)));
     }
 
+    @PreAuthorize("hasAuthority('INBOUND_APPROVE_PO')")
     @PostMapping("/{id}/reject")
     public ResponseEntity<PurchaseOrderResponse> reject(@PathVariable String id) {
         return ResponseEntity.ok(buildResponse(rejectUseCase.execute(id)));

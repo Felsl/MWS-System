@@ -10,10 +10,12 @@ import org.lvtn.mws.interfaces.mapper.InventoryWebMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 @RestController
 @RequestMapping("/api/v1/inventory")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('INVENTORY_VIEW')")
 public class InventoryController {
 
     private final InitInventoryUseCase initUseCase;
@@ -29,6 +31,7 @@ public class InventoryController {
 
     // ── Inventory aggregate ───────────────────────────────────────────────
 
+    @PreAuthorize("hasAuthority('INVENTORY_ADJUST')")
     @PostMapping("/init")
     @ResponseStatus(HttpStatus.CREATED)
     public InventoryResponse init(@RequestParam String productId,
@@ -49,18 +52,21 @@ public class InventoryController {
 
     // ── Stock operations ──────────────────────────────────────────────────
 
+    @PreAuthorize("hasAuthority('INVENTORY_ADJUST')")
     @PostMapping("/reserve")
     public InventoryResponse reserve(@Valid @RequestBody ReserveStockRequest req) {
         return mapper.toResponse(
                 reserveUseCase.execute(req.getProductId(), req.getWarehouseId(), req.getQuantity()));
     }
 
+    @PreAuthorize("hasAuthority('INVENTORY_ADJUST')")
     @PostMapping("/release")
     public InventoryResponse release(@Valid @RequestBody ReleaseStockRequest req) {
         return mapper.toResponse(
                 releaseUseCase.execute(req.getProductId(), req.getWarehouseId(), req.getQuantity()));
     }
 
+    @PreAuthorize("hasAuthority('INVENTORY_ADJUST')")
     @PostMapping("/commit")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void commit(@Valid @RequestBody CommitStockRequest req) {
@@ -82,6 +88,7 @@ public class InventoryController {
 
     // ── Batch CRUD ────────────────────────────────────────────────────────
 
+    @PreAuthorize("hasAuthority('INVENTORY_ADJUST')")
     @PostMapping("/batches")
     @ResponseStatus(HttpStatus.CREATED)
     public InventoryBatchResponse createBatch(@Valid @RequestBody CreateBatchRequest req) {
@@ -96,6 +103,7 @@ public class InventoryController {
         return mapper.toBatchResponseList(getBatchesUseCase.execute(productId, warehouseId));
     }
 
+    @PreAuthorize("hasAuthority('INVENTORY_ADJUST')")
     @PatchMapping("/batches/{batchId}/status")
     public InventoryBatchResponse updateBatchStatus(@PathVariable String batchId,
                                                     @Valid @RequestBody UpdateBatchStatusRequest req) {

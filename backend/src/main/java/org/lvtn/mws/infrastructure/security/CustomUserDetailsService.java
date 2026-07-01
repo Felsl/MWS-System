@@ -33,16 +33,19 @@ public class CustomUserDetailsService implements UserDetailsService {
         Role role = roleRepository.findById(user.getRoleId())
                 .orElseThrow(() -> new UsernameNotFoundException("Role not found for user: " + username));
 
-        List<SimpleGrantedAuthority> authorities = permissionRepository
+        List<String> permissions = permissionRepository
                 .findByIds(role.getPermissionIds())
                 .stream()
                 .map(Permission::getCode)
-                .map(SimpleGrantedAuthority::new)
-                .collect(Collectors.toList());
+                .collect(Collectors.toCollection(java.util.ArrayList::new));
 
-        authorities.add(new SimpleGrantedAuthority("ROLE_" + role.getCode()));
+        permissions.add("ROLE_" + role.getCode());
 
-        return new org.springframework.security.core.userdetails.User(
-                user.getUsername(), user.getPassword(), authorities);
+        return new UserPrincipal(
+                user.getId(),
+                user.getUsername(),
+                user.getPassword(),
+                user.getStatus(),
+                permissions);
     }
 }

@@ -13,10 +13,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 @RestController
 @RequestMapping("/api/v1/customers")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('MASTER_PARTNER_MANAGE')")
 public class CustomerController {
 
     private final CreateCustomerUseCase createUseCase;

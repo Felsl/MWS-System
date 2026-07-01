@@ -16,10 +16,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 @RestController
 @RequestMapping("/api/sales-orders")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('OUTBOUND_VIEW_SO')")
 public class SalesOrderController {
 
     private final CreateSalesOrderUseCase createSalesOrderUseCase;
@@ -29,6 +31,7 @@ public class SalesOrderController {
     private final CancelSalesOrderUseCase cancelSalesOrderUseCase;
     private final SalesOrderWebMapper mapper;
 
+    @PreAuthorize("hasAuthority('OUTBOUND_CREATE_SO')")
     @PostMapping
     public ResponseEntity<SalesOrderResponse> create(@Valid @RequestBody CreateSalesOrderRequest req) {
         List<SalesOrderLineCommand> lines = req.lines().stream()
@@ -52,12 +55,14 @@ public class SalesOrderController {
     }
 
     /** DRAFT -> ALLOCATED: giữ chỗ tồn kho cho từng dòng (rollback nếu thiếu). */
+    @PreAuthorize("hasAuthority('OUTBOUND_PICK')")
     @PostMapping("/{id}/allocate")
     public ResponseEntity<SalesOrderResponse> allocate(@PathVariable String id) {
         return ResponseEntity.ok(mapper.toResponse(allocateSalesOrderUseCase.execute(id)));
     }
 
     /** Hủy đơn: giải phóng tồn kho đã giữ chỗ. */
+    @PreAuthorize("hasAuthority('OUTBOUND_CREATE_SO')")
     @PostMapping("/{id}/cancel")
     public ResponseEntity<SalesOrderResponse> cancel(@PathVariable String id) {
         return ResponseEntity.ok(mapper.toResponse(cancelSalesOrderUseCase.execute(id)));

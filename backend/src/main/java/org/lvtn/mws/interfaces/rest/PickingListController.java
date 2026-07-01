@@ -20,10 +20,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 @RestController
-@RequestMapping("/api/picking-lists")
+@RequestMapping("/api/v1/picking-lists")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('OUTBOUND_VIEW')")
 public class PickingListController {
 
     private final CreatePickingListUseCase createPickingListUseCase;
@@ -36,6 +38,7 @@ public class PickingListController {
     private final PickingWebMapper mapper;
 
     /** Sinh lệnh gom hàng theo FEFO cho đơn đã ALLOCATED; chuyển SO -> PICKING. */
+    @PreAuthorize("hasAuthority('OUTBOUND_PICK')")
     @PostMapping
     public ResponseEntity<PickingListResponse> create(@Valid @RequestBody CreatePickingListRequest req) {
         var pl = createPickingListUseCase.execute(req.soId());
@@ -53,6 +56,7 @@ public class PickingListController {
     }
 
     /** Giao việc cho nhân viên kho (PENDING -> PICKING). */
+    @PreAuthorize("hasAuthority('OUTBOUND_PICK')")
     @PostMapping("/{id}/assign")
     public ResponseEntity<PickingListResponse> assign(@PathVariable String id,
                                                       @Valid @RequestBody AssignPickingRequest req) {
@@ -61,6 +65,7 @@ public class PickingListController {
     }
 
     /** Đối soát barcode cho 1 dòng gom hàng (so actual_batch_id với batch_id hệ thống gán). */
+    @PreAuthorize("hasAuthority('OUTBOUND_PICK')")
     @PostMapping("/details/{detailId}/confirm")
     public ResponseEntity<PickingListResponse> confirm(@PathVariable String detailId,
                                                        @Valid @RequestBody ConfirmPickRequest req) {
@@ -69,6 +74,7 @@ public class PickingListController {
     }
 
     /** Báo thiếu hàng thực tế cho 1 dòng; hệ thống tự bù phần thiếu từ lô FEFO kế tiếp. */
+    @PreAuthorize("hasAuthority('OUTBOUND_PICK')")
     @PostMapping("/details/{detailId}/short")
     public ResponseEntity<PickingListResponse> reportShort(@PathVariable String detailId,
                                                            @Valid @RequestBody ShortPickRequest req) {
@@ -77,6 +83,7 @@ public class PickingListController {
     }
 
     /** Hoàn tất gom hàng khi mọi dòng đã xác nhận (PICKING -> COMPLETED). */
+    @PreAuthorize("hasAuthority('OUTBOUND_PICK')")
     @PostMapping("/{id}/complete")
     public ResponseEntity<PickingListResponse> complete(@PathVariable String id) {
         return ResponseEntity.ok(mapper.toResponse(completePickingListUseCase.execute(id)));

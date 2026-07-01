@@ -18,10 +18,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 @RestController
 @RequestMapping("/api/shipments")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('OUTBOUND_VIEW')")
 public class ShipmentController {
 
     private final CreateShipmentUseCase createShipmentUseCase;
@@ -33,6 +35,7 @@ public class ShipmentController {
     private final ShipmentWebMapper mapper;
 
     /** Tạo vận đơn (PACKED) cho đơn bán hàng đã gom xong. */
+    @PreAuthorize("hasAuthority('OUTBOUND_SHIP')")
     @PostMapping
     public ResponseEntity<ShipmentResponse> create(@Valid @RequestBody CreateShipmentRequest req) {
         var s = createShipmentUseCase.execute(req.salesOrderId(), req.carrierId());
@@ -50,6 +53,7 @@ public class ShipmentController {
     }
 
     /** Gán hãng vận chuyển + tracking number. */
+    @PreAuthorize("hasAuthority('OUTBOUND_SHIP')")
     @PostMapping("/{id}/tracking")
     public ResponseEntity<ShipmentResponse> assignTracking(@PathVariable String id,
                                                            @Valid @RequestBody AssignTrackingRequest req) {
@@ -61,6 +65,7 @@ public class ShipmentController {
      * Xuất hàng (PACKED -> SHIPPING). Kích hoạt khấu trừ tồn kho song tầng,
      * ghi thẻ kho OUTBOUND và nâng SO -> SHIPPED trong cùng transaction.
      */
+    @PreAuthorize("hasAuthority('OUTBOUND_SHIP')")
     @PostMapping("/{id}/ship")
     public ResponseEntity<ShipmentResponse> ship(@PathVariable String id,
                                                  @Valid @RequestBody ShipShipmentRequest req) {
@@ -69,6 +74,7 @@ public class ShipmentController {
     }
 
     /** Giao thành công (SHIPPING -> DELIVERED). */
+    @PreAuthorize("hasAuthority('OUTBOUND_SHIP')")
     @PostMapping("/{id}/deliver")
     public ResponseEntity<ShipmentResponse> deliver(@PathVariable String id) {
         return ResponseEntity.ok(mapper.toResponse(deliverShipmentUseCase.execute(id)));

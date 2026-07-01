@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 /**
  * REST API điều chuyển nội bộ. Vòng đời:
@@ -42,6 +43,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/transfer-orders")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('TRANSFER_VIEW')")
 public class TransferOrderController {
 
     private final CreateTransferOrderUseCase createTransferOrderUseCase;
@@ -56,6 +58,7 @@ public class TransferOrderController {
     private final TransferWebMapper webMapper;
 
     /** I. Tạo phiếu DRAFT. */
+    @PreAuthorize("hasAuthority('TRANSFER_CREATE')")
     @PostMapping
     public ResponseEntity<TransferOrderResponse> create(@Valid @RequestBody CreateTransferOrderRequest request) {
         TransferOrder order = createTransferOrderUseCase.execute(
@@ -67,6 +70,7 @@ public class TransferOrderController {
     }
 
     /** I.2 Gửi duyệt + giữ chỗ ảo kho nguồn (DRAFT -> PENDING_APPROVAL). */
+    @PreAuthorize("hasAuthority('TRANSFER_CREATE')")
     @PostMapping("/{id}/request-approval")
     public ResponseEntity<TransferOrderResponse> requestApproval(@PathVariable("id") String id) {
         TransferOrder order = requestTransferApprovalUseCase.execute(id);
@@ -74,6 +78,7 @@ public class TransferOrderController {
     }
 
     /** II.1 Duyệt + FEFO gán lô/ô kệ nguồn (PENDING_APPROVAL -> APPROVED). */
+    @PreAuthorize("hasAuthority('TRANSFER_APPROVE')")
     @PostMapping("/{id}/approve")
     public ResponseEntity<TransferOrderResponse> approve(@PathVariable("id") String id,
                                                          @Valid @RequestBody ApproveTransferRequest request) {
@@ -82,6 +87,7 @@ public class TransferOrderController {
     }
 
     /** Từ chối duyệt (PENDING_APPROVAL -> REJECTED). Nhả lại hàng giữ chỗ kho nguồn. */
+    @PreAuthorize("hasAuthority('TRANSFER_APPROVE')")
     @PostMapping("/{id}/reject")
     public ResponseEntity<TransferOrderResponse> reject(@PathVariable("id") String id,
                                                         @Valid @RequestBody RejectTransferRequest request) {
@@ -90,6 +96,7 @@ public class TransferOrderController {
     }
 
     /** Huỷ phiếu (DRAFT/PENDING_APPROVAL/APPROVED -> CANCELLED). Nhả lại hàng giữ chỗ nếu có. */
+    @PreAuthorize("hasAuthority('TRANSFER_CREATE')")
     @PostMapping("/{id}/cancel")
     public ResponseEntity<TransferOrderResponse> cancel(@PathVariable("id") String id) {
         TransferOrder order = cancelTransferOrderUseCase.execute(id);
@@ -97,6 +104,7 @@ public class TransferOrderController {
     }
 
     /** II.2 Đóng gói + tạo giao vận + trừ kho nguồn (APPROVED -> IN_TRANSIT). */
+    @PreAuthorize("hasAuthority('TRANSFER_DISPATCH')")
     @PostMapping("/{id}/dispatch")
     public ResponseEntity<ShipmentResponse> dispatch(@PathVariable("id") String id,
                                                      @Valid @RequestBody DispatchTransferRequest request) {
@@ -105,6 +113,7 @@ public class TransferOrderController {
     }
 
     /** III + IV Cập bến + đối soát + cộng kho đích + thẻ kho (IN_TRANSIT -> COMPLETED). */
+    @PreAuthorize("hasAuthority('TRANSFER_RECEIVE')")
     @PostMapping("/{id}/complete")
     public ResponseEntity<TransferOrderResponse> complete(@PathVariable("id") String id,
                                                           @Valid @RequestBody CompleteReceiptRequest request) {

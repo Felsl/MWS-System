@@ -9,10 +9,12 @@ import org.lvtn.mws.interfaces.mapper.ProductCategoryWebMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 @RestController
 @RequestMapping("/api/v1/product-categories")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('MASTER_PRODUCT_VIEW')")
 public class ProductCategoryController {
 
     private final CreateProductCategoryUseCase createUseCase;
@@ -22,6 +24,7 @@ public class ProductCategoryController {
     private final DeleteProductCategoryUseCase deleteUseCase;
     private final ProductCategoryWebMapper mapper;
 
+    @PreAuthorize("hasAuthority('MASTER_PRODUCT_MANAGE')")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ProductCategoryResponse create(@Valid @RequestBody ProductCategoryRequest req) {
@@ -38,12 +41,14 @@ public class ProductCategoryController {
         return mapper.toResponse(getByIdUseCase.execute(id));
     }
 
+    @PreAuthorize("hasAuthority('MASTER_PRODUCT_MANAGE')")
     @PutMapping("/{id}")
     public ProductCategoryResponse update(@PathVariable String id,
                                           @Valid @RequestBody ProductCategoryRequest req) {
         return mapper.toResponse(updateUseCase.execute(id, req.getCode(), req.getName(), req.getDescription()));
     }
 
+    @PreAuthorize("hasAuthority('MASTER_PRODUCT_MANAGE')")
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable String id) {

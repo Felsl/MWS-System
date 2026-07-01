@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 /**
  * API Phiếu điều chỉnh tồn kho (Giai đoạn 6). Chỉ cần authenticated().
@@ -23,6 +24,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/v1/adjustment-vouchers")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('ADJUSTMENT_VIEW')")
 public class AdjustmentController {
 
     private final ApproveAdjustmentVoucherUseCase approveUseCase;
@@ -40,6 +42,7 @@ public class AdjustmentController {
         return ResponseEntity.ok(webMapper.toResponse(getByIdUseCase.execute(id)));
     }
 
+    @PreAuthorize("hasAuthority('ADJUSTMENT_APPROVE')")
     @PostMapping("/{id}/approve")
     public ResponseEntity<AdjustmentVoucherResponse> approve(@PathVariable String id,
                                                              Authentication authentication) {

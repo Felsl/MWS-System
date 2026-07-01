@@ -20,10 +20,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 @RestController
 @RequestMapping("/api/v1/goods-receipts")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('INBOUND_VIEW_GRN')")
 public class GoodsReceiptController {
 
     private final CreateGoodsReceiptUseCase createUseCase;
@@ -32,6 +34,7 @@ public class GoodsReceiptController {
     private final GetGoodsReceiptDetailsUseCase getDetailsUseCase;
     private final GoodsReceiptWebMapper webMapper;
 
+    @PreAuthorize("hasAuthority('INBOUND_CREATE_GRN')")
     @PostMapping
     public ResponseEntity<GoodsReceiptResponse> create(
             @Valid @RequestBody CreateGoodsReceiptRequest request,
@@ -45,6 +48,7 @@ public class GoodsReceiptController {
         return ResponseEntity.status(HttpStatus.CREATED).body(buildResponse(grn));
     }
 
+    @PreAuthorize("hasAuthority('INBOUND_COMPLETE_GRN')")
     @PostMapping("/{id}/complete")
     public ResponseEntity<GoodsReceiptResponse> complete(@PathVariable String id) {
         return ResponseEntity.ok(buildResponse(completeUseCase.execute(id)));

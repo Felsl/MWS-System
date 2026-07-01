@@ -26,6 +26,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 /**
  * API Kiểm kê kho (Giai đoạn 6). Bảo mật: chỉ cần authenticated() như module Inventory
@@ -34,6 +35,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/stocktakes")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('STOCKTAKE_VIEW')")
 public class StocktakeController {
 
     private final StartStocktakeUseCase startUseCase;
@@ -46,6 +48,7 @@ public class StocktakeController {
     private final StocktakeWebMapper webMapper;
     private final AdjustmentWebMapper adjustmentWebMapper;
 
+    @PreAuthorize("hasAuthority('STOCKTAKE_MANAGE')")
     @PostMapping
     public ResponseEntity<StocktakeResponse> start(@Valid @RequestBody StartStocktakeRequest request,
                                                    Authentication authentication) {
@@ -64,6 +67,7 @@ public class StocktakeController {
         return ResponseEntity.ok(buildResponse(getByIdUseCase.execute(id)));
     }
 
+    @PreAuthorize("hasAuthority('STOCKTAKE_MANAGE')")
     @PostMapping("/details/{detailId}/count")
     public ResponseEntity<?> count(@PathVariable String detailId,
                                    @Valid @RequestBody SubmitCountRequest request,
@@ -72,6 +76,7 @@ public class StocktakeController {
                 submitUseCase.execute(detailId, request.countedQuantity(), currentUserId(authentication))));
     }
 
+    @PreAuthorize("hasAuthority('STOCKTAKE_APPROVE')")
     @PostMapping("/details/{detailId}/approve-line")
     public ResponseEntity<?> approveLine(@PathVariable String detailId,
                                          @RequestBody(required = false) ApproveLineRequest request,
@@ -81,6 +86,7 @@ public class StocktakeController {
                 approveLineUseCase.execute(detailId, currentUserId(authentication), reason)));
     }
 
+    @PreAuthorize("hasAuthority('STOCKTAKE_MANAGE')")
     @PostMapping("/{id}/complete")
     public ResponseEntity<CompleteStocktakeResponse> complete(@PathVariable String id,
                                                               Authentication authentication) {
