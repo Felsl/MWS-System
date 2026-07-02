@@ -24,15 +24,15 @@ public class StockMovementController {
     private final GetStockMovementsUseCase getStockMovementsUseCase;
     private final StockMovementWebMapper mapper;
 
-    /** Tra theo sản phẩm; kèm warehouseId (tuỳ chọn) để giới hạn trong 1 kho. */
+    /** Tra theo sản phẩm (phân trang KEYSET); kèm warehouseId tuỳ chọn để giới hạn 1 kho. */
     @GetMapping(params = "productId")
-    public ResponseEntity<List<StockMovementResponse>> byProduct(
+    public org.lvtn.mws.interfaces.dto.response.common.CursorPageResponse<StockMovementResponse> byProduct(
             @RequestParam String productId,
-            @RequestParam(required = false) String warehouseId) {
-        List<StockMovementResponse> body = (warehouseId == null || warehouseId.isBlank())
-                ? mapper.toResponseList(getStockMovementsUseCase.byProduct(productId))
-                : mapper.toResponseList(getStockMovementsUseCase.byProductAndWarehouse(productId, warehouseId));
-        return ResponseEntity.ok(body);
+            @RequestParam(required = false) String warehouseId,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "20") int size) {
+        var page = getStockMovementsUseCase.byProductScrolling(productId, warehouseId, cursor, size);
+        return org.lvtn.mws.interfaces.dto.response.common.CursorPageResponse.from(page, mapper::toResponse);
     }
 
     /** Tra ngược theo chứng từ gốc (GOODS_RECEIPT / SALES_ORDER / TRANSFER_ORDER ...). */

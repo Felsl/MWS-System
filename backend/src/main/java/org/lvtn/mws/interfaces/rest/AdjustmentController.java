@@ -33,8 +33,14 @@ public class AdjustmentController {
     private final AdjustmentWebMapper webMapper;
 
     @GetMapping
-    public ResponseEntity<List<AdjustmentVoucherResponse>> list() {
-        return ResponseEntity.ok(webMapper.toResponseList(getAllUseCase.execute()));
+    public ResponseEntity<org.lvtn.mws.interfaces.dto.response.common.PageResponse<AdjustmentVoucherResponse>> list(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        var result = getAllUseCase.execute(keyword, status, page, size);
+        return ResponseEntity.ok(
+                org.lvtn.mws.interfaces.dto.response.common.PageResponse.from(result, webMapper::toResponse));
     }
 
     @GetMapping("/{id}")

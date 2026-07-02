@@ -3,6 +3,7 @@ package org.lvtn.mws.application.usecases.inventory;
 import lombok.RequiredArgsConstructor;
 import org.lvtn.mws.domain.model.Inventory;
 import org.lvtn.mws.domain.service.InventoryDomainService;
+import org.lvtn.mws.infrastructure.security.scope.WarehouseAccessGuard;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
@@ -11,14 +12,19 @@ import java.util.List;
 @RequiredArgsConstructor
 public class GetInventoryUseCase {
     private final InventoryDomainService domainService;
+    private final WarehouseAccessGuard warehouseAccessGuard;
 
     @Transactional(readOnly = true)
     public Inventory executeByProductAndWarehouse(String productId, String warehouseId) {
+        // A2: chặn xem tồn kho của kho ngoài phạm vi được giao (403).
+        warehouseAccessGuard.check(warehouseId);
         return domainService.findByProductAndWarehouse(productId, warehouseId);
     }
 
     @Transactional(readOnly = true)
     public List<Inventory> executeByWarehouse(String warehouseId) {
+        // A2: chặn xem tồn kho của kho ngoài phạm vi được giao (403).
+        warehouseAccessGuard.check(warehouseId);
         return domainService.findByWarehouse(warehouseId);
     }
 }

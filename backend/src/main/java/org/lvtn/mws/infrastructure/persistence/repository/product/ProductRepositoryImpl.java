@@ -45,6 +45,27 @@ public class ProductRepositoryImpl implements IProductRepository {
     }
 
     @Override
+    public org.lvtn.mws.domain.common.PageResult<Product> search(
+            String keyword, org.lvtn.mws.domain.common.PageQuery pageQuery) {
+        org.springframework.data.jpa.domain.Specification<org.lvtn.mws.infrastructure.persistence.entity.ProductEntity> spec =
+                (root, q, cb) -> cb.isNull(root.get("deletedAt"));
+        if (keyword != null && !keyword.isBlank()) {
+            String like = "%" + keyword.trim().toLowerCase() + "%";
+            spec = spec.and((root, q, cb) -> cb.or(
+                    cb.like(cb.lower(root.get("name")), like),
+                    cb.like(cb.lower(root.get("sku")), like),
+                    cb.like(cb.lower(root.get("barcode")), like)));
+        }
+        var pageable = org.springframework.data.domain.PageRequest.of(
+                pageQuery.page(), pageQuery.size(),
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.ASC, "name"));
+        var pageEntity = jpa.findAll(spec, pageable);
+        return new org.lvtn.mws.domain.common.PageResult<>(
+                pageEntity.getContent().stream().map(mapper::toDomain).collect(java.util.stream.Collectors.toList()),
+                pageQuery.page(), pageQuery.size(), pageEntity.getTotalElements());
+    }
+
+    @Override
     public boolean existsBySku(String sku) {
         return jpa.existsBySkuAndDeletedAtIsNull(sku);
     }

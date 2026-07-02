@@ -67,6 +67,15 @@ public class AdjustmentDomainService {
 
     public List<AdjustmentVoucher> findAll() { return voucherRepository.findAll(); }
 
+    /** [A2] Danh sách phiếu điều chỉnh đã lọc theo phạm vi kho của user. */
+    public List<AdjustmentVoucher> findAllScoped() { return voucherRepository.findAllScoped(); }
+
+    /** [B4] Tìm kiếm + phân trang (đã lọc theo phạm vi kho). */
+    public org.lvtn.mws.domain.common.PageResult<AdjustmentVoucher> search(
+            String keyword, String status, org.lvtn.mws.domain.common.PageQuery pageQuery) {
+        return voucherRepository.search(keyword, status, pageQuery);
+    }
+
     // ── 1. Sinh phiếu điều chỉnh (DRAFT) từ phiên kiểm kê ────────────────────
 
     /**

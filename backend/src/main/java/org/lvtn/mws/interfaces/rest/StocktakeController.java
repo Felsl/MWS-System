@@ -57,9 +57,13 @@ public class StocktakeController {
     }
 
     @GetMapping
-    public ResponseEntity<List<StocktakeSessionResponse>> list() {
-        return ResponseEntity.ok(getAllUseCase.execute().stream()
-                .map(webMapper::toSessionResponse).toList());
+    public ResponseEntity<org.lvtn.mws.interfaces.dto.response.common.PageResponse<StocktakeSessionResponse>> list(
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        var result = getAllUseCase.execute(status, page, size);
+        return ResponseEntity.ok(
+                org.lvtn.mws.interfaces.dto.response.common.PageResponse.from(result, webMapper::toSessionResponse));
     }
 
     @GetMapping("/{id}")

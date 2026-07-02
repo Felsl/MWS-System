@@ -42,11 +42,12 @@ public class ProductController {
     }
 
     @GetMapping
-    public List<ProductResponse> getAll(@RequestParam(required = false) String keyword) {
-        if (keyword != null && !keyword.isBlank()) {
-            return mapper.toResponseList(searchUseCase.execute(keyword));
-        }
-        return mapper.toResponseList(getAllUseCase.execute());
+    public org.lvtn.mws.interfaces.dto.response.common.PageResponse<ProductResponse> getAll(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        var result = getAllUseCase.execute(keyword, page, size);
+        return org.lvtn.mws.interfaces.dto.response.common.PageResponse.from(result, mapper::toResponse);
     }
 
     @PreAuthorize("hasAuthority('MASTER_PRODUCT_MANAGE')")

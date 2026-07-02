@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.lvtn.mws.application.event.ShipmentShippedEvent;
 import org.lvtn.mws.domain.model.Shipment;
 import org.lvtn.mws.domain.service.ShipmentDomainService;
+import org.lvtn.mws.infrastructure.security.scope.WarehouseAccessGuard;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,8 +21,11 @@ public class ShipShipmentUseCase {
 
     private final ShipmentDomainService shipmentDomainService;
     private final ApplicationEventPublisher eventPublisher;
+    private final WarehouseAccessGuard warehouseAccessGuard;
 
     public Shipment execute(String shipmentId, String actorUserId, String warehouseId) {
+        // A2: chặn xuất hàng khỏi kho ngoài phạm vi được giao (403).
+        warehouseAccessGuard.check(warehouseId);
         Shipment shipment = shipmentDomainService.ship(shipmentId);
         if (shipment.isSalesShipment()) {
             eventPublisher.publishEvent(new ShipmentShippedEvent(

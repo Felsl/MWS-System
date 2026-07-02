@@ -80,6 +80,17 @@ public class SalesOrderDomainService {
         return soRepository.findAll();
     }
 
+    /** [A2] Danh sách đơn xuất đã lọc theo phạm vi kho của user. */
+    public List<SalesOrder> findAllScoped() {
+        return soRepository.findAllScoped();
+    }
+
+    /** [B4] Tìm kiếm + phân trang (đã lọc theo phạm vi kho). */
+    public org.lvtn.mws.domain.common.PageResult<SalesOrder> search(
+            String keyword, String status, org.lvtn.mws.domain.common.PageQuery pageQuery) {
+        return soRepository.search(keyword, status, pageQuery);
+    }
+
     /**
      * Phân bổ hàng ảo: duyệt từng dòng, gọi reserve trên tồn kho tổng.
      * Nếu bất kỳ dòng nào không đủ -> ném InsufficientStockException để UseCase rollback toàn bộ.

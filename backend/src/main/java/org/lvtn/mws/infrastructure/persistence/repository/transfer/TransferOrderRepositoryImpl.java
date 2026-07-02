@@ -9,6 +9,8 @@ import org.lvtn.mws.infrastructure.persistence.entity.TransferOrderEntity;
 import org.lvtn.mws.infrastructure.persistence.mapper.TransferOrderDetailInfraMapper;
 import org.lvtn.mws.infrastructure.persistence.mapper.TransferOrderInfraMapper;
 import org.springframework.stereotype.Repository;
+import org.springframework.data.jpa.domain.*;
+import org.springframework.data.domain.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -61,6 +63,44 @@ public class TransferOrderRepositoryImpl implements ITransferOrderRepository {
             result.add(assemble(e));
         }
         return result;
+    }
+
+    @Override
+    public List<TransferOrder> findAllScoped() {
+        Specification<TransferOrderEntity> spec =
+                org.lvtn.mws.infrastructure.security.scope.WarehouseScopeSpecs
+                        .restrictAny("fromWarehouseId", "toWarehouseId");
+        List<TransferOrder> result = new ArrayList<>();
+        for (TransferOrderEntity e : jpaTransferOrderRepository.findAll(spec)) {
+            result.add(assemble(e));
+        }
+        return result;
+    }
+
+    @Override
+    public org.lvtn.mws.domain.common.PageResult<TransferOrder> search(
+            String keyword, String status, org.lvtn.mws.domain.common.PageQuery pageQuery) {
+        Specification<TransferOrderEntity> spec =
+                org.lvtn.mws.infrastructure.security.scope.WarehouseScopeSpecs
+                        .restrictAny("fromWarehouseId", "toWarehouseId");
+        if (keyword != null && !keyword.isBlank()) {
+            String like = "%" + keyword.trim().toLowerCase() + "%";
+            spec = spec.and((root, q, cb) -> cb.like(cb.lower(root.get("transferNumber")), like));
+        }
+        if (status != null && !status.isBlank()) {
+            try {
+                TransferOrder.Status st = TransferOrder.Status.valueOf(status.trim().toUpperCase());
+                spec = spec.and((root, q, cb) -> cb.equal(root.get("status"), st));
+            } catch (IllegalArgumentException ignored) { }
+        }
+        var pageable = PageRequest.of(
+                pageQuery.page(), pageQuery.size(),
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+        var pageEntity = jpaTransferOrderRepository.findAll(spec, pageable);
+        List<TransferOrder> content = new ArrayList<>();
+        for (TransferOrderEntity e : pageEntity.getContent()) content.add(assemble(e));
+        return new org.lvtn.mws.domain.common.PageResult<>(
+                content, pageQuery.page(), pageQuery.size(), pageEntity.getTotalElements());
     }
 
     @Override

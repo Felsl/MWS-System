@@ -43,6 +43,12 @@ public class ProductDomainService {
 
     public List<Product> search(String keyword) { return productRepository.searchActive(keyword); }
 
+    /** [B4] Tìm kiếm + phân trang (chỉ sản phẩm chưa xoá mềm). */
+    public org.lvtn.mws.domain.common.PageResult<Product> searchPaged(
+            String keyword, org.lvtn.mws.domain.common.PageQuery pageQuery) {
+        return productRepository.search(keyword, pageQuery);
+    }
+
     public Product update(String id, String categoryId, String sku, String barcode,
                           String name, String description, BigDecimal price,
                           BigDecimal costPrice, Unit unit, int safetyStock,

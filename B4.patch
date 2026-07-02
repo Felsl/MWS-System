@@ -1,0 +1,880 @@
+diff --git a/backend/src/main/java/org/lvtn/mws/application/usecases/adjustment/GetAllAdjustmentVouchersUseCase.java b/backend/src/main/java/org/lvtn/mws/application/usecases/adjustment/GetAllAdjustmentVouchersUseCase.java
+index 36a3e6c..b416f79 100644
+--- a/backend/src/main/java/org/lvtn/mws/application/usecases/adjustment/GetAllAdjustmentVouchersUseCase.java
++++ b/backend/src/main/java/org/lvtn/mws/application/usecases/adjustment/GetAllAdjustmentVouchersUseCase.java
+@@ -1,14 +1,14 @@
+ package org.lvtn.mws.application.usecases.adjustment;
+ 
+ import lombok.RequiredArgsConstructor;
++import org.lvtn.mws.domain.common.PageQuery;
++import org.lvtn.mws.domain.common.PageResult;
+ import org.lvtn.mws.domain.model.AdjustmentVoucher;
+ import org.lvtn.mws.domain.service.AdjustmentDomainService;
+ import org.lvtn.mws.infrastructure.security.scope.WarehouseScoped;
+ import org.springframework.stereotype.Service;
+ import org.springframework.transaction.annotation.Transactional;
+ 
+-import java.util.List;
+-
+ @Service
+ @RequiredArgsConstructor
+ @Transactional(readOnly = true)
+@@ -16,9 +16,9 @@ public class GetAllAdjustmentVouchersUseCase {
+ 
+     private final AdjustmentDomainService adjustmentDomainService;
+ 
+-    /** A2: lọc phiếu điều chỉnh theo kho user được phép; ADMIN thấy tất cả. */
++    /** B4: tìm kiếm + phân trang phiếu điều chỉnh, lọc theo kho user được phép. */
+     @WarehouseScoped
+-    public List<AdjustmentVoucher> execute() {
+-        return adjustmentDomainService.findAllScoped();
++    public PageResult<AdjustmentVoucher> execute(String keyword, String status, int page, int size) {
++        return adjustmentDomainService.search(keyword, status, new PageQuery(page, size));
+     }
+ }
+diff --git a/backend/src/main/java/org/lvtn/mws/application/usecases/product/GetAllProductsUseCase.java b/backend/src/main/java/org/lvtn/mws/application/usecases/product/GetAllProductsUseCase.java
+index 2c9dc71..c897244 100644
+--- a/backend/src/main/java/org/lvtn/mws/application/usecases/product/GetAllProductsUseCase.java
++++ b/backend/src/main/java/org/lvtn/mws/application/usecases/product/GetAllProductsUseCase.java
+@@ -1,17 +1,21 @@
+ package org.lvtn.mws.application.usecases.product;
+ 
+ import lombok.RequiredArgsConstructor;
++import org.lvtn.mws.domain.common.PageQuery;
++import org.lvtn.mws.domain.common.PageResult;
+ import org.lvtn.mws.domain.model.Product;
+ import org.lvtn.mws.domain.service.ProductDomainService;
+ import org.springframework.stereotype.Service;
+ import org.springframework.transaction.annotation.Transactional;
+-import java.util.List;
+ 
+ @Service
+ @RequiredArgsConstructor
+ public class GetAllProductsUseCase {
+     private final ProductDomainService domainService;
+ 
++    /** B4: danh sách sản phẩm có tìm kiếm (name/sku/barcode) + phân trang. */
+     @Transactional(readOnly = true)
+-    public List<Product> execute() { return domainService.findAllActive(); }
++    public PageResult<Product> execute(String keyword, int page, int size) {
++        return domainService.searchPaged(keyword, new PageQuery(page, size));
++    }
+ }
+diff --git a/backend/src/main/java/org/lvtn/mws/application/usecases/salesorder/GetAllSalesOrdersUseCase.java b/backend/src/main/java/org/lvtn/mws/application/usecases/salesorder/GetAllSalesOrdersUseCase.java
+index 7f9dfaa..3fa6831 100644
+--- a/backend/src/main/java/org/lvtn/mws/application/usecases/salesorder/GetAllSalesOrdersUseCase.java
++++ b/backend/src/main/java/org/lvtn/mws/application/usecases/salesorder/GetAllSalesOrdersUseCase.java
+@@ -1,14 +1,14 @@
+ package org.lvtn.mws.application.usecases.salesorder;
+ 
+ import lombok.RequiredArgsConstructor;
++import org.lvtn.mws.domain.common.PageQuery;
++import org.lvtn.mws.domain.common.PageResult;
+ import org.lvtn.mws.domain.model.SalesOrder;
+ import org.lvtn.mws.domain.service.SalesOrderDomainService;
+ import org.lvtn.mws.infrastructure.security.scope.WarehouseScoped;
+ import org.springframework.stereotype.Service;
+ import org.springframework.transaction.annotation.Transactional;
+ 
+-import java.util.List;
+-
+ @Service
+ @RequiredArgsConstructor
+ @Transactional(readOnly = true)
+@@ -16,9 +16,9 @@ public class GetAllSalesOrdersUseCase {
+ 
+     private final SalesOrderDomainService salesOrderDomainService;
+ 
+-    /** A2: lọc đơn xuất theo kho user được phép; ADMIN thấy tất cả. */
++    /** B4: tìm kiếm + phân trang đơn xuất, đã lọc theo kho user được phép (A2). */
+     @WarehouseScoped
+-    public List<SalesOrder> execute() {
+-        return salesOrderDomainService.findAllScoped();
++    public PageResult<SalesOrder> execute(String keyword, String status, int page, int size) {
++        return salesOrderDomainService.search(keyword, status, new PageQuery(page, size));
+     }
+ }
+diff --git a/backend/src/main/java/org/lvtn/mws/application/usecases/stockmovement/GetStockMovementsUseCase.java b/backend/src/main/java/org/lvtn/mws/application/usecases/stockmovement/GetStockMovementsUseCase.java
+index 76da2a0..a110a21 100644
+--- a/backend/src/main/java/org/lvtn/mws/application/usecases/stockmovement/GetStockMovementsUseCase.java
++++ b/backend/src/main/java/org/lvtn/mws/application/usecases/stockmovement/GetStockMovementsUseCase.java
+@@ -29,6 +29,19 @@ public class GetStockMovementsUseCase {
+         return stockMovementRepository.findByProductIdScoped(productId);
+     }
+ 
++    /**
++     * A2 + B4: tra thẻ kho theo sản phẩm với phân trang KEYSET (bảng lớn, không OFFSET).
++     * Nếu truyền warehouseId, chặn tra kho ngoài phạm vi (403) rồi giới hạn trong kho đó.
++     */
++    @WarehouseScoped
++    public org.lvtn.mws.domain.common.CursorPage<StockMovement> byProductScrolling(
++            String productId, String warehouseId, String cursor, int size) {
++        if (warehouseId != null && !warehouseId.isBlank()) {
++            warehouseAccessGuard.check(warehouseId);
++        }
++        return stockMovementRepository.findByProductScrolling(productId, warehouseId, cursor, size);
++    }
++
+     public List<StockMovement> byProductAndWarehouse(String productId, String warehouseId) {
+         // A2: chặn tra thẻ kho của kho ngoài phạm vi được giao (403).
+         warehouseAccessGuard.check(warehouseId);
+diff --git a/backend/src/main/java/org/lvtn/mws/application/usecases/stocktake/GetAllStocktakesUseCase.java b/backend/src/main/java/org/lvtn/mws/application/usecases/stocktake/GetAllStocktakesUseCase.java
+index a16e571..d6a617e 100644
+--- a/backend/src/main/java/org/lvtn/mws/application/usecases/stocktake/GetAllStocktakesUseCase.java
++++ b/backend/src/main/java/org/lvtn/mws/application/usecases/stocktake/GetAllStocktakesUseCase.java
+@@ -1,14 +1,14 @@
+ package org.lvtn.mws.application.usecases.stocktake;
+ 
+ import lombok.RequiredArgsConstructor;
++import org.lvtn.mws.domain.common.PageQuery;
++import org.lvtn.mws.domain.common.PageResult;
+ import org.lvtn.mws.domain.model.StocktakeSession;
+ import org.lvtn.mws.domain.service.StocktakeDomainService;
+ import org.lvtn.mws.infrastructure.security.scope.WarehouseScoped;
+ import org.springframework.stereotype.Service;
+ import org.springframework.transaction.annotation.Transactional;
+ 
+-import java.util.List;
+-
+ @Service
+ @RequiredArgsConstructor
+ @Transactional(readOnly = true)
+@@ -16,9 +16,9 @@ public class GetAllStocktakesUseCase {
+ 
+     private final StocktakeDomainService stocktakeDomainService;
+ 
+-    /** A2: lọc phiên kiểm kê theo kho user được phép; ADMIN thấy tất cả. */
++    /** B4: tìm kiếm theo trạng thái + phân trang, lọc theo kho user được phép. */
+     @WarehouseScoped
+-    public List<StocktakeSession> execute() {
+-        return stocktakeDomainService.findAllScoped();
++    public PageResult<StocktakeSession> execute(String status, int page, int size) {
++        return stocktakeDomainService.search(status, new PageQuery(page, size));
+     }
+ }
+diff --git a/backend/src/main/java/org/lvtn/mws/application/usecases/transfer/GetAllTransferOrdersUseCase.java b/backend/src/main/java/org/lvtn/mws/application/usecases/transfer/GetAllTransferOrdersUseCase.java
+index 4ccb5f1..ad33319 100644
+--- a/backend/src/main/java/org/lvtn/mws/application/usecases/transfer/GetAllTransferOrdersUseCase.java
++++ b/backend/src/main/java/org/lvtn/mws/application/usecases/transfer/GetAllTransferOrdersUseCase.java
+@@ -1,14 +1,14 @@
+ package org.lvtn.mws.application.usecases.transfer;
+ 
+ import lombok.RequiredArgsConstructor;
++import org.lvtn.mws.domain.common.PageQuery;
++import org.lvtn.mws.domain.common.PageResult;
+ import org.lvtn.mws.domain.model.TransferOrder;
+ import org.lvtn.mws.domain.service.TransferOrderDomainService;
+ import org.lvtn.mws.infrastructure.security.scope.WarehouseScoped;
+ import org.springframework.stereotype.Service;
+ import org.springframework.transaction.annotation.Transactional;
+ 
+-import java.util.List;
+-
+ @Service
+ @RequiredArgsConstructor
+ @Transactional(readOnly = true)
+@@ -16,9 +16,9 @@ public class GetAllTransferOrdersUseCase {
+ 
+     private final TransferOrderDomainService transferOrderDomainService;
+ 
+-    /** A2: lọc phiếu theo kho user được phép (nguồn hoặc đích); ADMIN thấy tất cả. */
++    /** B4: tìm kiếm + phân trang phiếu điều chuyển, lọc theo kho user được phép (nguồn hoặc đích). */
+     @WarehouseScoped
+-    public List<TransferOrder> execute() {
+-        return transferOrderDomainService.findAllScoped();
++    public PageResult<TransferOrder> execute(String keyword, String status, int page, int size) {
++        return transferOrderDomainService.search(keyword, status, new PageQuery(page, size));
+     }
+ }
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/common/CursorPage.java b/backend/src/main/java/org/lvtn/mws/domain/common/CursorPage.java
+new file mode 100644
+index 0000000..e4a67bc
+--- /dev/null
++++ b/backend/src/main/java/org/lvtn/mws/domain/common/CursorPage.java
+@@ -0,0 +1,14 @@
++package org.lvtn.mws.domain.common;
++
++import java.util.List;
++
++/**
++ * Kết quả phân trang kiểu con trỏ (keyset). Dùng cho bảng lớn như thẻ kho:
++ * chỉ đi tuần tự next (không nhảy trang N), không dùng OFFSET nên không chậm dần.
++ *
++ * @param content    dữ liệu trang hiện tại
++ * @param nextCursor con trỏ để lấy trang kế; null nếu đã hết
++ * @param hasNext    còn dữ liệu phía sau hay không
++ */
++public record CursorPage<T>(List<T> content, String nextCursor, boolean hasNext) {
++}
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/common/PageQuery.java b/backend/src/main/java/org/lvtn/mws/domain/common/PageQuery.java
+new file mode 100644
+index 0000000..374d2e1
+--- /dev/null
++++ b/backend/src/main/java/org/lvtn/mws/domain/common/PageQuery.java
+@@ -0,0 +1,23 @@
++package org.lvtn.mws.domain.common;
++
++/**
++ * Tham số phân trang trung lập với hạ tầng (không phụ thuộc Spring Data), dùng ở
++ * tầng domain/application. Tầng infrastructure sẽ dịch sang Pageable của Spring.
++ *
++ * <p>{@code page} tính từ 0. {@code size} bị kẹp trong [1, 200] để tránh tải nặng.
++ */
++public record PageQuery(int page, int size) {
++
++    private static final int MAX_SIZE = 200;
++    private static final int DEFAULT_SIZE = 20;
++
++    public PageQuery {
++        if (page < 0) page = 0;
++        if (size <= 0) size = DEFAULT_SIZE;
++        if (size > MAX_SIZE) size = MAX_SIZE;
++    }
++
++    public static PageQuery of(Integer page, Integer size) {
++        return new PageQuery(page == null ? 0 : page, size == null ? DEFAULT_SIZE : size);
++    }
++}
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/common/PageResult.java b/backend/src/main/java/org/lvtn/mws/domain/common/PageResult.java
+new file mode 100644
+index 0000000..5345360
+--- /dev/null
++++ b/backend/src/main/java/org/lvtn/mws/domain/common/PageResult.java
+@@ -0,0 +1,29 @@
++package org.lvtn.mws.domain.common;
++
++import java.util.List;
++import java.util.function.Function;
++
++/**
++ * Kết quả phân trang trung lập với hạ tầng.
++ *
++ * @param content       dữ liệu trang hiện tại
++ * @param page          số trang (từ 0)
++ * @param size          kích thước trang yêu cầu
++ * @param totalElements tổng số bản ghi khớp điều kiện (bỏ phân trang)
++ */
++public record PageResult<T>(List<T> content, int page, int size, long totalElements) {
++
++    public int totalPages() {
++        return size == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
++    }
++
++    public boolean hasNext() {
++        return (long) (page + 1) * size < totalElements;
++    }
++
++    /** Ánh xạ từng phần tử sang kiểu khác, giữ nguyên metadata phân trang. */
++    public <R> PageResult<R> map(Function<? super T, ? extends R> mapper) {
++        return new PageResult<>(content.stream().<R>map(mapper).toList(),
++                page, size, totalElements);
++    }
++}
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/repository/IAdjustmentVoucherRepository.java b/backend/src/main/java/org/lvtn/mws/domain/repository/IAdjustmentVoucherRepository.java
+index 95e9578..73e7f57 100644
+--- a/backend/src/main/java/org/lvtn/mws/domain/repository/IAdjustmentVoucherRepository.java
++++ b/backend/src/main/java/org/lvtn/mws/domain/repository/IAdjustmentVoucherRepository.java
+@@ -10,6 +10,9 @@ public interface IAdjustmentVoucherRepository {
+     List<AdjustmentVoucher> findAll();
+     /** [A2] Chỉ phiếu điều chỉnh thuộc kho user được phép (đọc từ WarehouseScopeContext). */
+     List<AdjustmentVoucher> findAllScoped();
++    /** [B4] Tìm kiếm (mã phiếu + trạng thái) + phân trang, lọc theo phạm vi kho. */
++    org.lvtn.mws.domain.common.PageResult<AdjustmentVoucher> search(
++            String keyword, String status, org.lvtn.mws.domain.common.PageQuery pageQuery);
+     List<AdjustmentVoucher> findBySessionId(String sessionId);
+     boolean existsByVoucherNumber(String voucherNumber);
+ }
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/repository/IProductRepository.java b/backend/src/main/java/org/lvtn/mws/domain/repository/IProductRepository.java
+index 9af4414..8487bb5 100644
+--- a/backend/src/main/java/org/lvtn/mws/domain/repository/IProductRepository.java
++++ b/backend/src/main/java/org/lvtn/mws/domain/repository/IProductRepository.java
+@@ -10,6 +10,9 @@ public interface IProductRepository {
+     Optional<Product> findBySku(String sku);
+     List<Product> findAllActive();
+     List<Product> searchActive(String keyword);
++    /** [B4] Tìm kiếm (name/sku/barcode) + phân trang, chỉ sản phẩm chưa xoá mềm. */
++    org.lvtn.mws.domain.common.PageResult<Product> search(
++            String keyword, org.lvtn.mws.domain.common.PageQuery pageQuery);
+     boolean existsBySku(String sku);
+     boolean existsBySkuExcludingId(String id, String sku);
+ }
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/repository/ISalesOrderRepository.java b/backend/src/main/java/org/lvtn/mws/domain/repository/ISalesOrderRepository.java
+index 46b31ee..4bdb06d 100644
+--- a/backend/src/main/java/org/lvtn/mws/domain/repository/ISalesOrderRepository.java
++++ b/backend/src/main/java/org/lvtn/mws/domain/repository/ISalesOrderRepository.java
+@@ -13,6 +13,9 @@ public interface ISalesOrderRepository {
+     List<SalesOrder> findAll();
+     /** [A2] Chỉ đơn thuộc kho user được phép (đọc từ WarehouseScopeContext). */
+     List<SalesOrder> findAllScoped();
++    /** [B4] Tìm kiếm + phân trang, đã lọc theo phạm vi kho (WarehouseScopeContext). */
++    org.lvtn.mws.domain.common.PageResult<SalesOrder> search(
++            String keyword, String status, org.lvtn.mws.domain.common.PageQuery pageQuery);
+     List<SalesOrder> findByStatus(Status status);
+     boolean existsBySoNumber(String soNumber);
+ }
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/repository/IStockMovementRepository.java b/backend/src/main/java/org/lvtn/mws/domain/repository/IStockMovementRepository.java
+index f7d0407..7680e3b 100644
+--- a/backend/src/main/java/org/lvtn/mws/domain/repository/IStockMovementRepository.java
++++ b/backend/src/main/java/org/lvtn/mws/domain/repository/IStockMovementRepository.java
+@@ -16,6 +16,9 @@ public interface IStockMovementRepository {
+      * Nếu context rỗng (ADMIN) → trả toàn bộ như findByProductId.
+      */
+     List<StockMovement> findByProductIdScoped(String productId);
++    /** [B4] Phân trang KEYSET theo sản phẩm (đã lọc phạm vi kho), created_at giảm dần. */
++    org.lvtn.mws.domain.common.CursorPage<StockMovement> findByProductScrolling(
++            String productId, String warehouseId, String cursor, int size);
+     /** [GIAI ĐOẠN 7] Truy vết theo sản phẩm TẠI một kho cụ thể (created_at giảm dần). */
+     List<StockMovement> findByProductIdAndWarehouseId(String productId, String warehouseId);
+ }
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/repository/IStocktakeSessionRepository.java b/backend/src/main/java/org/lvtn/mws/domain/repository/IStocktakeSessionRepository.java
+index 351cedf..6e734cd 100644
+--- a/backend/src/main/java/org/lvtn/mws/domain/repository/IStocktakeSessionRepository.java
++++ b/backend/src/main/java/org/lvtn/mws/domain/repository/IStocktakeSessionRepository.java
+@@ -10,6 +10,9 @@ public interface IStocktakeSessionRepository {
+     List<StocktakeSession> findAll();
+     /** [A2] Chỉ phiên kiểm kê thuộc kho user được phép (đọc từ WarehouseScopeContext). */
+     List<StocktakeSession> findAllScoped();
++    /** [B4] Tìm kiếm theo trạng thái + phân trang (đã lọc theo phạm vi kho). */
++    org.lvtn.mws.domain.common.PageResult<StocktakeSession> search(
++            String status, org.lvtn.mws.domain.common.PageQuery pageQuery);
+     List<StocktakeSession> findByWarehouseId(String warehouseId);
+ 
+     /** Phiên đang FREEZED của một kho (nếu có) — dùng cho cơ chế đóng băng kho. */
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/repository/ITransferOrderRepository.java b/backend/src/main/java/org/lvtn/mws/domain/repository/ITransferOrderRepository.java
+index 5d53ae8..c9a45ba 100644
+--- a/backend/src/main/java/org/lvtn/mws/domain/repository/ITransferOrderRepository.java
++++ b/backend/src/main/java/org/lvtn/mws/domain/repository/ITransferOrderRepository.java
+@@ -15,6 +15,9 @@ public interface ITransferOrderRepository {
+     List<TransferOrder> findAll();
+     /** [A2] Chỉ phiếu mà user có quyền ở kho nguồn HOẶC kho đích (đọc từ WarehouseScopeContext). */
+     List<TransferOrder> findAllScoped();
++    /** [B4] Tìm kiếm + phân trang (lọc theo phạm vi kho: nguồn hoặc đích). */
++    org.lvtn.mws.domain.common.PageResult<TransferOrder> search(
++            String keyword, String status, org.lvtn.mws.domain.common.PageQuery pageQuery);
+ 
+     List<TransferOrder> findByStatus(TransferOrder.Status status);
+ 
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/service/AdjustmentDomainService.java b/backend/src/main/java/org/lvtn/mws/domain/service/AdjustmentDomainService.java
+index 2391696..67751ef 100644
+--- a/backend/src/main/java/org/lvtn/mws/domain/service/AdjustmentDomainService.java
++++ b/backend/src/main/java/org/lvtn/mws/domain/service/AdjustmentDomainService.java
+@@ -70,6 +70,12 @@ public class AdjustmentDomainService {
+     /** [A2] Danh sách phiếu điều chỉnh đã lọc theo phạm vi kho của user. */
+     public List<AdjustmentVoucher> findAllScoped() { return voucherRepository.findAllScoped(); }
+ 
++    /** [B4] Tìm kiếm + phân trang (đã lọc theo phạm vi kho). */
++    public org.lvtn.mws.domain.common.PageResult<AdjustmentVoucher> search(
++            String keyword, String status, org.lvtn.mws.domain.common.PageQuery pageQuery) {
++        return voucherRepository.search(keyword, status, pageQuery);
++    }
++
+     // ── 1. Sinh phiếu điều chỉnh (DRAFT) từ phiên kiểm kê ────────────────────
+ 
+     /**
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/service/ProductDomainService.java b/backend/src/main/java/org/lvtn/mws/domain/service/ProductDomainService.java
+index 7eb0dff..aef1009 100644
+--- a/backend/src/main/java/org/lvtn/mws/domain/service/ProductDomainService.java
++++ b/backend/src/main/java/org/lvtn/mws/domain/service/ProductDomainService.java
+@@ -43,6 +43,12 @@ public class ProductDomainService {
+ 
+     public List<Product> search(String keyword) { return productRepository.searchActive(keyword); }
+ 
++    /** [B4] Tìm kiếm + phân trang (chỉ sản phẩm chưa xoá mềm). */
++    public org.lvtn.mws.domain.common.PageResult<Product> searchPaged(
++            String keyword, org.lvtn.mws.domain.common.PageQuery pageQuery) {
++        return productRepository.search(keyword, pageQuery);
++    }
++
+     public Product update(String id, String categoryId, String sku, String barcode,
+                           String name, String description, BigDecimal price,
+                           BigDecimal costPrice, Unit unit, int safetyStock,
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/service/SalesOrderDomainService.java b/backend/src/main/java/org/lvtn/mws/domain/service/SalesOrderDomainService.java
+index 8f39c05..7e1298d 100644
+--- a/backend/src/main/java/org/lvtn/mws/domain/service/SalesOrderDomainService.java
++++ b/backend/src/main/java/org/lvtn/mws/domain/service/SalesOrderDomainService.java
+@@ -85,6 +85,12 @@ public class SalesOrderDomainService {
+         return soRepository.findAllScoped();
+     }
+ 
++    /** [B4] Tìm kiếm + phân trang (đã lọc theo phạm vi kho). */
++    public org.lvtn.mws.domain.common.PageResult<SalesOrder> search(
++            String keyword, String status, org.lvtn.mws.domain.common.PageQuery pageQuery) {
++        return soRepository.search(keyword, status, pageQuery);
++    }
++
+     /**
+      * Phân bổ hàng ảo: duyệt từng dòng, gọi reserve trên tồn kho tổng.
+      * Nếu bất kỳ dòng nào không đủ -> ném InsufficientStockException để UseCase rollback toàn bộ.
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/service/StocktakeDomainService.java b/backend/src/main/java/org/lvtn/mws/domain/service/StocktakeDomainService.java
+index 417f8cc..aaf173a 100644
+--- a/backend/src/main/java/org/lvtn/mws/domain/service/StocktakeDomainService.java
++++ b/backend/src/main/java/org/lvtn/mws/domain/service/StocktakeDomainService.java
+@@ -44,6 +44,12 @@ public class StocktakeDomainService {
+     /** [A2] Danh sách kiểm kê đã lọc theo phạm vi kho của user. */
+     public List<StocktakeSession> findAllScoped() { return sessionRepository.findAllScoped(); }
+ 
++    /** [B4] Tìm kiếm theo trạng thái + phân trang (đã lọc theo phạm vi kho). */
++    public org.lvtn.mws.domain.common.PageResult<StocktakeSession> search(
++            String status, org.lvtn.mws.domain.common.PageQuery pageQuery) {
++        return sessionRepository.search(status, pageQuery);
++    }
++
+     public List<StocktakeDetail> findDetails(String sessionId) {
+         return detailRepository.findBySessionId(sessionId);
+     }
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/service/TransferOrderDomainService.java b/backend/src/main/java/org/lvtn/mws/domain/service/TransferOrderDomainService.java
+index f0eccf1..34faf39 100644
+--- a/backend/src/main/java/org/lvtn/mws/domain/service/TransferOrderDomainService.java
++++ b/backend/src/main/java/org/lvtn/mws/domain/service/TransferOrderDomainService.java
+@@ -87,6 +87,12 @@ public class TransferOrderDomainService {
+         return transferRepository.findAllScoped();
+     }
+ 
++    /** [B4] Tìm kiếm + phân trang (đã lọc theo phạm vi kho). */
++    public org.lvtn.mws.domain.common.PageResult<TransferOrder> search(
++            String keyword, String status, org.lvtn.mws.domain.common.PageQuery pageQuery) {
++        return transferRepository.search(keyword, status, pageQuery);
++    }
++
+     // ──────────────────────────────────────────────────────────────────────────
+     // I. KHỞI TẠO PHIẾU (DRAFT)
+     // ──────────────────────────────────────────────────────────────────────────
+diff --git a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/adjustment/AdjustmentVoucherRepositoryImpl.java b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/adjustment/AdjustmentVoucherRepositoryImpl.java
+index 208bc26..75869b8 100644
+--- a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/adjustment/AdjustmentVoucherRepositoryImpl.java
++++ b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/adjustment/AdjustmentVoucherRepositoryImpl.java
+@@ -31,6 +31,28 @@ public class AdjustmentVoucherRepositoryImpl implements IAdjustmentVoucherReposi
+         return jpa.findAll().stream().map(mapper::toDomain).toList();
+     }
+ 
++    @Override
++    public org.lvtn.mws.domain.common.PageResult<AdjustmentVoucher> search(
++            String keyword, String status, org.lvtn.mws.domain.common.PageQuery pageQuery) {
++        org.springframework.data.jpa.domain.Specification<org.lvtn.mws.infrastructure.persistence.entity.AdjustmentVoucherEntity> spec =
++                org.lvtn.mws.infrastructure.security.scope.WarehouseScopeSpecs.restrict("warehouseId");
++        if (keyword != null && !keyword.isBlank()) {
++            String like = "%" + keyword.trim().toLowerCase() + "%";
++            spec = spec.and((root, q, cb) -> cb.like(cb.lower(root.get("voucherNumber")), like));
++        }
++        if (status != null && !status.isBlank()) {
++            String st = status.trim();
++            spec = spec.and((root, q, cb) -> cb.equal(root.get("status"), st));
++        }
++        var pageable = org.springframework.data.domain.PageRequest.of(
++                pageQuery.page(), pageQuery.size(),
++                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
++        var pageEntity = jpa.findAll(spec, pageable);
++        return new org.lvtn.mws.domain.common.PageResult<>(
++                pageEntity.getContent().stream().map(mapper::toDomain).toList(),
++                pageQuery.page(), pageQuery.size(), pageEntity.getTotalElements());
++    }
++
+     @Override
+     public List<AdjustmentVoucher> findAllScoped() {
+         return jpa.findAll(org.lvtn.mws.infrastructure.security.scope.WarehouseScopeSpecs
+diff --git a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/product/JpaProductRepository.java b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/product/JpaProductRepository.java
+index adf1ad2..19ad5cf 100644
+--- a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/product/JpaProductRepository.java
++++ b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/product/JpaProductRepository.java
+@@ -2,12 +2,15 @@ package org.lvtn.mws.infrastructure.persistence.repository.product;
+ 
+ import org.lvtn.mws.infrastructure.persistence.entity.ProductEntity;
+ import org.springframework.data.jpa.repository.JpaRepository;
++import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+ import org.springframework.data.jpa.repository.Query;
+ import org.springframework.data.repository.query.Param;
+ import java.util.List;
+ import java.util.Optional;
+ 
+-public interface JpaProductRepository extends JpaRepository<ProductEntity, String> {
++public interface JpaProductRepository
++        extends JpaRepository<ProductEntity, String>,
++                JpaSpecificationExecutor<ProductEntity> {
+ 
+     Optional<ProductEntity> findByIdAndDeletedAtIsNull(String id);
+     Optional<ProductEntity> findBySkuAndDeletedAtIsNull(String sku);
+diff --git a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/product/ProductRepositoryImpl.java b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/product/ProductRepositoryImpl.java
+index dd589af..0bba465 100644
+--- a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/product/ProductRepositoryImpl.java
++++ b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/product/ProductRepositoryImpl.java
+@@ -44,6 +44,27 @@ public class ProductRepositoryImpl implements IProductRepository {
+                 .map(mapper::toDomain).collect(Collectors.toList());
+     }
+ 
++    @Override
++    public org.lvtn.mws.domain.common.PageResult<Product> search(
++            String keyword, org.lvtn.mws.domain.common.PageQuery pageQuery) {
++        org.springframework.data.jpa.domain.Specification<org.lvtn.mws.infrastructure.persistence.entity.ProductEntity> spec =
++                (root, q, cb) -> cb.isNull(root.get("deletedAt"));
++        if (keyword != null && !keyword.isBlank()) {
++            String like = "%" + keyword.trim().toLowerCase() + "%";
++            spec = spec.and((root, q, cb) -> cb.or(
++                    cb.like(cb.lower(root.get("name")), like),
++                    cb.like(cb.lower(root.get("sku")), like),
++                    cb.like(cb.lower(root.get("barcode")), like)));
++        }
++        var pageable = org.springframework.data.domain.PageRequest.of(
++                pageQuery.page(), pageQuery.size(),
++                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.ASC, "name"));
++        var pageEntity = jpa.findAll(spec, pageable);
++        return new org.lvtn.mws.domain.common.PageResult<>(
++                pageEntity.getContent().stream().map(mapper::toDomain).collect(java.util.stream.Collectors.toList()),
++                pageQuery.page(), pageQuery.size(), pageEntity.getTotalElements());
++    }
++
+     @Override
+     public boolean existsBySku(String sku) {
+         return jpa.existsBySkuAndDeletedAtIsNull(sku);
+diff --git a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/salesorder/SalesOrderRepositoryImpl.java b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/salesorder/SalesOrderRepositoryImpl.java
+index 01a848b..9c58ec9 100644
+--- a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/salesorder/SalesOrderRepositoryImpl.java
++++ b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/salesorder/SalesOrderRepositoryImpl.java
+@@ -39,6 +39,28 @@ public class SalesOrderRepositoryImpl implements ISalesOrderRepository {
+                 .stream().map(mapper::toDomain).toList();
+     }
+ 
++    @Override
++    public org.lvtn.mws.domain.common.PageResult<SalesOrder> search(
++            String keyword, String status, org.lvtn.mws.domain.common.PageQuery pageQuery) {
++        org.springframework.data.jpa.domain.Specification<org.lvtn.mws.infrastructure.persistence.entity.SalesOrderEntity> spec =
++                org.lvtn.mws.infrastructure.security.scope.WarehouseScopeSpecs.restrict("warehouseId");
++        if (keyword != null && !keyword.isBlank()) {
++            String like = "%" + keyword.trim().toLowerCase() + "%";
++            spec = spec.and((root, q, cb) -> cb.like(cb.lower(root.get("soNumber")), like));
++        }
++        if (status != null && !status.isBlank()) {
++            String st = status.trim();
++            spec = spec.and((root, q, cb) -> cb.equal(root.get("status"), st));
++        }
++        var pageable = org.springframework.data.domain.PageRequest.of(
++                pageQuery.page(), pageQuery.size(),
++                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
++        var pageEntity = jpa.findAll(spec, pageable);
++        return new org.lvtn.mws.domain.common.PageResult<>(
++                pageEntity.getContent().stream().map(mapper::toDomain).toList(),
++                pageQuery.page(), pageQuery.size(), pageEntity.getTotalElements());
++    }
++
+     @Override
+     public List<SalesOrder> findByStatus(Status status) {
+         return jpa.findByStatus(status.name()).stream().map(mapper::toDomain).toList();
+diff --git a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/stockmovement/StockMovementRepositoryImpl.java b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/stockmovement/StockMovementRepositoryImpl.java
+index b8653d8..d93e289 100644
+--- a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/stockmovement/StockMovementRepositoryImpl.java
++++ b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/stockmovement/StockMovementRepositoryImpl.java
+@@ -53,6 +53,51 @@ public class StockMovementRepositoryImpl implements IStockMovementRepository {
+                 .stream().map(mapper::toDomain).toList();
+     }
+ 
++    @Override
++    public org.lvtn.mws.domain.common.CursorPage<StockMovement> findByProductScrolling(
++            String productId, String warehouseId, String cursor, int size) {
++        Specification<StockMovementEntity> spec =
++                ((Specification<StockMovementEntity>)
++                        (root, q, cb) -> cb.equal(root.get("productId"), productId))
++                        .and(WarehouseScopeSpecs.restrict("warehouseId"));
++        if (warehouseId != null && !warehouseId.isBlank()) {
++            String wh = warehouseId.trim();
++            spec = spec.and((root, q, cb) -> cb.equal(root.get("warehouseId"), wh));
++        }
++        Sort sort = Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id"));
++        org.springframework.data.domain.ScrollPosition position = decodeCursor(cursor);
++        org.springframework.data.domain.Window<StockMovementEntity> window =
++                jpa.findBy(spec, q -> q.sortBy(sort).limit(size).scroll(position));
++        List<StockMovement> content = window.stream().map(mapper::toDomain).toList();
++        String nextCursor = null;
++        if (window.hasNext() && !window.getContent().isEmpty()) {
++            StockMovementEntity last = window.getContent().get(window.getContent().size() - 1);
++            nextCursor = encodeCursor(last.getCreatedAt(), last.getId());
++        }
++        return new org.lvtn.mws.domain.common.CursorPage<>(content, nextCursor, window.hasNext());
++    }
++
++    private org.springframework.data.domain.ScrollPosition decodeCursor(String cursor) {
++        if (cursor == null || cursor.isBlank()) {
++            return org.springframework.data.domain.ScrollPosition.keyset();
++        }
++        String decoded = new String(java.util.Base64.getUrlDecoder().decode(cursor),
++                java.nio.charset.StandardCharsets.UTF_8);
++        int sep = decoded.indexOf('|');
++        java.time.LocalDateTime createdAt = java.time.LocalDateTime.parse(decoded.substring(0, sep));
++        String id = decoded.substring(sep + 1);
++        java.util.LinkedHashMap<String, Object> keys = new java.util.LinkedHashMap<>();
++        keys.put("createdAt", createdAt);
++        keys.put("id", id);
++        return org.springframework.data.domain.ScrollPosition.forward(keys);
++    }
++
++    private String encodeCursor(java.time.LocalDateTime createdAt, String id) {
++        String raw = createdAt.toString() + "|" + id;
++        return java.util.Base64.getUrlEncoder().withoutPadding()
++                .encodeToString(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8));
++    }
++
+     @Override
+     public List<StockMovement> findByProductIdAndWarehouseId(String productId, String warehouseId) {
+         return jpa.findByProductIdAndWarehouseIdOrderByCreatedAtDesc(productId, warehouseId)
+diff --git a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/stocktake/StocktakeSessionRepositoryImpl.java b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/stocktake/StocktakeSessionRepositoryImpl.java
+index 334cfe6..4f7acae 100644
+--- a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/stocktake/StocktakeSessionRepositoryImpl.java
++++ b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/stocktake/StocktakeSessionRepositoryImpl.java
+@@ -33,6 +33,24 @@ public class StocktakeSessionRepositoryImpl implements IStocktakeSessionReposito
+         return jpa.findAll().stream().map(mapper::toDomain).toList();
+     }
+ 
++    @Override
++    public org.lvtn.mws.domain.common.PageResult<StocktakeSession> search(
++            String status, org.lvtn.mws.domain.common.PageQuery pageQuery) {
++        org.springframework.data.jpa.domain.Specification<org.lvtn.mws.infrastructure.persistence.entity.StocktakeSessionEntity> spec =
++                org.lvtn.mws.infrastructure.security.scope.WarehouseScopeSpecs.restrict("warehouseId");
++        if (status != null && !status.isBlank()) {
++            String st = status.trim();
++            spec = spec.and((root, q, cb) -> cb.equal(root.get("status"), st));
++        }
++        var pageable = org.springframework.data.domain.PageRequest.of(
++                pageQuery.page(), pageQuery.size(),
++                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
++        var pageEntity = jpa.findAll(spec, pageable);
++        return new org.lvtn.mws.domain.common.PageResult<>(
++                pageEntity.getContent().stream().map(mapper::toDomain).toList(),
++                pageQuery.page(), pageQuery.size(), pageEntity.getTotalElements());
++    }
++
+     @Override
+     public List<StocktakeSession> findAllScoped() {
+         return jpa.findAll(org.lvtn.mws.infrastructure.security.scope.WarehouseScopeSpecs
+diff --git a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/transfer/TransferOrderRepositoryImpl.java b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/transfer/TransferOrderRepositoryImpl.java
+index 8677d62..bf5e75f 100644
+--- a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/transfer/TransferOrderRepositoryImpl.java
++++ b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/transfer/TransferOrderRepositoryImpl.java
+@@ -75,6 +75,32 @@ public class TransferOrderRepositoryImpl implements ITransferOrderRepository {
+         return result;
+     }
+ 
++    @Override
++    public org.lvtn.mws.domain.common.PageResult<TransferOrder> search(
++            String keyword, String status, org.lvtn.mws.domain.common.PageQuery pageQuery) {
++        org.springframework.data.jpa.domain.Specification<TransferOrderEntity> spec =
++                org.lvtn.mws.infrastructure.security.scope.WarehouseScopeSpecs
++                        .restrictAny("fromWarehouseId", "toWarehouseId");
++        if (keyword != null && !keyword.isBlank()) {
++            String like = "%" + keyword.trim().toLowerCase() + "%";
++            spec = spec.and((root, q, cb) -> cb.like(cb.lower(root.get("transferNumber")), like));
++        }
++        if (status != null && !status.isBlank()) {
++            try {
++                TransferOrder.Status st = TransferOrder.Status.valueOf(status.trim().toUpperCase());
++                spec = spec.and((root, q, cb) -> cb.equal(root.get("status"), st));
++            } catch (IllegalArgumentException ignored) { }
++        }
++        var pageable = org.springframework.data.domain.PageRequest.of(
++                pageQuery.page(), pageQuery.size(),
++                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
++        var pageEntity = jpaTransferOrderRepository.findAll(spec, pageable);
++        List<TransferOrder> content = new ArrayList<>();
++        for (TransferOrderEntity e : pageEntity.getContent()) content.add(assemble(e));
++        return new org.lvtn.mws.domain.common.PageResult<>(
++                content, pageQuery.page(), pageQuery.size(), pageEntity.getTotalElements());
++    }
++
+     @Override
+     public List<TransferOrder> findByStatus(TransferOrder.Status status) {
+         List<TransferOrder> result = new ArrayList<>();
+diff --git a/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/common/CursorPageResponse.java b/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/common/CursorPageResponse.java
+new file mode 100644
+index 0000000..a126efe
+--- /dev/null
++++ b/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/common/CursorPageResponse.java
+@@ -0,0 +1,15 @@
++package org.lvtn.mws.interfaces.dto.response.common;
++
++import org.lvtn.mws.domain.common.CursorPage;
++
++import java.util.List;
++import java.util.function.Function;
++
++/** DTO trả về cho phân trang kiểu con trỏ (keyset). */
++public record CursorPageResponse<T>(List<T> content, String nextCursor, boolean hasNext) {
++
++    public static <E, D> CursorPageResponse<D> from(CursorPage<E> page, Function<? super E, ? extends D> mapper) {
++        List<D> mapped = page.content().stream().<D>map(mapper).toList();
++        return new CursorPageResponse<>(mapped, page.nextCursor(), page.hasNext());
++    }
++}
+diff --git a/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/common/PageResponse.java b/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/common/PageResponse.java
+new file mode 100644
+index 0000000..3a43a85
+--- /dev/null
++++ b/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/common/PageResponse.java
+@@ -0,0 +1,31 @@
++package org.lvtn.mws.interfaces.dto.response.common;
++
++import org.lvtn.mws.domain.common.PageResult;
++
++import java.util.List;
++import java.util.function.Function;
++
++/**
++ * DTO trả về cho client khi phân trang. Không lộ trực tiếp Page/PageImpl của Spring
++ * (tránh cảnh báo serialize và giữ hợp đồng API ổn định).
++ */
++public record PageResponse<T>(
++        List<T> content,
++        int page,
++        int size,
++        long totalElements,
++        int totalPages,
++        boolean hasNext) {
++
++    /** Dựng từ PageResult domain, ánh xạ từng phần tử sang DTO response. */
++    public static <E, D> PageResponse<D> from(PageResult<E> result, Function<? super E, ? extends D> mapper) {
++        List<D> mapped = result.content().stream().<D>map(mapper).toList();
++        return new PageResponse<>(
++                mapped,
++                result.page(),
++                result.size(),
++                result.totalElements(),
++                result.totalPages(),
++                result.hasNext());
++    }
++}
+diff --git a/backend/src/main/java/org/lvtn/mws/interfaces/rest/AdjustmentController.java b/backend/src/main/java/org/lvtn/mws/interfaces/rest/AdjustmentController.java
+index e6b15f5..483b291 100644
+--- a/backend/src/main/java/org/lvtn/mws/interfaces/rest/AdjustmentController.java
++++ b/backend/src/main/java/org/lvtn/mws/interfaces/rest/AdjustmentController.java
+@@ -33,8 +33,14 @@ public class AdjustmentController {
+     private final AdjustmentWebMapper webMapper;
+ 
+     @GetMapping
+-    public ResponseEntity<List<AdjustmentVoucherResponse>> list() {
+-        return ResponseEntity.ok(webMapper.toResponseList(getAllUseCase.execute()));
++    public ResponseEntity<org.lvtn.mws.interfaces.dto.response.common.PageResponse<AdjustmentVoucherResponse>> list(
++            @RequestParam(required = false) String keyword,
++            @RequestParam(required = false) String status,
++            @RequestParam(defaultValue = "0") int page,
++            @RequestParam(defaultValue = "20") int size) {
++        var result = getAllUseCase.execute(keyword, status, page, size);
++        return ResponseEntity.ok(
++                org.lvtn.mws.interfaces.dto.response.common.PageResponse.from(result, webMapper::toResponse));
+     }
+ 
+     @GetMapping("/{id}")
+diff --git a/backend/src/main/java/org/lvtn/mws/interfaces/rest/ProductController.java b/backend/src/main/java/org/lvtn/mws/interfaces/rest/ProductController.java
+index a5aff4d..1d2804a 100644
+--- a/backend/src/main/java/org/lvtn/mws/interfaces/rest/ProductController.java
++++ b/backend/src/main/java/org/lvtn/mws/interfaces/rest/ProductController.java
+@@ -42,11 +42,12 @@ public class ProductController {
+     }
+ 
+     @GetMapping
+-    public List<ProductResponse> getAll(@RequestParam(required = false) String keyword) {
+-        if (keyword != null && !keyword.isBlank()) {
+-            return mapper.toResponseList(searchUseCase.execute(keyword));
+-        }
+-        return mapper.toResponseList(getAllUseCase.execute());
++    public org.lvtn.mws.interfaces.dto.response.common.PageResponse<ProductResponse> getAll(
++            @RequestParam(required = false) String keyword,
++            @RequestParam(defaultValue = "0") int page,
++            @RequestParam(defaultValue = "20") int size) {
++        var result = getAllUseCase.execute(keyword, page, size);
++        return org.lvtn.mws.interfaces.dto.response.common.PageResponse.from(result, mapper::toResponse);
+     }
+ 
+     @PreAuthorize("hasAuthority('MASTER_PRODUCT_MANAGE')")
+diff --git a/backend/src/main/java/org/lvtn/mws/interfaces/rest/SalesOrderController.java b/backend/src/main/java/org/lvtn/mws/interfaces/rest/SalesOrderController.java
+index 60bf92e..a2b036a 100644
+--- a/backend/src/main/java/org/lvtn/mws/interfaces/rest/SalesOrderController.java
++++ b/backend/src/main/java/org/lvtn/mws/interfaces/rest/SalesOrderController.java
+@@ -50,8 +50,14 @@ public class SalesOrderController {
+     }
+ 
+     @GetMapping
+-    public ResponseEntity<List<SalesOrderResponse>> getAll() {
+-        return ResponseEntity.ok(mapper.toResponseList(getAllSalesOrdersUseCase.execute()));
++    public ResponseEntity<org.lvtn.mws.interfaces.dto.response.common.PageResponse<SalesOrderResponse>> getAll(
++            @RequestParam(required = false) String keyword,
++            @RequestParam(required = false) String status,
++            @RequestParam(defaultValue = "0") int page,
++            @RequestParam(defaultValue = "20") int size) {
++        var result = getAllSalesOrdersUseCase.execute(keyword, status, page, size);
++        return ResponseEntity.ok(
++                org.lvtn.mws.interfaces.dto.response.common.PageResponse.from(result, mapper::toResponse));
+     }
+ 
+     /** DRAFT -> ALLOCATED: giữ chỗ tồn kho cho từng dòng (rollback nếu thiếu). */
+diff --git a/backend/src/main/java/org/lvtn/mws/interfaces/rest/StockMovementController.java b/backend/src/main/java/org/lvtn/mws/interfaces/rest/StockMovementController.java
+index 6873285..52967f0 100644
+--- a/backend/src/main/java/org/lvtn/mws/interfaces/rest/StockMovementController.java
++++ b/backend/src/main/java/org/lvtn/mws/interfaces/rest/StockMovementController.java
+@@ -24,15 +24,15 @@ public class StockMovementController {
+     private final GetStockMovementsUseCase getStockMovementsUseCase;
+     private final StockMovementWebMapper mapper;
+ 
+-    /** Tra theo sản phẩm; kèm warehouseId (tuỳ chọn) để giới hạn trong 1 kho. */
++    /** Tra theo sản phẩm (phân trang KEYSET); kèm warehouseId tuỳ chọn để giới hạn 1 kho. */
+     @GetMapping(params = "productId")
+-    public ResponseEntity<List<StockMovementResponse>> byProduct(
++    public org.lvtn.mws.interfaces.dto.response.common.CursorPageResponse<StockMovementResponse> byProduct(
+             @RequestParam String productId,
+-            @RequestParam(required = false) String warehouseId) {
+-        List<StockMovementResponse> body = (warehouseId == null || warehouseId.isBlank())
+-                ? mapper.toResponseList(getStockMovementsUseCase.byProduct(productId))
+-                : mapper.toResponseList(getStockMovementsUseCase.byProductAndWarehouse(productId, warehouseId));
+-        return ResponseEntity.ok(body);
++            @RequestParam(required = false) String warehouseId,
++            @RequestParam(required = false) String cursor,
++            @RequestParam(defaultValue = "20") int size) {
++        var page = getStockMovementsUseCase.byProductScrolling(productId, warehouseId, cursor, size);
++        return org.lvtn.mws.interfaces.dto.response.common.CursorPageResponse.from(page, mapper::toResponse);
+     }
+ 
+     /** Tra ngược theo chứng từ gốc (GOODS_RECEIPT / SALES_ORDER / TRANSFER_ORDER ...). */
+diff --git a/backend/src/main/java/org/lvtn/mws/interfaces/rest/StocktakeController.java b/backend/src/main/java/org/lvtn/mws/interfaces/rest/StocktakeController.java
+index bd2fc5a..7139413 100644
+--- a/backend/src/main/java/org/lvtn/mws/interfaces/rest/StocktakeController.java
++++ b/backend/src/main/java/org/lvtn/mws/interfaces/rest/StocktakeController.java
+@@ -57,9 +57,13 @@ public class StocktakeController {
+     }
+ 
+     @GetMapping
+-    public ResponseEntity<List<StocktakeSessionResponse>> list() {
+-        return ResponseEntity.ok(getAllUseCase.execute().stream()
+-                .map(webMapper::toSessionResponse).toList());
++    public ResponseEntity<org.lvtn.mws.interfaces.dto.response.common.PageResponse<StocktakeSessionResponse>> list(
++            @RequestParam(required = false) String status,
++            @RequestParam(defaultValue = "0") int page,
++            @RequestParam(defaultValue = "20") int size) {
++        var result = getAllUseCase.execute(status, page, size);
++        return ResponseEntity.ok(
++                org.lvtn.mws.interfaces.dto.response.common.PageResponse.from(result, webMapper::toSessionResponse));
+     }
+ 
+     @GetMapping("/{id}")
+diff --git a/backend/src/main/java/org/lvtn/mws/interfaces/rest/TransferOrderController.java b/backend/src/main/java/org/lvtn/mws/interfaces/rest/TransferOrderController.java
+index 02e3fac..1c2f7c7 100644
+--- a/backend/src/main/java/org/lvtn/mws/interfaces/rest/TransferOrderController.java
++++ b/backend/src/main/java/org/lvtn/mws/interfaces/rest/TransferOrderController.java
+@@ -28,6 +28,7 @@ import org.springframework.web.bind.annotation.PathVariable;
+ import org.springframework.web.bind.annotation.PostMapping;
+ import org.springframework.web.bind.annotation.RequestBody;
+ import org.springframework.web.bind.annotation.RequestMapping;
++import org.springframework.web.bind.annotation.RequestParam;
+ import org.springframework.web.bind.annotation.RestController;
+ 
+ import java.util.List;
+@@ -127,7 +128,13 @@ public class TransferOrderController {
+     }
+ 
+     @GetMapping
+-    public ResponseEntity<List<TransferOrderResponse>> getAll() {
+-        return ResponseEntity.ok(webMapper.toResponseList(getAllTransferOrdersUseCase.execute()));
++    public ResponseEntity<org.lvtn.mws.interfaces.dto.response.common.PageResponse<TransferOrderResponse>> getAll(
++            @RequestParam(required = false) String keyword,
++            @RequestParam(required = false) String status,
++            @RequestParam(defaultValue = "0") int page,
++            @RequestParam(defaultValue = "20") int size) {
++        var result = getAllTransferOrdersUseCase.execute(keyword, status, page, size);
++        return ResponseEntity.ok(
++                org.lvtn.mws.interfaces.dto.response.common.PageResponse.from(result, webMapper::toResponse));
+     }
+ }

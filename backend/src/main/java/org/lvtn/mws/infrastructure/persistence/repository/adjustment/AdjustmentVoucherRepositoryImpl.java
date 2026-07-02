@@ -5,7 +5,8 @@ import org.lvtn.mws.domain.model.AdjustmentVoucher;
 import org.lvtn.mws.domain.repository.IAdjustmentVoucherRepository;
 import org.lvtn.mws.infrastructure.persistence.mapper.AdjustmentVoucherInfraMapper;
 import org.springframework.stereotype.Repository;
-
+import org.springframework.data.domain.*;
+import org.springframework.data.jpa.domain.*;
 import java.util.List;
 import java.util.Optional;
 
@@ -29,6 +30,35 @@ public class AdjustmentVoucherRepositoryImpl implements IAdjustmentVoucherReposi
     @Override
     public List<AdjustmentVoucher> findAll() {
         return jpa.findAll().stream().map(mapper::toDomain).toList();
+    }
+
+    @Override
+    public org.lvtn.mws.domain.common.PageResult<AdjustmentVoucher> search(
+            String keyword, String status, org.lvtn.mws.domain.common.PageQuery pageQuery) {
+        Specification<org.lvtn.mws.infrastructure.persistence.entity.AdjustmentVoucherEntity> spec =
+                org.lvtn.mws.infrastructure.security.scope.WarehouseScopeSpecs.restrict("warehouseId");
+        if (keyword != null && !keyword.isBlank()) {
+            String like = "%" + keyword.trim().toLowerCase() + "%";
+            spec = spec.and((root, q, cb) -> cb.like(cb.lower(root.get("voucherNumber")), like));
+        }
+        if (status != null && !status.isBlank()) {
+            String st = status.trim();
+            spec = spec.and((root, q, cb) -> cb.equal(root.get("status"), st));
+        }
+        var pageable = PageRequest.of(
+                pageQuery.page(), pageQuery.size(),
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+        var pageEntity = jpa.findAll(spec, pageable);
+        return new org.lvtn.mws.domain.common.PageResult<>(
+                pageEntity.getContent().stream().map(mapper::toDomain).toList(),
+                pageQuery.page(), pageQuery.size(), pageEntity.getTotalElements());
+    }
+
+    @Override
+    public List<AdjustmentVoucher> findAllScoped() {
+        return jpa.findAll(org.lvtn.mws.infrastructure.security.scope.WarehouseScopeSpecs
+                        .<org.lvtn.mws.infrastructure.persistence.entity.AdjustmentVoucherEntity>restrict("warehouseId"))
+                .stream().map(mapper::toDomain).toList();
     }
 
     @Override

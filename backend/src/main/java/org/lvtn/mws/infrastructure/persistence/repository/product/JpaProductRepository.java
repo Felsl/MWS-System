@@ -2,12 +2,15 @@ package org.lvtn.mws.infrastructure.persistence.repository.product;
 
 import org.lvtn.mws.infrastructure.persistence.entity.ProductEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
 
-public interface JpaProductRepository extends JpaRepository<ProductEntity, String> {
+public interface JpaProductRepository
+        extends JpaRepository<ProductEntity, String>,
+                JpaSpecificationExecutor<ProductEntity> {
 
     Optional<ProductEntity> findByIdAndDeletedAtIsNull(String id);
     Optional<ProductEntity> findBySkuAndDeletedAtIsNull(String sku);

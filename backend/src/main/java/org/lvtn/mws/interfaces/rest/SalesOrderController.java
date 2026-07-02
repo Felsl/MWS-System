@@ -50,8 +50,14 @@ public class SalesOrderController {
     }
 
     @GetMapping
-    public ResponseEntity<List<SalesOrderResponse>> getAll() {
-        return ResponseEntity.ok(mapper.toResponseList(getAllSalesOrdersUseCase.execute()));
+    public ResponseEntity<org.lvtn.mws.interfaces.dto.response.common.PageResponse<SalesOrderResponse>> getAll(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        var result = getAllSalesOrdersUseCase.execute(keyword, status, page, size);
+        return ResponseEntity.ok(
+                org.lvtn.mws.interfaces.dto.response.common.PageResponse.from(result, mapper::toResponse));
     }
 
     /** DRAFT -> ALLOCATED: giữ chỗ tồn kho cho từng dòng (rollback nếu thiếu). */

@@ -28,6 +28,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -127,7 +128,13 @@ public class TransferOrderController {
     }
 
     @GetMapping
-    public ResponseEntity<List<TransferOrderResponse>> getAll() {
-        return ResponseEntity.ok(webMapper.toResponseList(getAllTransferOrdersUseCase.execute()));
+    public ResponseEntity<org.lvtn.mws.interfaces.dto.response.common.PageResponse<TransferOrderResponse>> getAll(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        var result = getAllTransferOrdersUseCase.execute(keyword, status, page, size);
+        return ResponseEntity.ok(
+                org.lvtn.mws.interfaces.dto.response.common.PageResponse.from(result, webMapper::toResponse));
     }
 }

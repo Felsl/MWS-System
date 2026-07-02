@@ -11,6 +11,11 @@ public interface ISalesOrderRepository {
     SalesOrder save(SalesOrder salesOrder);
     Optional<SalesOrder> findById(String id);
     List<SalesOrder> findAll();
+    /** [A2] Chỉ đơn thuộc kho user được phép (đọc từ WarehouseScopeContext). */
+    List<SalesOrder> findAllScoped();
+    /** [B4] Tìm kiếm + phân trang, đã lọc theo phạm vi kho (WarehouseScopeContext). */
+    org.lvtn.mws.domain.common.PageResult<SalesOrder> search(
+            String keyword, String status, org.lvtn.mws.domain.common.PageQuery pageQuery);
     List<SalesOrder> findByStatus(Status status);
     boolean existsBySoNumber(String soNumber);
 }

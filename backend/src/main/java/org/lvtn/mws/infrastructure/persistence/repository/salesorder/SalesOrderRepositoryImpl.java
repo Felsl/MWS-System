@@ -33,6 +33,35 @@ public class SalesOrderRepositoryImpl implements ISalesOrderRepository {
     }
 
     @Override
+    public List<SalesOrder> findAllScoped() {
+        return jpa.findAll(org.lvtn.mws.infrastructure.security.scope.WarehouseScopeSpecs
+                        .<org.lvtn.mws.infrastructure.persistence.entity.SalesOrderEntity>restrict("warehouseId"))
+                .stream().map(mapper::toDomain).toList();
+    }
+
+    @Override
+    public org.lvtn.mws.domain.common.PageResult<SalesOrder> search(
+            String keyword, String status, org.lvtn.mws.domain.common.PageQuery pageQuery) {
+        org.springframework.data.jpa.domain.Specification<org.lvtn.mws.infrastructure.persistence.entity.SalesOrderEntity> spec =
+                org.lvtn.mws.infrastructure.security.scope.WarehouseScopeSpecs.restrict("warehouseId");
+        if (keyword != null && !keyword.isBlank()) {
+            String like = "%" + keyword.trim().toLowerCase() + "%";
+            spec = spec.and((root, q, cb) -> cb.like(cb.lower(root.get("soNumber")), like));
+        }
+        if (status != null && !status.isBlank()) {
+            String st = status.trim();
+            spec = spec.and((root, q, cb) -> cb.equal(root.get("status"), st));
+        }
+        var pageable = org.springframework.data.domain.PageRequest.of(
+                pageQuery.page(), pageQuery.size(),
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
+        var pageEntity = jpa.findAll(spec, pageable);
+        return new org.lvtn.mws.domain.common.PageResult<>(
+                pageEntity.getContent().stream().map(mapper::toDomain).toList(),
+                pageQuery.page(), pageQuery.size(), pageEntity.getTotalElements());
+    }
+
+    @Override
     public List<SalesOrder> findByStatus(Status status) {
         return jpa.findByStatus(status.name()).stream().map(mapper::toDomain).toList();
     }

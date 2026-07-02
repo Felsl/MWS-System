@@ -82,6 +82,17 @@ public class TransferOrderDomainService {
         return transferRepository.findAll();
     }
 
+    /** [A2] Danh sách phiếu điều chuyển đã lọc theo phạm vi kho của user. */
+    public List<TransferOrder> findAllScoped() {
+        return transferRepository.findAllScoped();
+    }
+
+    /** [B4] Tìm kiếm + phân trang (đã lọc theo phạm vi kho). */
+    public org.lvtn.mws.domain.common.PageResult<TransferOrder> search(
+            String keyword, String status, org.lvtn.mws.domain.common.PageQuery pageQuery) {
+        return transferRepository.search(keyword, status, pageQuery);
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
     // I. KHỞI TẠO PHIẾU (DRAFT)
     // ──────────────────────────────────────────────────────────────────────────

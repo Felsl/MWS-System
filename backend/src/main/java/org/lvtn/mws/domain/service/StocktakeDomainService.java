@@ -41,6 +41,15 @@ public class StocktakeDomainService {
 
     public List<StocktakeSession> findAll() { return sessionRepository.findAll(); }
 
+    /** [A2] Danh sách kiểm kê đã lọc theo phạm vi kho của user. */
+    public List<StocktakeSession> findAllScoped() { return sessionRepository.findAllScoped(); }
+
+    /** [B4] Tìm kiếm theo trạng thái + phân trang (đã lọc theo phạm vi kho). */
+    public org.lvtn.mws.domain.common.PageResult<StocktakeSession> search(
+            String status, org.lvtn.mws.domain.common.PageQuery pageQuery) {
+        return sessionRepository.search(status, pageQuery);
+    }
+
     public List<StocktakeDetail> findDetails(String sessionId) {
         return detailRepository.findBySessionId(sessionId);
     }

@@ -6,21 +6,51 @@
   <component name="ChangeListManager">
     <list default="true" id="171ee5f9-9f87-41c7-b7aa-8fb100f28d35" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/security/CustomUserDetailsService.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/security/CustomUserDetailsService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/backend/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/adjustment/GetAllAdjustmentVouchersUseCase.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/adjustment/GetAllAdjustmentVouchersUseCase.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/goodsreceipt/CreateGoodsReceiptUseCase.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/goodsreceipt/CreateGoodsReceiptUseCase.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/inventory/GetInventoryUseCase.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/inventory/GetInventoryUseCase.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/inventory/ReserveStockUseCase.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/inventory/ReserveStockUseCase.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/product/GetAllProductsUseCase.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/product/GetAllProductsUseCase.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/purchaseorder/CreatePurchaseOrderUseCase.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/purchaseorder/CreatePurchaseOrderUseCase.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/salesorder/CreateSalesOrderUseCase.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/salesorder/CreateSalesOrderUseCase.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/salesorder/GetAllSalesOrdersUseCase.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/salesorder/GetAllSalesOrdersUseCase.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/shipment/ShipShipmentUseCase.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/shipment/ShipShipmentUseCase.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/stockmovement/GetStockMovementsUseCase.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/stockmovement/GetStockMovementsUseCase.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/stocktake/GetAllStocktakesUseCase.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/stocktake/GetAllStocktakesUseCase.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/stocktake/StartStocktakeUseCase.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/stocktake/StartStocktakeUseCase.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/transfer/CreateTransferOrderUseCase.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/transfer/CreateTransferOrderUseCase.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/transfer/GetAllTransferOrdersUseCase.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/application/usecases/transfer/GetAllTransferOrdersUseCase.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/repository/IAdjustmentVoucherRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/repository/IAdjustmentVoucherRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/repository/IProductRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/repository/IProductRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/repository/ISalesOrderRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/repository/ISalesOrderRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/repository/IStockMovementRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/repository/IStockMovementRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/repository/IStocktakeSessionRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/repository/IStocktakeSessionRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/repository/ITransferOrderRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/repository/ITransferOrderRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/service/AdjustmentDomainService.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/service/AdjustmentDomainService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/service/ProductDomainService.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/service/ProductDomainService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/service/SalesOrderDomainService.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/service/SalesOrderDomainService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/service/StocktakeDomainService.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/service/StocktakeDomainService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/service/TransferOrderDomainService.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/domain/service/TransferOrderDomainService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/adjustment/AdjustmentVoucherRepositoryImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/adjustment/AdjustmentVoucherRepositoryImpl.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/adjustment/JpaAdjustmentVoucherRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/adjustment/JpaAdjustmentVoucherRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/product/JpaProductRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/product/JpaProductRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/product/ProductRepositoryImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/product/ProductRepositoryImpl.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/salesorder/JpaSalesOrderRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/salesorder/JpaSalesOrderRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/salesorder/SalesOrderRepositoryImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/salesorder/SalesOrderRepositoryImpl.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/stockmovement/JpaStockMovementRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/stockmovement/JpaStockMovementRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/stockmovement/StockMovementRepositoryImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/stockmovement/StockMovementRepositoryImpl.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/stocktake/JpaStocktakeSessionRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/stocktake/JpaStocktakeSessionRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/stocktake/StocktakeSessionRepositoryImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/stocktake/StocktakeSessionRepositoryImpl.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/transfer/JpaTransferOrderRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/transfer/JpaTransferOrderRepository.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/transfer/TransferOrderRepositoryImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/transfer/TransferOrderRepositoryImpl.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/AdjustmentController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/AdjustmentController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/CarrierController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/CarrierController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/CustomerController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/CustomerController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/GoodsReceiptController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/GoodsReceiptController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/InventoryController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/InventoryController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/PickingListController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/PickingListController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/ProductCategoryController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/ProductCategoryController.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/ProductController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/ProductController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/PurchaseOrderController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/PurchaseOrderController.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/SalesOrderController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/SalesOrderController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/ShipmentController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/ShipmentController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/StockMovementController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/StockMovementController.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/StocktakeController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/StocktakeController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/SupplierController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/SupplierController.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/TransferOrderController.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/main/java/org/lvtn/mws/interfaces/rest/TransferOrderController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/src/test/java/org/lvtn/mws/MwsApplicationTests.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/test/java/org/lvtn/mws/MwsApplicationTests.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -56,24 +86,24 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;Maven.mws [clean].executor&quot;: &quot;Run&quot;,
-    &quot;Maven.mws [compile].executor&quot;: &quot;Run&quot;,
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
-    &quot;Spring Boot.MWS.executor&quot;: &quot;Run&quot;,
-    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;D:/MWS system/backend/src/main/java/org/lvtn/mws/interfaces/rest&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Maven.mws [clean].executor": "Run",
+    "Maven.mws [compile].executor": "Run",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "Spring Boot.MWS.executor": "Run",
+    "codeWithMe.voiceChat.enabledByDefault": "false",
+    "git-widget-placeholder": "add-feat-test-branch",
+    "kotlin-language-version-configured": "true",
+    "last_opened_file_path": "D:/MWS system/backend/src/main/java/org/lvtn/mws/interfaces/rest",
+    "node.js.detected.package.eslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="D:\MWS system\backend\src\main\java\org\lvtn\mws\interfaces\rest" />

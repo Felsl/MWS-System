@@ -13,6 +13,11 @@ public interface ITransferOrderRepository {
     Optional<TransferOrder> findById(String id);
 
     List<TransferOrder> findAll();
+    /** [A2] Chỉ phiếu mà user có quyền ở kho nguồn HOẶC kho đích (đọc từ WarehouseScopeContext). */
+    List<TransferOrder> findAllScoped();
+    /** [B4] Tìm kiếm + phân trang (lọc theo phạm vi kho: nguồn hoặc đích). */
+    org.lvtn.mws.domain.common.PageResult<TransferOrder> search(
+            String keyword, String status, org.lvtn.mws.domain.common.PageQuery pageQuery);
 
     List<TransferOrder> findByStatus(TransferOrder.Status status);
 
