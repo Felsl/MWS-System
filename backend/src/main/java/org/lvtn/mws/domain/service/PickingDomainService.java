@@ -121,9 +121,7 @@ public class PickingDomainService {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Không tìm thấy dòng nhặt: " + pickingListDetailId));
 
-        InventoryBatch scanned = batchRepository.findByBatchNumber(scannedBatchNumber)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Không tìm thấy lô hàng theo mã vạch: " + scannedBatchNumber));
+        InventoryBatch scanned = resolveBatch(scannedBatchNumber);
 
         PickingListDetail detail = findDetail(pl, pickingListDetailId);
 
@@ -154,9 +152,7 @@ public class PickingDomainService {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Không tìm thấy dòng nhặt: " + pickingListDetailId));
 
-        InventoryBatch scanned = batchRepository.findByBatchNumber(scannedBatchNumber)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Không tìm thấy lô hàng theo mã vạch: " + scannedBatchNumber));
+        InventoryBatch scanned = resolveBatch(scannedBatchNumber);
 
         PickingListDetail shortDetail = findDetail(pl, pickingListDetailId);
         String productId = shortDetail.getProductId();
@@ -234,6 +230,19 @@ public class PickingDomainService {
     public PickingList getById(String id) {
         return pickingRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy lệnh gom hàng: " + id));
+    }
+
+    /**
+     * Định vị lô hàng từ giá trị công nhân nhập/quét: ưu tiên MÃ LÔ (batch_number, barcode
+     * dạng BATCH-yyyyMMdd-####); nếu không thấy, thử coi như ID lô (ULID). Nhờ vậy cả thao tác
+     * quét mã vạch lẫn thao tác chọn theo id trên UI đều dùng được. Việc đối chiếu lô có đúng
+     * lô FEFO cần xuất hay không vẫn do PickingListDetail.confirmScan/confirmShort đảm nhiệm.
+     */
+    private InventoryBatch resolveBatch(String scannedBatchNumberOrId) {
+        return batchRepository.findByBatchNumber(scannedBatchNumberOrId)
+                .or(() -> batchRepository.findById(scannedBatchNumberOrId))
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Không tìm thấy lô hàng theo mã lô hoặc id: " + scannedBatchNumberOrId));
     }
 
     private PickingListDetail findDetail(PickingList pl, String detailId) {

@@ -44,6 +44,13 @@ public interface InventoryWebMapper {
                 .build();
     }
 
+    /** Bản có kèm mã vị trí ô kệ đã resolve (zone-aisle-rack-bin). */
+    default InventoryBatchResponse toBatchResponse(InventoryBatch domain, String binLocation) {
+        InventoryBatchResponse response = toBatchResponse(domain);
+        if (response != null) response.setBinLocation(binLocation);
+        return response;
+    }
+
     default List<InventoryBatchResponse> toBatchResponseList(List<InventoryBatch> domains) {
         if (domains == null) return List.of();
         return domains.stream().map(this::toBatchResponse).toList();

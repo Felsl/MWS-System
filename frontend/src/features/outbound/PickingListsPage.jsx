@@ -186,7 +186,11 @@ function PLDetail({ id }) {
 function AssignModal({ open, onClose, pickId, onDone }) {
   const { message } = AntdApp.useApp()
   const [userId, setUserId] = useState()
-  const users = useQuery({ queryKey: ['users'], queryFn: usersApi.list, enabled: open })
+  const users = useQuery({
+    queryKey: ['users', 'pickers'],
+    queryFn: () => usersApi.list({ permission: 'OUTBOUND_PICK' }),
+    enabled: open,
+  })
   const assignMut = useMutation({
     mutationFn: () => pickingListsApi.assign(pickId, userId),
     onSuccess: (u) => { message.success('Đã gán người lấy'); onDone(u); onClose() },

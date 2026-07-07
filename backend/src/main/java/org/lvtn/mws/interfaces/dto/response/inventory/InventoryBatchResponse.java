@@ -12,6 +12,8 @@ public class InventoryBatchResponse {
     private String productId;
     private String warehouseId;
     private String binLocationId;
+    /** Mã vị trí ô kệ dạng zone-aisle-rack-bin (VD: A-01-R1-B1). */
+    private String binLocation;
     private String batchNumber;
     private int quantity;
     private LocalDate expiryDate;

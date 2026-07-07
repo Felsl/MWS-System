@@ -6,12 +6,16 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dev:mobile": "vite --host --mode mobile"
   },
   "dependencies": {
     "@ant-design/icons": "^5.5.2",
     "@stomp/stompjs": "^7.0.0",
     "@tanstack/react-query": "^5.62.0",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
+    "@zxing/browser": "^0.2.1",
+    "@zxing/library": "^0.23.0",
     "antd": "^5.22.0",
     "axios": "^1.7.9",
     "dayjs": "^1.11.13",

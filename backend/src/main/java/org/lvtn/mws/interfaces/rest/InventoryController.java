@@ -10,6 +10,7 @@ import org.lvtn.mws.interfaces.mapper.InventoryWebMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import java.util.Map;
 import org.springframework.security.access.prepost.PreAuthorize;
 
 @RestController
@@ -26,6 +27,7 @@ public class InventoryController {
     private final CommitStockDeductionUseCase commitUseCase;
     private final CreateInventoryBatchUseCase createBatchUseCase;
     private final GetBatchesUseCase getBatchesUseCase;
+    private final org.lvtn.mws.application.usecases.warehouse.GetBinLocationCodesUseCase getBinLocationCodesUseCase;
     private final UpdateBatchStatusUseCase updateBatchStatusUseCase;
     private final InventoryWebMapper mapper;
 
@@ -100,7 +102,10 @@ public class InventoryController {
     @GetMapping("/batches")
     public List<InventoryBatchResponse> getBatches(@RequestParam String productId,
                                                    @RequestParam String warehouseId) {
-        return mapper.toBatchResponseList(getBatchesUseCase.execute(productId, warehouseId));
+        Map<String, String> binCodes = getBinLocationCodesUseCase.executeByWarehouse(warehouseId);
+        return getBatchesUseCase.execute(productId, warehouseId).stream()
+                .map(b -> mapper.toBatchResponse(b, binCodes.get(b.getBinLocationId())))
+                .toList();
     }
 
     @PreAuthorize("hasAuthority('INVENTORY_ADJUST')")

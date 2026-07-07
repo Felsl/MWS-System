@@ -53,6 +53,11 @@ public class BinLocation {
         return warehouseId + "|" + zone + "|" + aisle + "|" + rack + "|" + bin;
     }
 
+    /** Mã vị trí ô kệ thân thiện để hiển thị: zone-aisle-rack-bin (VD: A-01-R1-B1). */
+    public String locationCode() {
+        return zone + "-" + aisle + "-" + rack + "-" + bin;
+    }
+
     public String getId()          { return id; }
     public String getWarehouseId() { return warehouseId; }
     public String getZone()        { return zone; }

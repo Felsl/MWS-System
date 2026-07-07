@@ -7,7 +7,7 @@ import {
   InboxOutlined, FileDoneOutlined,
   ShoppingCartOutlined, ProfileOutlined, CarOutlined, SwapOutlined,
   AuditOutlined, ReconciliationOutlined,
-  DatabaseOutlined, HistoryOutlined,
+  DatabaseOutlined, HistoryOutlined, ScanOutlined,
 } from '@ant-design/icons'
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
@@ -43,6 +43,7 @@ const NAV = [
     type: 'group', label: 'Xuất kho', children: [
       { key: '/sales-orders', icon: <ShoppingCartOutlined />, label: 'Đơn bán hàng', perm: P.OUTBOUND_VIEW_SO },
       { key: '/picking-lists', icon: <ProfileOutlined />, label: 'Lệnh lấy hàng', perm: P.OUTBOUND_VIEW },
+      { key: '/picking-scan', icon: <ScanOutlined />, label: 'Quét lấy hàng', perm: P.OUTBOUND_PICK },
       { key: '/shipments', icon: <CarOutlined />, label: 'Vận đơn', perm: P.OUTBOUND_VIEW },
     ],
   },

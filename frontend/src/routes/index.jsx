@@ -17,6 +17,7 @@ import PurchaseOrdersPage from '../features/inbound/PurchaseOrdersPage'
 import GoodsReceiptsPage from '../features/inbound/GoodsReceiptsPage'
 import SalesOrdersPage from '../features/outbound/SalesOrdersPage'
 import PickingListsPage from '../features/outbound/PickingListsPage'
+import PickingScanPage from '../features/outbound/PickingScanPage'
 import ShipmentsPage from '../features/outbound/ShipmentsPage'
 import TransferOrdersPage from '../features/transfer/TransferOrdersPage'
 import StocktakesPage from '../features/stocktake/StocktakesPage'
@@ -55,6 +56,9 @@ export default function AppRoutes() {
           <Route element={<ProtectedRoute permission={P.OUTBOUND_VIEW} />}>
             <Route path="picking-lists" element={<PickingListsPage />} />
             <Route path="shipments" element={<ShipmentsPage />} />
+          </Route>
+          <Route element={<ProtectedRoute permission={P.OUTBOUND_PICK} />}>
+            <Route path="picking-scan" element={<PickingScanPage />} />
           </Route>
           <Route element={<ProtectedRoute permission={P.TRANSFER_VIEW} />}>
             <Route path="transfer-orders" element={<TransferOrdersPage />} />

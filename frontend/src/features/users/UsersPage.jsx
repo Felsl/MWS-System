@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Table, Button, Space, Modal, Form, Input, Select, Tag, Popconfirm,
-  Typography, App as AntdApp,
+  Typography, Alert, Empty, App as AntdApp,
 } from 'antd'
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, HomeOutlined,
@@ -22,7 +22,7 @@ export default function UsersPage() {
   const [editing, setEditing] = useState(null)
   const [whUser, setWhUser] = useState(null) // user đang gán kho
 
-  const users = useQuery({ queryKey: ['users'], queryFn: usersApi.list })
+  const users = useQuery({ queryKey: ['users'], queryFn: () => usersApi.list() })
   const roles = useQuery({ queryKey: ['roles'], queryFn: rolesApi.list })
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['users'] })
@@ -192,6 +192,26 @@ function WarehouseAccessModal({ user, onClose }) {
       <Typography.Paragraph type="secondary">
         Chọn các kho người dùng được phép thao tác. BE sẽ lọc dữ liệu theo danh sách này.
       </Typography.Paragraph>
+
+      {warehouses.isError && (
+        <Alert type="error" showIcon style={{ marginBottom: 12 }}
+          message="Không tải được danh sách kho"
+          description={
+            <>
+              {getErrorMessage(warehouses.error)}
+              <br />
+              Lấy danh sách kho cần quyền <b>WAREHOUSE_VIEW</b>. Tài khoản đang đăng nhập
+              cần có cả <b>USER_ASSIGN_WAREHOUSE</b> lẫn <b>WAREHOUSE_VIEW</b> để dùng chức năng này.
+            </>
+          }
+          action={<Button size="small" onClick={() => warehouses.refetch()}>Thử lại</Button>}
+        />
+      )}
+
+      {!warehouses.isError && !warehouses.isLoading && (warehouses.data || []).length === 0 && (
+        <Empty description="Chưa có kho nào (hoặc bạn không có kho trong phạm vi). Hãy tạo kho ở mục Kho & ô kệ trước." />
+      )}
+
       <Select
         mode="multiple"
         style={{ width: '100%' }}
@@ -199,6 +219,7 @@ function WarehouseAccessModal({ user, onClose }) {
         loading={warehouses.isLoading || current.isLoading}
         value={selected}
         onChange={setSelected}
+        notFoundContent={warehouses.isLoading ? 'Đang tải...' : 'Không có kho'}
         options={(warehouses.data || []).map(w => ({ value: w.id, label: `${w.name} (${w.code})` }))}
       />
     </Modal>

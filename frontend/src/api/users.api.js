@@ -1,7 +1,8 @@
 import api from './client'
 const base = '/api/v1/users'
 export const usersApi = {
-  list: () => api.get(base).then(r => r.data),
+  // params tùy chọn: { permission, roleId } — BE sẽ thêm filter; nếu chưa có, BE bỏ qua và trả tất cả.
+  list: (params) => api.get(base, { params }).then(r => r.data),
   get: (id) => api.get(`${base}/${id}`).then(r => r.data),
   create: (body) => api.post(base, body).then(r => r.data),
   update: (id, body) => api.put(`${base}/${id}`, body).then(r => r.data),
