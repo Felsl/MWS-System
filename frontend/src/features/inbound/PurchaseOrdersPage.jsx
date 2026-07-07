@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Row, Col, Card, Button, Input, List, Form, Select, DatePicker, InputNumber,
+  Card, Button, Input, Form, Select, DatePicker, InputNumber, Row, Col,
   Table, Space, Typography, Tag, Descriptions, Empty, Popconfirm, Divider, App as AntdApp,
 } from 'antd'
 import {
-  PlusOutlined, SearchOutlined, DeleteOutlined, SendOutlined,
-  CheckOutlined, CloseOutlined, InboxOutlined,
+  PlusOutlined, SearchOutlined, DeleteOutlined, SendOutlined, ReloadOutlined,
+  CheckOutlined, CloseOutlined, InboxOutlined, ArrowLeftOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import Can from '../../components/Can'
@@ -16,11 +16,9 @@ import { getErrorMessage } from '../../api/client'
 import { P } from '../../constants/permissions'
 import { purchaseOrdersApi } from '../../api/purchaseOrders.api'
 import { productsApi } from '../../api/products.api'
-import { suppliersApi, /* customersApi */ } from '../../api/partners.api'
+import { suppliersApi } from '../../api/partners.api'
 import { warehousesApi } from '../../api/warehouses.api'
-import { useRecent } from './useRecent'
 
-// Trạng thái PO + màu
 const PO_STATUS = {
   DRAFT: { color: 'default', label: 'Nháp' },
   PENDING_REVIEW: { color: 'gold', label: 'Chờ kiểm tra' },
@@ -32,81 +30,104 @@ const PO_STATUS = {
   CANCELLED: { color: 'red', label: 'Đã huỷ' },
 }
 const poTag = (s) => <Tag color={PO_STATUS[s]?.color || 'default'}>{PO_STATUS[s]?.label || s}</Tag>
+const PO_STATUS_OPTS = Object.entries(PO_STATUS).map(([value, m]) => ({ value, label: m.label }))
+
+// Map id -> tên NCC / kho (nhẹ, dùng cho bảng list + header chi tiết)
+function useNameMaps() {
+  const suppliers = useQuery({ queryKey: ['suppliers'], queryFn: suppliersApi.list })
+  const warehouses = useQuery({ queryKey: ['warehouses', 'active'], queryFn: () => warehousesApi.list(false) })
+  const supplierMap = useMemo(() => Object.fromEntries((suppliers.data || []).map(s => [s.id, s])), [suppliers.data])
+  const warehouseMap = useMemo(() => Object.fromEntries((warehouses.data || []).map(w => [w.id, w])), [warehouses.data])
+  return { suppliers, warehouses, supplierMap, warehouseMap }
+}
 
 export default function PurchaseOrdersPage() {
-  const [mode, setMode] = useState('detail') // 'create' | 'detail'
-  const [currentId, setCurrentId] = useState(null)
-  const [lookup, setLookup] = useState('')
-  const recent = useRecent('mws_recent_po')
-
-  const openDetail = (id) => { setCurrentId(id); setMode('detail') }
+  const [view, setView] = useState({ mode: 'list', id: null })
+  const openDetail = (id) => setView({ mode: 'detail', id })
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>Đơn mua hàng (PO)</Typography.Title>
+        <Space>
+          {view.mode !== 'list' && (
+            <Button icon={<ArrowLeftOutlined />} onClick={() => setView({ mode: 'list', id: null })}>Danh sách</Button>
+          )}
+          <Typography.Title level={4} style={{ margin: 0 }}>Đơn mua hàng (PO)</Typography.Title>
+        </Space>
         <Can permission={P.INBOUND_CREATE_PO}>
           <Button type="primary" icon={<PlusOutlined />}
-            onClick={() => { setMode('create'); setCurrentId(null) }}>Tạo đơn mua</Button>
+            onClick={() => setView({ mode: 'create', id: null })}>Tạo đơn mua</Button>
         </Can>
       </div>
 
-      <Typography.Paragraph type="secondary" style={{ marginTop: -8 }}>
-        BE hiện chưa có API liệt kê đơn mua — tra cứu theo mã/ID hoặc chọn từ danh sách gần đây (lưu ở máy này).
-      </Typography.Paragraph>
-
-      <Row gutter={16}>
-        <Col xs={24} md={7} lg={6}>
-          <Card size="small" title="Tra cứu / Gần đây" styles={{ body: { padding: 12 } }}>
-            <Input.Search
-              placeholder="Dán ID đơn mua" allowClear enterButton={<SearchOutlined />}
-              value={lookup} onChange={(e) => setLookup(e.target.value)}
-              onSearch={(v) => v && openDetail(v.trim())} />
-            <Divider style={{ margin: '12px 0' }} />
-            {recent.items.length === 0
-              ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có" />
-              : (
-                <List size="small" dataSource={recent.items}
-                  renderItem={(it) => (
-                    <List.Item style={{ cursor: 'pointer' }} onClick={() => openDetail(it.id)}>
-                      <List.Item.Meta
-                        title={<span>{it.poNumber || it.id}</span>}
-                        description={poTag(it.status)} />
-                    </List.Item>
-                  )} />
-              )}
-            {recent.items.length > 0 && (
-              <Button type="link" size="small" danger onClick={recent.clear}>Xoá danh sách</Button>
-            )}
-          </Card>
-        </Col>
-
-        <Col xs={24} md={17} lg={18}>
-          {mode === 'create'
-            ? <CreatePO onCreated={(po) => { recent.push({ id: po.id, poNumber: po.poNumber, status: po.status }); openDetail(po.id) }} />
-            : currentId
-              ? <PODetail id={currentId} onChanged={(po) => recent.push({ id: po.id, poNumber: po.poNumber, status: po.status })} />
-              : <Card><Empty description="Chọn một đơn mua hoặc tạo mới" /></Card>}
-        </Col>
-      </Row>
+      {view.mode === 'list' && <POList onOpen={openDetail} />}
+      {view.mode === 'create' && <CreatePO onCreated={(po) => openDetail(po.id)} />}
+      {view.mode === 'detail' && view.id && <PODetail id={view.id} />}
     </div>
   )
 }
 
-// ---- Hook dữ liệu dùng chung ----
+// ---- Bảng danh sách ----
+function POList({ onOpen }) {
+  const [keyword, setKeyword] = useState('')
+  const [status, setStatus] = useState()
+  const [pager, setPager] = useState({ page: 0, size: 20 })
+  const { supplierMap, warehouseMap } = useNameMaps()
+
+  const list = useQuery({
+    queryKey: ['po-list', keyword, status, pager.page, pager.size],
+    queryFn: () => purchaseOrdersApi.list({ keyword, status, page: pager.page, size: pager.size }),
+    placeholderData: keepPreviousData,
+  })
+  const pageData = list.data
+
+  const columns = [
+    { title: 'Mã đơn', dataIndex: 'poNumber', render: (v, r) => <a onClick={() => onOpen(r.id)}>{v || r.id}</a> },
+    { title: 'Trạng thái', dataIndex: 'status', width: 140, render: poTag },
+    { title: 'Nhà cung cấp', dataIndex: 'supplierId', render: (v) => supplierMap[v]?.name || v },
+    { title: 'Kho', dataIndex: 'warehouseId', render: (v) => warehouseMap[v]?.name || v, width: 150 },
+    { title: 'Ngày dự kiến', dataIndex: 'expectedDate', width: 120,
+      render: (v) => v ? dayjs(v).format('DD/MM/YYYY') : '—' },
+    { title: 'Người tạo', dataIndex: 'createdBy', width: 130 },
+    { title: 'Tạo lúc', dataIndex: 'createdAt', width: 150,
+      render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
+  ]
+
+  return (
+    <>
+      <Space style={{ marginBottom: 12 }} wrap>
+        <Input.Search allowClear placeholder="Tìm theo mã đơn" style={{ width: 220 }}
+          prefix={<SearchOutlined />}
+          onSearch={(v) => { setKeyword(v); setPager(p => ({ ...p, page: 0 })) }} />
+        <Select allowClear placeholder="Lọc trạng thái" style={{ width: 180 }}
+          options={PO_STATUS_OPTS} value={status}
+          onChange={(v) => { setStatus(v); setPager(p => ({ ...p, page: 0 })) }} />
+        <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching} />
+      </Space>
+
+      <Table rowKey="id" loading={list.isLoading} dataSource={pageData?.content || []}
+        columns={columns} scroll={{ x: 'max-content' }}
+        pagination={{
+          current: (pageData?.page ?? 0) + 1,
+          pageSize: pageData?.size ?? 20,
+          total: pageData?.totalElements ?? 0,
+          showSizeChanger: true,
+          showTotal: (t) => `Tổng ${t}`,
+          onChange: (p, s) => setPager({ page: p - 1, size: s }),
+        }} />
+    </>
+  )
+}
+
+// ---- Lookups cho form tạo & chi tiết (kèm sản phẩm) ----
 function useLookups() {
-  const suppliers = useQuery({ queryKey: ['suppliers'], queryFn: suppliersApi.list })
-  const warehouses = useQuery({ queryKey: ['warehouses', 'active'], queryFn: () => warehousesApi.list(false) })
+  const { suppliers, warehouses, supplierMap, warehouseMap } = useNameMaps()
   const products = useQuery({ queryKey: ['products', 'all'], queryFn: () => productsApi.list({ size: 500 }) })
   const productList = products.data?.content || []
   const productMap = useMemo(() => Object.fromEntries(productList.map(p => [p.id, p])), [productList])
-  const supplierMap = useMemo(() => Object.fromEntries((suppliers.data || []).map(s => [s.id, s])), [suppliers.data])
-  const warehouseMap = useMemo(() => Object.fromEntries((warehouses.data || []).map(w => [w.id, w])), [warehouses.data])
   return { suppliers, warehouses, products, productList, productMap, supplierMap, warehouseMap }
 }
-
-const productOptions = (list) =>
-  list.map(p => ({ value: p.id, label: `${p.name} · ${p.sku}` }))
+const productOptions = (list) => list.map(p => ({ value: p.id, label: `${p.name} · ${p.sku}` }))
 
 // ---- Form tạo PO ----
 function CreatePO({ onCreated }) {
@@ -204,7 +225,7 @@ function CreatePO({ onCreated }) {
 }
 
 // ---- Chi tiết PO + workflow ----
-function PODetail({ id, onChanged }) {
+function PODetail({ id }) {
   const { message } = AntdApp.useApp()
   const { hasPermission } = useAuth()
   const navigate = useNavigate()
@@ -218,7 +239,11 @@ function PODetail({ id, onChanged }) {
 
   const mkAct = (mutFn, okMsg) => ({
     mutationFn: () => mutFn(id),
-    onSuccess: (updated) => { message.success(okMsg); qc.setQueryData(['po', id], updated); onChanged?.(updated) },
+    onSuccess: (updated) => {
+      message.success(okMsg)
+      qc.setQueryData(['po', id], updated)
+      qc.invalidateQueries({ queryKey: ['po-list'] })
+    },
     onError: (e) => message.error(getErrorMessage(e)),
   })
   const reviewMut = useMutation(mkAct(purchaseOrdersApi.submitReview, 'Đã gửi kiểm tra'))
@@ -240,7 +265,6 @@ function PODetail({ id, onChanged }) {
     { title: 'Thành tiền', key: 'lt', width: 130, align: 'right',
       render: (_, r) => r.unitPrice != null ? (Number(r.unitPrice) * r.quantityOrdered).toLocaleString('vi-VN') : '—' },
   ]
-
   const busy = reviewMut.isPending || approvalMut.isPending || approveMut.isPending || rejectMut.isPending
 
   return (

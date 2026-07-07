@@ -15,10 +15,15 @@ import CategoriesPage from '../features/categories/CategoriesPage'
 import PartnersPage from '../features/partners/PartnersPage'
 import PurchaseOrdersPage from '../features/inbound/PurchaseOrdersPage'
 import GoodsReceiptsPage from '../features/inbound/GoodsReceiptsPage'
-
-function NotificationsPlaceholder() {
-  return <Result title="Thông báo" subTitle="Trung tâm thông báo realtime (WebSocket/STOMP) sẽ nối ở Giai đoạn 7." />
-}
+import SalesOrdersPage from '../features/outbound/SalesOrdersPage'
+import PickingListsPage from '../features/outbound/PickingListsPage'
+import ShipmentsPage from '../features/outbound/ShipmentsPage'
+import TransferOrdersPage from '../features/transfer/TransferOrdersPage'
+import StocktakesPage from '../features/stocktake/StocktakesPage'
+import AdjustmentsPage from '../features/stocktake/AdjustmentsPage'
+import InventoryPage from '../features/inventory/InventoryPage'
+import StockMovementsPage from '../features/inventory/StockMovementsPage'
+import NotificationsPage from '../features/notifications/NotificationsPage'
 
 export default function AppRoutes() {
   return (
@@ -29,7 +34,7 @@ export default function AppRoutes() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route index element={<DashboardPage />} />
-          <Route path="notifications" element={<NotificationsPlaceholder />} />
+          <Route path="notifications" element={<NotificationsPage />} />
 
           <Route element={<ProtectedRoute permission={P.MASTER_PRODUCT_VIEW} />}>
             <Route path="products" element={<ProductsPage />} />
@@ -43,6 +48,28 @@ export default function AppRoutes() {
           </Route>
           <Route element={<ProtectedRoute permission={P.INBOUND_VIEW_GRN} />}>
             <Route path="goods-receipts" element={<GoodsReceiptsPage />} />
+          </Route>
+          <Route element={<ProtectedRoute permission={P.OUTBOUND_VIEW_SO} />}>
+            <Route path="sales-orders" element={<SalesOrdersPage />} />
+          </Route>
+          <Route element={<ProtectedRoute permission={P.OUTBOUND_VIEW} />}>
+            <Route path="picking-lists" element={<PickingListsPage />} />
+            <Route path="shipments" element={<ShipmentsPage />} />
+          </Route>
+          <Route element={<ProtectedRoute permission={P.TRANSFER_VIEW} />}>
+            <Route path="transfer-orders" element={<TransferOrdersPage />} />
+          </Route>
+          <Route element={<ProtectedRoute permission={P.STOCKTAKE_VIEW} />}>
+            <Route path="stocktakes" element={<StocktakesPage />} />
+          </Route>
+          <Route element={<ProtectedRoute permission={P.ADJUSTMENT_VIEW} />}>
+            <Route path="adjustment-vouchers" element={<AdjustmentsPage />} />
+          </Route>
+          <Route element={<ProtectedRoute permission={P.INVENTORY_VIEW} />}>
+            <Route path="inventory" element={<InventoryPage />} />
+          </Route>
+          <Route element={<ProtectedRoute permission={P.AUDIT_VIEW_MOVEMENTS} />}>
+            <Route path="stock-movements" element={<StockMovementsPage />} />
           </Route>
           <Route element={<ProtectedRoute permission={P.WAREHOUSE_VIEW} />}>
             <Route path="warehouses" element={<WarehousesPage />} />

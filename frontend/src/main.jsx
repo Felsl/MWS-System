@@ -7,6 +7,7 @@ import viVN from 'antd/locale/vi_VN'
 import dayjs from 'dayjs'
 import 'dayjs/locale/vi'
 import { AuthProvider } from './auth/AuthContext.jsx'
+import { NotificationProvider } from './context/NotificationContext.jsx'
 import AppRoutes from './routes/index.jsx'
 import './index.css'
 
@@ -34,7 +35,9 @@ createRoot(document.getElementById('root')).render(
         <QueryClientProvider client={queryClient}>
           <BrowserRouter>
             <AuthProvider>
-              <AppRoutes />
+              <NotificationProvider>
+                <AppRoutes />
+              </NotificationProvider>
             </AuthProvider>
           </BrowserRouter>
         </QueryClientProvider>

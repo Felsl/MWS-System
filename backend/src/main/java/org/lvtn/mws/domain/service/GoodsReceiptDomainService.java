@@ -59,6 +59,12 @@ public class GoodsReceiptDomainService {
 
     // ── Read ───────────────────────────────────────────────────────────────
 
+    /** [B4] Tìm kiếm + phân trang (đã lọc theo phạm vi kho). */
+    public org.lvtn.mws.domain.common.PageResult<GoodsReceipt> search(
+            String keyword, String status, org.lvtn.mws.domain.common.PageQuery pageQuery) {
+        return grnRepository.search(keyword, status, pageQuery);
+    }
+
     public GoodsReceipt findById(String id) {
         return grnRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu nhập: " + id));

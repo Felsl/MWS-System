@@ -5,9 +5,13 @@ import {
   HomeOutlined, AppstoreOutlined, TagsOutlined, TeamOutlined,
   BellOutlined, LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
   InboxOutlined, FileDoneOutlined,
+  ShoppingCartOutlined, ProfileOutlined, CarOutlined, SwapOutlined,
+  AuditOutlined, ReconciliationOutlined,
+  DatabaseOutlined, HistoryOutlined,
 } from '@ant-design/icons'
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import NotificationBell from './NotificationBell'
 import { P } from '../constants/permissions'
 
 const { Header, Sider, Content } = Layout
@@ -24,9 +28,33 @@ const NAV = [
     ],
   },
   {
+    type: 'group', label: 'Tồn kho', children: [
+      { key: '/inventory', icon: <DatabaseOutlined />, label: 'Tồn kho & lô', perm: P.INVENTORY_VIEW },
+      { key: '/stock-movements', icon: <HistoryOutlined />, label: 'Thẻ kho (Kardex)', perm: P.AUDIT_VIEW_MOVEMENTS },
+    ],
+  },
+  {
     type: 'group', label: 'Nhập kho', children: [
       { key: '/purchase-orders', icon: <FileDoneOutlined />, label: 'Đơn mua hàng', perm: P.INBOUND_VIEW_PO },
       { key: '/goods-receipts', icon: <InboxOutlined />, label: 'Phiếu nhập kho', perm: P.INBOUND_VIEW_GRN },
+    ],
+  },
+  {
+    type: 'group', label: 'Xuất kho', children: [
+      { key: '/sales-orders', icon: <ShoppingCartOutlined />, label: 'Đơn bán hàng', perm: P.OUTBOUND_VIEW_SO },
+      { key: '/picking-lists', icon: <ProfileOutlined />, label: 'Lệnh lấy hàng', perm: P.OUTBOUND_VIEW },
+      { key: '/shipments', icon: <CarOutlined />, label: 'Vận đơn', perm: P.OUTBOUND_VIEW },
+    ],
+  },
+  {
+    type: 'group', label: 'Điều chuyển', children: [
+      { key: '/transfer-orders', icon: <SwapOutlined />, label: 'Phiếu điều chuyển', perm: P.TRANSFER_VIEW },
+    ],
+  },
+  {
+    type: 'group', label: 'Kiểm kê', children: [
+      { key: '/stocktakes', icon: <AuditOutlined />, label: 'Phiên kiểm kê', perm: P.STOCKTAKE_VIEW },
+      { key: '/adjustment-vouchers', icon: <ReconciliationOutlined />, label: 'Phiếu điều chỉnh', perm: P.ADJUSTMENT_VIEW },
     ],
   },
   {
@@ -92,9 +120,7 @@ export default function AppLayout() {
           <Button type="text" onClick={() => setCollapsed(v => !v)}
             icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <Badge count={0} size="small">
-              <Button type="text" icon={<BellOutlined />} onClick={() => navigate('/notifications')} />
-            </Badge>
+            <NotificationBell />
             <Dropdown menu={userMenu} trigger={['click']}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                 <Avatar size="small" icon={<UserOutlined />} />

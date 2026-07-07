@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
@@ -32,6 +33,7 @@ public class GoodsReceiptController {
     private final CompleteGoodsReceiptUseCase completeUseCase;
     private final GetGoodsReceiptByIdUseCase getByIdUseCase;
     private final GetGoodsReceiptDetailsUseCase getDetailsUseCase;
+    private final org.lvtn.mws.application.usecases.goodsreceipt.GetAllGoodsReceiptsUseCase getAllUseCase;
     private final GoodsReceiptWebMapper webMapper;
 
     @PreAuthorize("hasAuthority('INBOUND_CREATE_GRN')")
@@ -52,6 +54,19 @@ public class GoodsReceiptController {
     @PostMapping("/{id}/complete")
     public ResponseEntity<GoodsReceiptResponse> complete(@PathVariable String id) {
         return ResponseEntity.ok(buildResponse(completeUseCase.execute(id)));
+    }
+
+    /** [B4] Danh sách phiếu nhập có tìm kiếm + lọc + phân trang (header-only). */
+    @PreAuthorize("hasAuthority('INBOUND_VIEW_GRN')")
+    @GetMapping
+    public ResponseEntity<org.lvtn.mws.interfaces.dto.response.common.PageResponse<GoodsReceiptResponse>> getAll(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        var result = getAllUseCase.execute(keyword, status, page, size);
+        return ResponseEntity.ok(
+                org.lvtn.mws.interfaces.dto.response.common.PageResponse.from(result, webMapper::toResponse));
     }
 
     @GetMapping("/{id}")

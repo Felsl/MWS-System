@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
@@ -38,6 +39,7 @@ public class PurchaseOrderController {
     private final RejectPurchaseOrderUseCase rejectUseCase;
     private final GetPurchaseOrderByIdUseCase getByIdUseCase;
     private final GetPurchaseOrderDetailsUseCase getDetailsUseCase;
+    private final org.lvtn.mws.application.usecases.purchaseorder.GetAllPurchaseOrdersUseCase getAllUseCase;
     private final PurchaseOrderWebMapper webMapper;
 
     @PreAuthorize("hasAuthority('INBOUND_CREATE_PO')")
@@ -79,6 +81,19 @@ public class PurchaseOrderController {
     @PostMapping("/{id}/reject")
     public ResponseEntity<PurchaseOrderResponse> reject(@PathVariable String id) {
         return ResponseEntity.ok(buildResponse(rejectUseCase.execute(id)));
+    }
+
+    /** [B4] Danh sách PO có tìm kiếm + lọc + phân trang (header-only, không kèm dòng chi tiết). */
+    @PreAuthorize("hasAuthority('INBOUND_VIEW_PO')")
+    @GetMapping
+    public ResponseEntity<org.lvtn.mws.interfaces.dto.response.common.PageResponse<PurchaseOrderResponse>> getAll(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        var result = getAllUseCase.execute(keyword, status, page, size);
+        return ResponseEntity.ok(
+                org.lvtn.mws.interfaces.dto.response.common.PageResponse.from(result, webMapper::toResponse));
     }
 
     @GetMapping("/{id}")

@@ -37,6 +37,30 @@ public class GoodsReceiptRepositoryImpl implements IGoodsReceiptRepository {
     }
 
     @Override
+    public org.lvtn.mws.domain.common.PageResult<GoodsReceipt> search(
+            String keyword, String status, org.lvtn.mws.domain.common.PageQuery pageQuery) {
+        org.springframework.data.jpa.domain.Specification<org.lvtn.mws.infrastructure.persistence.entity.GoodsReceiptEntity> spec =
+                org.lvtn.mws.infrastructure.security.scope.WarehouseScopeSpecs.restrict("warehouseId");
+        if (keyword != null && !keyword.isBlank()) {
+            String like = "%" + keyword.trim().toLowerCase() + "%";
+            spec = spec.and((root, q, cb) -> cb.like(cb.lower(root.get("grnNumber")), like));
+        }
+        if (status != null && !status.isBlank()) {
+            try {
+                GoodsReceipt.Status st = GoodsReceipt.Status.valueOf(status.trim().toUpperCase());
+                spec = spec.and((root, q, cb) -> cb.equal(root.get("status"), st));
+            } catch (IllegalArgumentException ignored) { }
+        }
+        var pageable = org.springframework.data.domain.PageRequest.of(
+                pageQuery.page(), pageQuery.size(),
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "receivedAt"));
+        var pageEntity = jpa.findAll(spec, pageable);
+        return new org.lvtn.mws.domain.common.PageResult<>(
+                pageEntity.getContent().stream().map(mapper::toDomain).toList(),
+                pageQuery.page(), pageQuery.size(), pageEntity.getTotalElements());
+    }
+
+    @Override
     public boolean existsByGrnNumber(String grnNumber) {
         return jpa.existsByGrnNumber(grnNumber);
     }

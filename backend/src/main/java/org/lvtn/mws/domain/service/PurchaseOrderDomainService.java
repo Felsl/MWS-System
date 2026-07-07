@@ -30,6 +30,12 @@ public class PurchaseOrderDomainService {
 
     // ── Read ───────────────────────────────────────────────────────────────
 
+    /** [B4] Tìm kiếm + phân trang (đã lọc theo phạm vi kho). */
+    public org.lvtn.mws.domain.common.PageResult<PurchaseOrder> search(
+            String keyword, String status, org.lvtn.mws.domain.common.PageQuery pageQuery) {
+        return poRepository.search(keyword, status, pageQuery);
+    }
+
     public PurchaseOrder findById(String id) {
         return poRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy đơn mua: " + id));

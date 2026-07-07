@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Row, Col, Card, Button, Input, List, Form, Select, InputNumber, DatePicker,
+  Card, Button, Input, Form, Select, InputNumber, DatePicker, Row, Col,
   Table, Space, Typography, Tag, Descriptions, Empty, Divider, App as AntdApp,
 } from 'antd'
 import {
   PlusOutlined, SearchOutlined, DeleteOutlined, CheckCircleOutlined,
+  ReloadOutlined, ArrowLeftOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import Can from '../../components/Can'
@@ -16,69 +17,19 @@ import { goodsReceiptsApi } from '../../api/goodsReceipts.api'
 import { purchaseOrdersApi } from '../../api/purchaseOrders.api'
 import { productsApi } from '../../api/products.api'
 import { warehousesApi } from '../../api/warehouses.api'
-import { useRecent } from './useRecent'
 
 const GRN_STATUS = {
   PENDING: { color: 'gold', label: 'Chờ hoàn thành' },
   COMPLETED: { color: 'green', label: 'Đã hoàn thành' },
 }
 const grnTag = (s) => <Tag color={GRN_STATUS[s]?.color || 'default'}>{GRN_STATUS[s]?.label || s}</Tag>
+const GRN_STATUS_OPTS = Object.entries(GRN_STATUS).map(([value, m]) => ({ value, label: m.label }))
 
-export default function GoodsReceiptsPage() {
-  const location = useLocation()
-  const poIdFromNav = location.state?.poId || null
-  const [mode, setMode] = useState(poIdFromNav ? 'create' : 'detail')
-  const [currentId, setCurrentId] = useState(null)
-  const recent = useRecent('mws_recent_grn')
-
-  const openDetail = (id) => { setCurrentId(id); setMode('detail') }
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>Phiếu nhập kho (GRN)</Typography.Title>
-        <Can permission={P.INBOUND_CREATE_GRN}>
-          <Button type="primary" icon={<PlusOutlined />}
-            onClick={() => { setMode('create'); setCurrentId(null) }}>Tạo phiếu nhập</Button>
-        </Can>
-      </div>
-      <Typography.Paragraph type="secondary" style={{ marginTop: -8 }}>
-        BE chưa có API liệt kê phiếu nhập — tra cứu theo ID hoặc chọn từ danh sách gần đây (lưu ở máy này).
-      </Typography.Paragraph>
-
-      <Row gutter={16}>
-        <Col xs={24} md={7} lg={6}>
-          <Card size="small" title="Tra cứu / Gần đây" styles={{ body: { padding: 12 } }}>
-            <Input.Search placeholder="Dán ID phiếu nhập" allowClear enterButton={<SearchOutlined />}
-              onSearch={(v) => v && openDetail(v.trim())} />
-            <Divider style={{ margin: '12px 0' }} />
-            {recent.items.length === 0
-              ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có" />
-              : <List size="small" dataSource={recent.items}
-                  renderItem={(it) => (
-                    <List.Item style={{ cursor: 'pointer' }} onClick={() => openDetail(it.id)}>
-                      <List.Item.Meta title={it.grnNumber || it.id} description={grnTag(it.status)} />
-                    </List.Item>
-                  )} />}
-            {recent.items.length > 0 && (
-              <Button type="link" size="small" danger onClick={recent.clear}>Xoá danh sách</Button>
-            )}
-          </Card>
-        </Col>
-
-        <Col xs={24} md={17} lg={18}>
-          {mode === 'create'
-            ? <CreateGRN initialPoId={poIdFromNav}
-                onCreated={(grn) => { recent.push({ id: grn.id, grnNumber: grn.grnNumber, status: grn.status }); openDetail(grn.id) }} />
-            : currentId
-              ? <GRNDetail id={currentId} onChanged={(grn) => recent.push({ id: grn.id, grnNumber: grn.grnNumber, status: grn.status })} />
-              : <Card><Empty description="Chọn một phiếu nhập hoặc tạo mới" /></Card>}
-        </Col>
-      </Row>
-    </div>
-  )
+function useWarehouseMap() {
+  const warehouses = useQuery({ queryKey: ['warehouses', 'active'], queryFn: () => warehousesApi.list(false) })
+  const map = useMemo(() => Object.fromEntries((warehouses.data || []).map(w => [w.id, w])), [warehouses.data])
+  return { warehouses, warehouseMap: map }
 }
-
 function useProductMap() {
   const products = useQuery({ queryKey: ['products', 'all'], queryFn: () => productsApi.list({ size: 500 }) })
   const list = products.data?.content || []
@@ -87,22 +38,96 @@ function useProductMap() {
 }
 const productOptions = (list) => list.map(p => ({ value: p.id, label: `${p.name} · ${p.sku}` }))
 
+export default function GoodsReceiptsPage() {
+  const location = useLocation()
+  const poIdFromNav = location.state?.poId || null
+  const [view, setView] = useState(poIdFromNav ? { mode: 'create', id: null } : { mode: 'list', id: null })
+  const openDetail = (id) => setView({ mode: 'detail', id })
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+        <Space>
+          {view.mode !== 'list' && (
+            <Button icon={<ArrowLeftOutlined />} onClick={() => setView({ mode: 'list', id: null })}>Danh sách</Button>
+          )}
+          <Typography.Title level={4} style={{ margin: 0 }}>Phiếu nhập kho (GRN)</Typography.Title>
+        </Space>
+        <Can permission={P.INBOUND_CREATE_GRN}>
+          <Button type="primary" icon={<PlusOutlined />}
+            onClick={() => setView({ mode: 'create', id: null })}>Tạo phiếu nhập</Button>
+        </Can>
+      </div>
+
+      {view.mode === 'list' && <GRNList onOpen={openDetail} />}
+      {view.mode === 'create' && <CreateGRN initialPoId={poIdFromNav} onCreated={(grn) => openDetail(grn.id)} />}
+      {view.mode === 'detail' && view.id && <GRNDetail id={view.id} />}
+    </div>
+  )
+}
+
+function GRNList({ onOpen }) {
+  const [keyword, setKeyword] = useState('')
+  const [status, setStatus] = useState()
+  const [pager, setPager] = useState({ page: 0, size: 20 })
+  const { warehouseMap } = useWarehouseMap()
+
+  const list = useQuery({
+    queryKey: ['grn-list', keyword, status, pager.page, pager.size],
+    queryFn: () => goodsReceiptsApi.list({ keyword, status, page: pager.page, size: pager.size }),
+    placeholderData: keepPreviousData,
+  })
+  const pageData = list.data
+
+  const columns = [
+    { title: 'Mã phiếu', dataIndex: 'grnNumber', render: (v, r) => <a onClick={() => onOpen(r.id)}>{v || r.id}</a> },
+    { title: 'Trạng thái', dataIndex: 'status', width: 150, render: grnTag },
+    { title: 'Kho', dataIndex: 'warehouseId', render: (v) => warehouseMap[v]?.name || v, width: 160 },
+    { title: 'Từ đơn mua', dataIndex: 'poId', render: (v) => v || '— (tự do)' },
+    { title: 'Người nhận', dataIndex: 'receivedBy', width: 130 },
+    { title: 'Nhận lúc', dataIndex: 'receivedAt', width: 150,
+      render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
+  ]
+
+  return (
+    <>
+      <Space style={{ marginBottom: 12 }} wrap>
+        <Input.Search allowClear placeholder="Tìm theo mã phiếu" style={{ width: 220 }}
+          prefix={<SearchOutlined />}
+          onSearch={(v) => { setKeyword(v); setPager(p => ({ ...p, page: 0 })) }} />
+        <Select allowClear placeholder="Lọc trạng thái" style={{ width: 180 }}
+          options={GRN_STATUS_OPTS} value={status}
+          onChange={(v) => { setStatus(v); setPager(p => ({ ...p, page: 0 })) }} />
+        <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching} />
+      </Space>
+
+      <Table rowKey="id" loading={list.isLoading} dataSource={pageData?.content || []}
+        columns={columns} scroll={{ x: 'max-content' }}
+        pagination={{
+          current: (pageData?.page ?? 0) + 1,
+          pageSize: pageData?.size ?? 20,
+          total: pageData?.totalElements ?? 0,
+          showSizeChanger: true,
+          showTotal: (t) => `Tổng ${t}`,
+          onChange: (p, s) => setPager({ page: p - 1, size: s }),
+        }} />
+    </>
+  )
+}
+
 function CreateGRN({ initialPoId, onCreated }) {
   const { message } = AntdApp.useApp()
   const [form] = Form.useForm()
   const [poId, setPoId] = useState(initialPoId || '')
   const { products, list: productList } = useProductMap()
-  const warehouses = useQuery({ queryKey: ['warehouses', 'active'], queryFn: () => warehousesApi.list(false) })
+  const { warehouses } = useWarehouseMap()
 
-  // Kho đang chọn -> tải ô kệ để putaway
   const warehouseId = Form.useWatch('warehouseId', form)
   const bins = useQuery({
     queryKey: ['bins', warehouseId],
     queryFn: () => warehousesApi.listBins(warehouseId),
     enabled: !!warehouseId,
   })
-
-  // Nạp PO để prefill dòng hàng (nếu có poId)
   const po = useQuery({
     queryKey: ['po', poId],
     queryFn: () => purchaseOrdersApi.get(poId),
@@ -183,7 +208,6 @@ function CreateGRN({ initialPoId, onCreated }) {
             <>
               {fields.map(({ key, name, ...rest }) => (
                 <Row gutter={8} key={key} align="middle" style={{ marginBottom: 4 }}>
-                  {/* poDetailId ẩn để gắn về dòng PO khi prefill */}
                   <Form.Item {...rest} name={[name, 'poDetailId']} hidden><Input /></Form.Item>
                   <Col flex="220px">
                     <Form.Item {...rest} name={[name, 'productId']} rules={[{ required: true, message: 'SP' }]}>
@@ -231,7 +255,7 @@ function CreateGRN({ initialPoId, onCreated }) {
   )
 }
 
-function GRNDetail({ id, onChanged }) {
+function GRNDetail({ id }) {
   const { message } = AntdApp.useApp()
   const qc = useQueryClient()
   const { map: productMap } = useProductMap()
@@ -242,7 +266,11 @@ function GRNDetail({ id, onChanged }) {
   })
   const completeMut = useMutation({
     mutationFn: () => goodsReceiptsApi.complete(id),
-    onSuccess: (updated) => { message.success('Đã hoàn thành nhập kho'); qc.setQueryData(['grn', id], updated); onChanged?.(updated) },
+    onSuccess: (updated) => {
+      message.success('Đã hoàn thành nhập kho')
+      qc.setQueryData(['grn', id], updated)
+      qc.invalidateQueries({ queryKey: ['grn-list'] })
+    },
     onError: (e) => message.error(getErrorMessage(e)),
   })
 
