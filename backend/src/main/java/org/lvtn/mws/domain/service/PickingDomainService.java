@@ -121,11 +121,11 @@ public class PickingDomainService {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Không tìm thấy dòng nhặt: " + pickingListDetailId));
 
-        InventoryBatch scanned = resolveBatch(scannedBatchNumber);
-
         PickingListDetail detail = findDetail(pl, pickingListDetailId);
 
-        // Quét đúng lô = nhận trọn quantityToPick; lệch FEFO -> ném "Sai mã lô hàng!"
+        // Xác định lô CẦN xuất theo id đã chốt bởi FEFO (khoá chính, duy nhất) và kiểm tra
+        // công nhân quét đúng lô đó. Quét đúng = nhận trọn quantityToPick.
+        InventoryBatch scanned = resolveExpectedBatchForScan(detail, scannedBatchNumber);
         detail.confirmScan(scanned.getId(), confirmedBy);
         return pickingRepository.save(pl);
     }
@@ -152,9 +152,8 @@ public class PickingDomainService {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Không tìm thấy dòng nhặt: " + pickingListDetailId));
 
-        InventoryBatch scanned = resolveBatch(scannedBatchNumber);
-
         PickingListDetail shortDetail = findDetail(pl, pickingListDetailId);
+        InventoryBatch scanned = resolveExpectedBatchForScan(shortDetail, scannedBatchNumber);
         String productId = shortDetail.getProductId();
 
         // (1) Xác nhận short-pick (kiểm tra lệch lô + biên độ số lượng nằm trong confirmShort)
@@ -233,16 +232,26 @@ public class PickingDomainService {
     }
 
     /**
-     * Định vị lô hàng từ giá trị công nhân nhập/quét: ưu tiên MÃ LÔ (batch_number, barcode
-     * dạng BATCH-yyyyMMdd-####); nếu không thấy, thử coi như ID lô (ULID). Nhờ vậy cả thao tác
-     * quét mã vạch lẫn thao tác chọn theo id trên UI đều dùng được. Việc đối chiếu lô có đúng
-     * lô FEFO cần xuất hay không vẫn do PickingListDetail.confirmScan/confirmShort đảm nhiệm.
+     * Xác định lô CẦN xuất cho một dòng nhặt và kiểm tra công nhân đã quét đúng lô.
+     *
+     * <p>QUAN TRỌNG: {@code batch_number} (mã lô/barcode) KHÔNG duy nhất toàn hệ thống —
+     * cùng một mã lô có thể tồn tại ở nhiều kho/ô kệ (VD: "LOT-2026-07"). Vì vậy KHÔNG dùng
+     * {@code findByBatchNumber} (sẽ ném NonUniqueResult khi trùng). Thay vào đó tra lô kỳ vọng
+     * theo {@code detail.batchId} (khoá chính, luôn duy nhất — do FEFO chốt) rồi đối chiếu giá
+     * trị công nhân quét. Chấp nhận quét bằng MÃ LÔ hoặc ID lô.
      */
-    private InventoryBatch resolveBatch(String scannedBatchNumberOrId) {
-        return batchRepository.findByBatchNumber(scannedBatchNumberOrId)
-                .or(() -> batchRepository.findById(scannedBatchNumberOrId))
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Không tìm thấy lô hàng theo mã lô hoặc id: " + scannedBatchNumberOrId));
+    private InventoryBatch resolveExpectedBatchForScan(PickingListDetail detail, String scanned) {
+        InventoryBatch expected = batchRepository.findById(detail.getBatchId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Không tìm thấy lô hàng cần xuất (id=" + detail.getBatchId() + ")"));
+        boolean matches = expected.getBatchNumber().equals(scanned)
+                || expected.getId().equals(scanned);
+        if (!matches) {
+            throw new IllegalArgumentException(
+                    "Sai mã lô hàng! Lô bạn vừa quét (" + scanned + ") không phải lô cận hạn nhất "
+                    + "cần xuất (" + expected.getBatchNumber() + "). Vui lòng kiểm tra lại!");
+        }
+        return expected;
     }
 
     private PickingListDetail findDetail(PickingList pl, String detailId) {

@@ -17,7 +17,8 @@ public class TransferOrder {
     public enum Status {
         DRAFT,        // vừa lập phiếu
         PENDING_APPROVAL,    // đã gửi duyệt + đã giữ chỗ ảo ở kho nguồn
-        APPROVED,     // quản lý duyệt + đã chạy FEFO gán lô/ô kệ nguồn
+        APPROVED,     // quản lý duyệt (chờ gom hàng)
+        PICKING,      // đang gom hàng (picking) tại kho nguồn
         IN_TRANSIT,   // xe đã rời kho nguồn, hàng đang đi đường
         COMPLETED,    // kho đích đã nhận + đối soát xong
         REJECTED,     // bị từ chối duyệt
@@ -113,6 +114,12 @@ public class TransferOrder {
     }
 
     /** APPROVED -> IN_TRANSIT (xe lăn bánh rời kho nguồn). */
+    /** Bắt đầu gom hàng: APPROVED -> PICKING (khi sinh picking list cho điều chuyển). */
+    public void markPicking() {
+        ensure(Status.APPROVED, "Chỉ phiếu đã duyệt (APPROVED) mới bắt đầu gom hàng");
+        this.status = Status.PICKING;
+    }
+
     public void markInTransit() {
         ensure(Status.APPROVED, "Chỉ phiếu đã duyệt (APPROVED) mới được xuất kho đi đường");
         this.status = Status.IN_TRANSIT;

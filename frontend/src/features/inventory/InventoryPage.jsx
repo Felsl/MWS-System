@@ -121,7 +121,7 @@ function BatchView() {
 
   const columns = [
     { title: 'Số lô', dataIndex: 'batchNumber', width: 150 },
-    { title: 'Ô kệ', dataIndex: 'binLocationId', width: 130 },
+    { title: 'Ô kệ', dataIndex: 'binLocation', width: 150, render: (v, r) => v || r.binLocationId || '—' },
     { title: 'SL', dataIndex: 'quantity', width: 90, align: 'right' },
     { title: 'NSX', dataIndex: 'manufacturedDate', width: 120, render: (v) => v ? dayjs(v).format('DD/MM/YYYY') : '—' },
     {

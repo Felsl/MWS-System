@@ -16,6 +16,7 @@ public class PickingList {
 
     private final String id;
     private final String soId;
+    private final String transferOrderId;
     private String assignedTo;
     private Status status;
     private LocalDateTime startedAt;
@@ -25,7 +26,13 @@ public class PickingList {
 
     private PickingList(Builder b) {
         this.id          = Objects.requireNonNull(b.id, "id is required");
-        this.soId        = Objects.requireNonNull(b.soId, "soId is required");
+        this.soId        = b.soId;
+        this.transferOrderId = b.transferOrderId;
+        // Một picking list phải thuộc ĐÚNG MỘT nguồn: đơn xuất (soId) HOẶC điều chuyển (transferOrderId).
+        if ((this.soId == null) == (this.transferOrderId == null)) {
+            throw new IllegalArgumentException(
+                    "Picking list phải gắn đúng một nguồn: soId hoặc transferOrderId");
+        }
         this.assignedTo  = b.assignedTo;
         this.status      = b.status == null ? Status.PENDING : b.status;
         this.startedAt   = b.startedAt;
@@ -36,6 +43,7 @@ public class PickingList {
     public static class Builder {
         private String id;
         private String soId;
+        private String transferOrderId;
         private String assignedTo;
         private Status status;
         private LocalDateTime startedAt;
@@ -44,6 +52,7 @@ public class PickingList {
 
         public Builder id(String v)              { this.id = v; return this; }
         public Builder soId(String v)            { this.soId = v; return this; }
+        public Builder transferOrderId(String v) { this.transferOrderId = v; return this; }
         public Builder assignedTo(String v)      { this.assignedTo = v; return this; }
         public Builder status(Status v)          { this.status = v; return this; }
         public Builder startedAt(LocalDateTime v){ this.startedAt = v; return this; }
@@ -83,6 +92,7 @@ public class PickingList {
 
     public String getId()              { return id; }
     public String getSoId()            { return soId; }
+    public String getTransferOrderId() { return transferOrderId; }
     public String getAssignedTo()      { return assignedTo; }
     public Status getStatus()          { return status; }
     public LocalDateTime getStartedAt(){ return startedAt; }

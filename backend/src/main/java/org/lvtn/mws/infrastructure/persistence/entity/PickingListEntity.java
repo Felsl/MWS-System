@@ -16,8 +16,11 @@ public class PickingListEntity {
     @Column(length = 20)
     private String id;
 
-    @Column(name = "so_id", nullable = false, length = 20)
+    @Column(name = "so_id", length = 20)
     private String soId;
+
+    @Column(name = "transfer_order_id", length = 20)
+    private String transferOrderId;
 
     @Column(name = "assigned_to", length = 20)
     private String assignedTo;
