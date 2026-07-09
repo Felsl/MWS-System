@@ -7,6 +7,7 @@ public record PickingListDetailResponse(
         String pickingListId,
         String productId,
         String batchId,
+        String requiredBatchId,
         String actualBatchId,
         String binLocationId,
         int quantityToPick,

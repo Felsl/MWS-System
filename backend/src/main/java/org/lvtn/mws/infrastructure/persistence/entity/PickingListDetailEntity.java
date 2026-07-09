@@ -24,6 +24,9 @@ public class PickingListDetailEntity {
     @Column(name = "batch_id", nullable = false, length = 20)
     private String batchId;
 
+    @Column(name = "required_batch_id", length = 20)
+    private String requiredBatchId;
+
     @Column(name = "actual_batch_id", length = 20)
     private String actualBatchId;
 

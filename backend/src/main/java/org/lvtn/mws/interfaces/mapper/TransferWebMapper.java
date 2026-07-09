@@ -28,7 +28,7 @@ public class TransferWebMapper {
         List<NewTransferLine> lines = new ArrayList<>();
         if (reqs != null) {
             for (TransferLineItemRequest r : reqs) {
-                lines.add(new NewTransferLine(r.getProductId(), r.getQuantity()));
+                lines.add(new NewTransferLine(r.getProductId(), r.getQuantity(), r.getDesignatedBatchId()));
             }
         }
         return lines;
@@ -74,6 +74,7 @@ public class TransferWebMapper {
                 .transferOrderId(d.getTransferOrderId())
                 .productId(d.getProductId())
                 .batchId(d.getBatchId())
+                .designatedBatchId(d.getDesignatedBatchId())
                 .quantity(d.getQuantity())
                 .quantityReceived(d.getQuantityReceived())
                 .lostQuantity(d.lostQuantity())

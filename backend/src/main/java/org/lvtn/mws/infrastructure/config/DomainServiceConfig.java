@@ -78,6 +78,16 @@ public class DomainServiceConfig {
     }
 
     @Bean
+    public org.lvtn.mws.domain.service.TransferPickingDomainService transferPickingDomainService(
+            IPickingListRepository pickingListRepository,
+            IInventoryBatchRepository inventoryBatchRepository,
+            org.lvtn.mws.domain.repository.ITransferOrderRepository transferOrderRepository,
+            IIdGenerator idGenerator) {
+        return new org.lvtn.mws.domain.service.TransferPickingDomainService(
+                pickingListRepository, inventoryBatchRepository, transferOrderRepository, idGenerator);
+    }
+
+    @Bean
     public ShipmentDomainService shipmentDomainService(
             IShipmentRepository shipmentRepository,
             ISalesOrderRepository salesOrderRepository,

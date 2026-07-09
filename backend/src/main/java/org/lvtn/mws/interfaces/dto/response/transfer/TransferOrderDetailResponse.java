@@ -10,6 +10,7 @@ public class TransferOrderDetailResponse {
     private String transferOrderId;
     private String productId;
     private String batchId;
+    private String designatedBatchId;
     private int quantity;
     private int quantityReceived;
     private int lostQuantity;

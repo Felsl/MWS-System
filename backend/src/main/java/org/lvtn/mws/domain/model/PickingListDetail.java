@@ -9,7 +9,8 @@ public class PickingListDetail {
     private final String id;
     private String pickingListId;
     private final String productId;
-    private final String batchId;        // Lô hệ thống đề xuất (FEFO)
+    private final String batchId;        // Lô hệ thống đề xuất (FEFO / hoặc lô chỉ định)
+    private final String requiredBatchId; // != null => BẮT BUỘC quét đúng lô này (lô chỉ định); null => cho quét tự do
     private String actualBatchId;        // Lô thực tế quét được
     private final String binLocationId;
     private final int quantityToPick;
@@ -23,6 +24,7 @@ public class PickingListDetail {
         this.pickingListId  = b.pickingListId;
         this.productId      = Objects.requireNonNull(b.productId, "productId is required");
         this.batchId        = Objects.requireNonNull(b.batchId, "batchId is required");
+        this.requiredBatchId = b.requiredBatchId;
         this.actualBatchId  = b.actualBatchId;
         this.binLocationId  = Objects.requireNonNull(b.binLocationId, "binLocationId is required");
         if (b.quantityToPick <= 0) {
@@ -40,6 +42,7 @@ public class PickingListDetail {
         private String pickingListId;
         private String productId;
         private String batchId;
+        private String requiredBatchId;
         private String actualBatchId;
         private String binLocationId;
         private int quantityToPick;
@@ -49,6 +52,7 @@ public class PickingListDetail {
         private LocalDateTime confirmedAt;
 
         public Builder id(String v)            { this.id = v; return this; }
+        public Builder requiredBatchId(String v){ this.requiredBatchId = v; return this; }
         public Builder pickingListId(String v) { this.pickingListId = v; return this; }
         public Builder productId(String v)     { this.productId = v; return this; }
         public Builder batchId(String v)       { this.batchId = v; return this; }
@@ -94,6 +98,22 @@ public class PickingListDetail {
      * được DomainService tự bù bằng dòng nhặt mới từ lô FEFO kế tiếp.
      * quantityToPick GIỮ NGUYÊN để truy vết "định lấy bao nhiêu" so với "lấy được bao nhiêu".
      */
+    /**
+     * Xác nhận đã nhặt cho ĐIỀU CHUYỂN: ghi lô THỰC TẾ đã quét, KHÔNG khoá theo lô FEFO gợi ý.
+     * (Việc kiểm "đúng lô chỉ định / lô ACTIVE hợp lệ" do TransferPickingDomainService lo trước khi gọi.)
+     */
+    public void confirmPicked(String actualBatchId, String confirmedBy) {
+        Objects.requireNonNull(actualBatchId, "actualBatchId không được trống");
+        if (this.confirmed) {
+            throw new IllegalStateException("Dòng này đã được xác nhận trước đó");
+        }
+        this.actualBatchId  = actualBatchId;
+        this.quantityPicked = this.quantityToPick;
+        this.confirmed      = true;
+        this.confirmedBy    = confirmedBy;
+        this.confirmedAt    = LocalDateTime.now();
+    }
+
     public void confirmShort(String scannedBatchId, int actualQty, String confirmedBy) {
         Objects.requireNonNull(scannedBatchId, "scannedBatchId không được trống");
         if (this.confirmed) {
@@ -124,6 +144,7 @@ public class PickingListDetail {
     public String getPickingListId()  { return pickingListId; }
     public String getProductId()      { return productId; }
     public String getBatchId()        { return batchId; }
+    public String getRequiredBatchId() { return requiredBatchId; }
     public String getActualBatchId()  { return actualBatchId; }
     public String getBinLocationId()  { return binLocationId; }
     public int getQuantityToPick()    { return quantityToPick; }

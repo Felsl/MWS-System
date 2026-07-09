@@ -12,4 +12,7 @@ public class TransferLineItemRequest {
 
     @Min(value = 1, message = "Số lượng phải lớn hơn 0")
     private int quantity;
+
+    /** (Tùy chọn) Lô do người lập/duyệt CHỈ ĐỊNH; bỏ trống = chỉ gợi ý FEFO, picker quét tự do. */
+    private String designatedBatchId;
 }

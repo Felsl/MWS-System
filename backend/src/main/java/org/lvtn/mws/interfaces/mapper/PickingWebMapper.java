@@ -27,7 +27,7 @@ public interface PickingWebMapper {
         if (d == null) return null;
         return new PickingListDetailResponse(
                 d.getId(), d.getPickingListId(), d.getProductId(),
-                d.getBatchId(), d.getActualBatchId(), d.getBinLocationId(),
+                d.getBatchId(), d.getRequiredBatchId(), d.getActualBatchId(), d.getBinLocationId(),
                 d.getQuantityToPick(), d.getQuantityPicked(),
                 d.isConfirmed(), d.getConfirmedBy(), d.getConfirmedAt());
     }

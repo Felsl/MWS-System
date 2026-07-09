@@ -38,6 +38,7 @@ public interface PickingListInfraMapper {
         de.setId(d.getId());
         de.setProductId(d.getProductId());
         de.setBatchId(d.getBatchId());
+        de.setRequiredBatchId(d.getRequiredBatchId());
         de.setActualBatchId(d.getActualBatchId());
         de.setBinLocationId(d.getBinLocationId());
         de.setQuantityToPick(d.getQuantityToPick());
@@ -58,6 +59,7 @@ public interface PickingListInfraMapper {
                         .pickingListId(e.getId())
                         .productId(de.getProductId())
                         .batchId(de.getBatchId())
+                        .requiredBatchId(de.getRequiredBatchId())
                         .actualBatchId(de.getActualBatchId())
                         .binLocationId(de.getBinLocationId())
                         .quantityToPick(de.getQuantityToPick())

@@ -9,6 +9,7 @@ public interface IPickingListRepository {
     PickingList save(PickingList pickingList);
     Optional<PickingList> findById(String id);
     Optional<PickingList> findBySoId(String soId);
+    Optional<PickingList> findByTransferOrderId(String transferOrderId);
     List<PickingList> findAll();
     /** Tìm 1 dòng chi tiết để đối soát quét mã (trả về aggregate chứa dòng đó). */
     Optional<PickingList> findByDetailId(String pickingListDetailId);

@@ -9,6 +9,7 @@ import java.util.Optional;
 
 public interface JpaPickingListRepository extends JpaRepository<PickingListEntity, String> {
     Optional<PickingListEntity> findBySoId(String soId);
+    Optional<PickingListEntity> findByTransferOrderId(String transferOrderId);
 
     @Query("SELECT DISTINCT pl FROM PickingListEntity pl JOIN pl.details d WHERE d.id = :detailId")
     Optional<PickingListEntity> findByDetailId(@Param("detailId") String detailId);
