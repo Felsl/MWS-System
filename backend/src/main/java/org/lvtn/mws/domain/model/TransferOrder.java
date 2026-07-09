@@ -99,6 +99,16 @@ public class TransferOrder {
      * PENDING_APPROVAL -> APPROVED. Thay danh sách detail bằng danh sách đã chạy FEFO
      * (đã gán batchId + fromBinLocationId, có thể đã tách dòng theo nhiều lô).
      */
+    /** [INC3] Duyệt KHÔNG gán lô — chọn lô dời sang bước gom hàng (picking). */
+    public void approve(String approvedBy) {
+        ensure(Status.PENDING_APPROVAL, "Chỉ phiếu ở trạng thái PENDING_APPROVAL mới được duyệt");
+        Objects.requireNonNull(approvedBy, "Người duyệt không được trống");
+        this.status     = Status.APPROVED;
+        this.approvedBy = approvedBy;
+        this.approvedAt = LocalDateTime.now();
+        touch();
+    }
+
     public void approve(String approvedBy, List<TransferOrderDetail> allocatedDetails) {
         ensure(Status.PENDING_APPROVAL, "Chỉ phiếu ở trạng thái PENDING_APPROVAL mới được duyệt");
         Objects.requireNonNull(approvedBy, "Người duyệt không được trống");
@@ -121,7 +131,10 @@ public class TransferOrder {
     }
 
     public void markInTransit() {
-        ensure(Status.APPROVED, "Chỉ phiếu đã duyệt (APPROVED) mới được xuất kho đi đường");
+        // [INC3] Xuất kho sau khi đã duyệt HOẶC sau khi gom hàng (picking).
+        if (this.status != Status.APPROVED && this.status != Status.PICKING) {
+            throw new IllegalStateException("Chỉ phiếu đã duyệt hoặc đang gom hàng mới được xuất kho đi đường");
+        }
         this.status = Status.IN_TRANSIT;
         touch();
     }

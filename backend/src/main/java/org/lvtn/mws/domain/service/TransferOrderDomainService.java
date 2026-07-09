@@ -18,6 +18,9 @@ import org.lvtn.mws.domain.repository.INotificationPort;
 import org.lvtn.mws.domain.repository.IShipmentRepository;
 import org.lvtn.mws.domain.repository.IShippingFeeCalculator;
 import org.lvtn.mws.domain.repository.IStockMovementRepository;
+import org.lvtn.mws.domain.model.PickingList;
+import org.lvtn.mws.domain.model.PickingListDetail;
+import org.lvtn.mws.domain.repository.IPickingListRepository;
 import org.lvtn.mws.domain.repository.ITransferOrderRepository;
 import org.lvtn.mws.domain.repository.IWarehouseRepository;
 
@@ -48,6 +51,7 @@ public class TransferOrderDomainService {
     private final INotificationPort notificationPort;
     private final IShippingFeeCalculator shippingFeeCalculator;
     private final IIdGenerator idGenerator;
+    private final IPickingListRepository pickingRepository;
 
     public TransferOrderDomainService(ITransferOrderRepository transferRepository,
                                       IShipmentRepository shipmentRepository,
@@ -58,7 +62,8 @@ public class TransferOrderDomainService {
                                       IStockMovementRepository stockMovementRepository,
                                       INotificationPort notificationPort,
                                       IShippingFeeCalculator shippingFeeCalculator,
-                                      IIdGenerator idGenerator) {
+                                      IIdGenerator idGenerator,
+                                      IPickingListRepository pickingRepository) {
         this.transferRepository      = transferRepository;
         this.shipmentRepository      = shipmentRepository;
         this.carrierRepository       = carrierRepository;
@@ -69,6 +74,7 @@ public class TransferOrderDomainService {
         this.notificationPort        = notificationPort;
         this.shippingFeeCalculator   = shippingFeeCalculator;
         this.idGenerator             = idGenerator;
+        this.pickingRepository       = pickingRepository;
     }
 
     // ── Đọc ──────────────────────────────────────────────────────────────────
@@ -216,48 +222,8 @@ public class TransferOrderDomainService {
     /** PENDING_APPROVAL -> APPROVED. Chạy FEFO, gán batchId + fromBinLocationId (tách dòng theo lô). */
     public TransferOrder approveTransferOrder(String transferId, String approvedBy) {
         TransferOrder order = findById(transferId);
-
-        // gộp nhu cầu theo product (phòng trường hợp trùng product nhiều dòng)
-        Map<String, Integer> demandByProduct = aggregateBy(order.getDetails(),
-                TransferOrderDetail::getProductId, TransferOrderDetail::getQuantity);
-
-        List<TransferOrderDetail> allocated = new ArrayList<>();
-
-        for (Map.Entry<String, Integer> e : demandByProduct.entrySet()) {
-            String productId = e.getKey();
-            int remaining = e.getValue();
-
-            // FEFO: ACTIVE batches sắp xếp expiry ASC, created ASC
-            List<InventoryBatch> batches =
-                    batchRepository.findActiveBatchesForPicking(productId, order.getFromWarehouseId());
-
-            for (InventoryBatch batch : batches) {
-                if (remaining <= 0) break;
-                int avail = batch.getQuantity();
-                if (avail <= 0) continue;
-                int take = Math.min(avail, remaining);
-
-                allocated.add(new TransferOrderDetail.Builder()
-                        .id(idGenerator.generate())
-                        .transferOrderId(order.getId())
-                        .productId(productId)
-                        .batchId(batch.getId())
-                        .fromBinLocationId(batch.getBinLocationId())
-                        .quantity(take)
-                        .quantityReceived(0)
-                        .build());
-
-                remaining -= take;
-            }
-
-            if (remaining > 0) {
-                throw new InsufficientStockException(
-                        "Không đủ tồn theo lô (FEFO) cho sản phẩm " + productId
-                                + " tại kho nguồn: còn thiếu " + remaining);
-            }
-        }
-
-        order.approve(approvedBy, allocated);
+        // [INC3] Duyệt KHÔNG còn gán lô FEFO — việc chọn lô dời sang bước gom hàng (picking).
+        order.approve(approvedBy);
         return transferRepository.save(order);
     }
 
@@ -279,7 +245,14 @@ public class TransferOrderDomainService {
             throw new IllegalStateException("Đơn vị vận chuyển đang ngừng hoạt động: " + carrier.getCode());
         }
 
-        List<TransferOrderDetail> details = order.getDetails();
+        // [INC3] Xuất kho theo LÔ THỰC NHẶT ở bước picking (không dùng lô FEFO gán lúc approve).
+        PickingList picking = pickingRepository.findByTransferOrderId(order.getId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Phiếu chưa có lệnh gom hàng — phải gom hàng (picking) xong mới xuất kho"));
+        if (!picking.isCompleted()) {
+            throw new IllegalStateException("Lệnh gom hàng chưa hoàn tất — chưa nhặt xong, không thể xuất kho");
+        }
+        List<PickingListDetail> picked = picking.getDetails();
 
         // Tạo kiện hàng: PACKED
         Shipment shipment = new Shipment.Builder()
@@ -292,7 +265,7 @@ public class TransferOrderDomainService {
                 .build();
 
         // Ước tính phí ship từ cấu hình JSON (không có cột lưu -> dùng cho log/notify)
-        int totalQty = details.stream().mapToInt(TransferOrderDetail::getQuantity).sum();
+        int totalQty = picked.stream().mapToInt(PickingListDetail::getQuantityPicked).sum();
         BigDecimal estimatedFee = shippingFeeCalculator.estimate(
                 carrier.getShippingFeeRule(), totalQty,
                 order.getFromWarehouseId(), order.getToWarehouseId());
@@ -301,8 +274,8 @@ public class TransferOrderDomainService {
         shipment.ship();
 
         // Trừ kho vật lý tại kho nguồn (quantity & reserved giảm song song)
-        Map<String, Integer> qtyByProduct = aggregateBy(details,
-                TransferOrderDetail::getProductId, TransferOrderDetail::getQuantity);
+        Map<String, Integer> qtyByProduct = aggregateBy(picked,
+                PickingListDetail::getProductId, PickingListDetail::getQuantityPicked);
         for (Map.Entry<String, Integer> e : qtyByProduct.entrySet()) {
             Inventory inv = inventoryRepository
                     .findByProductIdAndWarehouseId(e.getKey(), order.getFromWarehouseId())
@@ -312,12 +285,12 @@ public class TransferOrderDomainService {
             inventoryRepository.save(inv);
         }
 
-        // Trừ chính xác theo lô tại ô kệ nguồn
-        for (TransferOrderDetail d : details) {
-            InventoryBatch batch = batchRepository.findById(d.getBatchId())
+        // Trừ đúng LÔ THỰC NHẶT tại ô kệ nguồn
+        for (PickingListDetail d : picked) {
+            InventoryBatch batch = batchRepository.findById(d.getActualBatchId())
                     .orElseThrow(() -> new IllegalStateException(
-                            "Lô đã phân bổ không còn tồn tại: " + d.getBatchId()));
-            batch.deduct(d.getQuantity());
+                            "Lô thực nhặt không còn tồn tại: " + d.getActualBatchId()));
+            batch.deduct(d.getQuantityPicked());
             batchRepository.save(batch);
         }
 

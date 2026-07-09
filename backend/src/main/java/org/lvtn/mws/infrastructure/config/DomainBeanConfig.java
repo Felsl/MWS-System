@@ -15,6 +15,7 @@ import org.lvtn.mws.domain.repository.IWarehouseRepository;
 import org.lvtn.mws.domain.service.CarrierDomainService;
 import org.lvtn.mws.domain.service.CustomerDomainService;
 import org.lvtn.mws.domain.service.SupplierDomainService;
+import org.lvtn.mws.domain.repository.IPickingListRepository;
 import org.lvtn.mws.domain.service.TransferOrderDomainService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -37,11 +38,13 @@ public class DomainBeanConfig {
             IStockMovementRepository stockMovementRepository,
             INotificationPort notificationPort,
             IShippingFeeCalculator shippingFeeCalculator,
-            IIdGenerator idGenerator) {
+            IIdGenerator idGenerator,
+            IPickingListRepository pickingListRepository) {
         return new TransferOrderDomainService(
                 transferRepository, shipmentRepository, carrierRepository,
                 inventoryRepository, batchRepository, warehouseRepository,
-                stockMovementRepository, notificationPort, shippingFeeCalculator, idGenerator);
+                stockMovementRepository, notificationPort, shippingFeeCalculator, idGenerator,
+                pickingListRepository);
     }
 
     @Bean
