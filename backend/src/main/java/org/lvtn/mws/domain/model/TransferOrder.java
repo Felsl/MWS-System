@@ -130,6 +130,20 @@ public class TransferOrder {
         this.status = Status.PICKING;
     }
 
+    /**
+     * [INC3] Ghi nhận LÔ THỰC NHẶT (từ picking) thành chi tiết phiếu: mỗi lô đã nhặt = một dòng.
+     * Nhờ vậy ca một dòng tách nhiều lô theo FEFO được biểu diễn đúng (VD: 15 = 10 lô A + 5 lô B
+     * -> 2 dòng), và kho đích nhận đúng lô/hạn dùng.
+     */
+    public void applyPickedAllocation(List<TransferOrderDetail> pickedDetails) {
+        if (pickedDetails == null || pickedDetails.isEmpty()) {
+            throw new IllegalStateException("Chưa có lô thực nhặt để xuất kho");
+        }
+        this.details.clear();
+        this.details.addAll(pickedDetails);
+        touch();
+    }
+
     public void markInTransit() {
         // [INC3] Xuất kho sau khi đã duyệt HOẶC sau khi gom hàng (picking).
         if (this.status != Status.APPROVED && this.status != Status.PICKING) {

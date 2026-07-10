@@ -2,14 +2,16 @@ import { useMemo, useState } from 'react'
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Button, Input, Form, Select, InputNumber, Row, Col, Table, Space,
-  Typography, Tag, Descriptions, Empty, Popconfirm, Divider, Modal, App as AntdApp,
+  Typography, Tag, Descriptions, Empty, Popconfirm, Divider, Modal, Progress, App as AntdApp,
 } from 'antd'
 import {
   PlusOutlined, SearchOutlined, DeleteOutlined, ReloadOutlined, ArrowLeftOutlined,
   SendOutlined, CheckOutlined, CloseOutlined, CarOutlined, InboxOutlined,
+  ProfileOutlined, ScanOutlined, LockOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import Can from '../../components/Can'
+import BarcodeScanner from '../../components/BarcodeScanner'
 import { useAuth } from '../../auth/AuthContext'
 import { getErrorMessage } from '../../api/client'
 import { P } from '../../constants/permissions'
@@ -17,11 +19,13 @@ import { transferOrdersApi } from '../../api/transferOrders.api'
 import { productsApi } from '../../api/products.api'
 import { warehousesApi } from '../../api/warehouses.api'
 import { carriersApi } from '../../api/partners.api'
+import { inventoryApi } from '../../api/inventory.api'
 
 const TO_STATUS = {
   DRAFT: { color: 'default', label: 'Nháp' },
   PENDING_APPROVAL: { color: 'gold', label: 'Chờ phê duyệt' },
   APPROVED: { color: 'blue', label: 'Đã duyệt' },
+  PICKING: { color: 'orange', label: 'Đang gom hàng' },
   IN_TRANSIT: { color: 'geekblue', label: 'Đang chuyển' },
   COMPLETED: { color: 'green', label: 'Hoàn thành' },
   REJECTED: { color: 'red', label: 'Bị từ chối' },
@@ -106,6 +110,29 @@ function TOList({ onOpen }) {
   )
 }
 
+// Ô chọn lô cho 1 dòng: mặc định "Tự động (FEFO)", có thể chỉ định lô cụ thể (gợi ý theo FEFO).
+const AUTO = '__auto__'
+function BatchLineSelect({ fromWarehouseId, productId, quantity, value, onChange }) {
+  const enabled = !!fromWarehouseId && !!productId && quantity > 0
+  const sug = useQuery({
+    queryKey: ['fefo', fromWarehouseId, productId, quantity],
+    queryFn: () => inventoryApi.allocateBatches(productId, fromWarehouseId, quantity),
+    enabled,
+  })
+  const options = [
+    { value: AUTO, label: 'Tự động (FEFO) — picker quét lô bất kỳ' },
+    ...(sug.data || []).map(s => ({
+      value: s.batchId,
+      label: `Chỉ định: ${s.batchNumber} · ${s.binLocationId} · gợi ý ${s.suggestedQuantity}`,
+    })),
+  ]
+  return (
+    <Select value={value || AUTO} onChange={onChange} options={options}
+      loading={sug.isFetching} style={{ width: '100%' }}
+      disabled={!enabled} placeholder={enabled ? undefined : 'Chọn kho nguồn + SP + SL trước'} />
+  )
+}
+
 function CreateTO({ onCreated }) {
   const { message } = AntdApp.useApp()
   const { user } = useAuth()
@@ -127,7 +154,11 @@ function CreateTO({ onCreated }) {
       fromWarehouseId: v.fromWarehouseId,
       toWarehouseId: v.toWarehouseId,
       createdBy: user?.userId,
-      lines: v.lines.map(l => ({ productId: l.productId, quantity: l.quantity })),
+      lines: v.lines.map(l => ({
+        productId: l.productId,
+        quantity: l.quantity,
+        designatedBatchId: l.designatedBatchId && l.designatedBatchId !== AUTO ? l.designatedBatchId : null,
+      })),
     })
   }
 
@@ -135,7 +166,7 @@ function CreateTO({ onCreated }) {
 
   return (
     <Card title="Tạo phiếu điều chuyển">
-      <Form form={form} layout="vertical" initialValues={{ lines: [{}] }}>
+      <Form form={form} layout="vertical" initialValues={{ lines: [{ designatedBatchId: AUTO }] }}>
         <Row gutter={16}>
           <Col xs={24} md={10}>
             <Form.Item name="fromWarehouseId" label="Kho nguồn" rules={[{ required: true, message: 'Chọn kho nguồn' }]}>
@@ -151,19 +182,34 @@ function CreateTO({ onCreated }) {
         </Row>
 
         <Divider orientation="left" style={{ margin: '4px 0 12px' }}>Dòng hàng</Divider>
+        <Typography.Paragraph type="secondary" style={{ marginTop: -8 }}>
+          Mặc định để "Tự động (FEFO)" — picker quét lô ACTIVE bất kỳ. Nếu chọn "Chỉ định", picker buộc phải quét đúng lô đó.
+        </Typography.Paragraph>
         <Form.List name="lines">
           {(fields, { add, remove }) => (
             <>
               {fields.map(({ key, name, ...rest }) => (
-                <Row gutter={8} key={key} align="middle">
-                  <Col flex="auto">
+                <Row gutter={8} key={key} align="top" style={{ marginBottom: 4 }}>
+                  <Col flex="260px">
                     <Form.Item {...rest} name={[name, 'productId']} rules={[{ required: true, message: 'Chọn SP' }]}>
                       <Select showSearch optionFilterProp="label" placeholder="Sản phẩm" options={productOptions(productList)} />
                     </Form.Item>
                   </Col>
-                  <Col flex="140px">
+                  <Col flex="110px">
                     <Form.Item {...rest} name={[name, 'quantity']} rules={[{ required: true, message: 'SL' }]}>
                       <InputNumber min={1} placeholder="Số lượng" style={{ width: '100%' }} />
+                    </Form.Item>
+                  </Col>
+                  <Col flex="auto">
+                    <Form.Item noStyle shouldUpdate>
+                      {() => (
+                        <Form.Item {...rest} name={[name, 'designatedBatchId']}>
+                          <BatchLineSelect
+                            fromWarehouseId={fromId}
+                            productId={form.getFieldValue(['lines', name, 'productId'])}
+                            quantity={form.getFieldValue(['lines', name, 'quantity'])} />
+                        </Form.Item>
+                      )}
                     </Form.Item>
                   </Col>
                   <Col flex="40px">
@@ -171,7 +217,7 @@ function CreateTO({ onCreated }) {
                   </Col>
                 </Row>
               ))}
-              <Button type="dashed" block icon={<PlusOutlined />} onClick={() => add({})}>Thêm dòng</Button>
+              <Button type="dashed" block icon={<PlusOutlined />} onClick={() => add({ designatedBatchId: AUTO })}>Thêm dòng</Button>
             </>
           )}
         </Form.List>
@@ -206,6 +252,9 @@ function TODetail({ id }) {
     onSuccess: (u) => { message.success('Đã từ chối'); refresh(u) }, onError: (e) => message.error(getErrorMessage(e)) })
   const cancelMut = useMutation({ mutationFn: () => transferOrdersApi.cancel(id),
     onSuccess: (u) => { message.success('Đã huỷ phiếu'); refresh(u) }, onError: (e) => message.error(getErrorMessage(e)) })
+  const genPickMut = useMutation({ mutationFn: () => transferOrdersApi.generatePicking(id),
+    onSuccess: () => { message.success('Đã tạo lệnh gom hàng'); refresh(); qc.invalidateQueries({ queryKey: ['to-picking', id] }) },
+    onError: (e) => message.error(getErrorMessage(e)) })
 
   if (isLoading) return <Card loading />
   if (isError) return <Card><Empty description={getErrorMessage(error, 'Không tìm thấy phiếu điều chuyển')} /></Card>
@@ -214,12 +263,16 @@ function TODetail({ id }) {
   const busy = reqMut.isPending || approveMut.isPending || rejectMut.isPending || cancelMut.isPending
   const columns = [
     { title: 'Sản phẩm', dataIndex: 'productId', render: (pid) => productMap[pid]?.name || pid },
-    { title: 'SL chuyển', dataIndex: 'quantity', width: 100, align: 'right' },
+    { title: 'SL chuyển', dataIndex: 'quantity', width: 90, align: 'right' },
+    {
+      title: 'Lô', key: 'batch', width: 150,
+      render: (_, r) => r.designatedBatchId
+        ? <Tag color="purple" icon={<LockOutlined />}>Chỉ định</Tag>
+        : <Tag>FEFO tự động</Tag>,
+    },
     { title: 'SL nhận', dataIndex: 'quantityReceived', width: 90, align: 'right' },
-    { title: 'Hao hụt', dataIndex: 'lostQuantity', width: 90, align: 'right',
-      render: (v) => v > 0 ? <Tag color="red">{v}</Tag> : v },
-    { title: 'Ô kệ nguồn', dataIndex: 'fromBinLocationId', width: 130, render: (v) => v || '—' },
-    { title: 'Ô kệ đích', dataIndex: 'binLocationId', width: 130, render: (v) => v || '—' },
+    { title: 'Hao hụt', dataIndex: 'lostQuantity', width: 90, align: 'right', render: (v) => v > 0 ? <Tag color="red">{v}</Tag> : v },
+    { title: 'Ô kệ đích', dataIndex: 'binLocationId', width: 120, render: (v) => v || '—' },
   ]
 
   return (
@@ -246,7 +299,8 @@ function TODetail({ id }) {
           )}
           {s === 'APPROVED' && (
             <Can permission={P.TRANSFER_DISPATCH}>
-              <Button type="primary" icon={<CarOutlined />} onClick={() => setDispatchOpen(true)}>Xuất chuyển</Button>
+              <Button type="primary" icon={<ProfileOutlined />} loading={genPickMut.isPending}
+                onClick={() => genPickMut.mutate()}>Tạo lệnh gom hàng</Button>
             </Can>
           )}
           {s === 'IN_TRANSIT' && (
@@ -276,9 +330,106 @@ function TODetail({ id }) {
       <Table style={{ marginTop: 16 }} rowKey="id" size="small" pagination={false}
         dataSource={to.details || []} columns={columns} scroll={{ x: 'max-content' }} />
 
+      {s === 'PICKING' && (
+        <TransferPickingPanel transferId={id} productMap={productMap} onDispatch={() => setDispatchOpen(true)} />
+      )}
+
       <DispatchModal open={dispatchOpen} onClose={() => setDispatchOpen(false)} toId={id} onDone={refresh} />
       <ReceiveModal open={receiveOpen} onClose={() => setReceiveOpen(false)} to={to} productMap={productMap} onDone={refresh} />
     </Card>
+  )
+}
+
+function TransferPickingPanel({ transferId, productMap, onDispatch }) {
+  const [scanOpen, setScanOpen] = useState(false)
+  const picking = useQuery({ queryKey: ['to-picking', transferId], queryFn: () => transferOrdersApi.getPicking(transferId) })
+  const details = picking.data?.details || []
+  const done = details.filter(d => d.confirmed).length
+  const allDone = details.length > 0 && done === details.length
+
+  const columns = [
+    { title: 'Sản phẩm', dataIndex: 'productId', render: (pid) => productMap[pid]?.name || pid },
+    { title: 'Ô kệ', dataIndex: 'binLocationId', width: 120 },
+    {
+      title: 'Yêu cầu lô', dataIndex: 'requiredBatchId', width: 150,
+      render: (v) => v ? <Tag color="purple" icon={<LockOutlined />}>{v}</Tag> : <Tag>Lô ACTIVE bất kỳ</Tag>,
+    },
+    { title: 'Lô đã quét', dataIndex: 'actualBatchId', width: 130, render: (v) => v || '—' },
+    { title: 'SL cần', dataIndex: 'quantityToPick', width: 80, align: 'right' },
+    { title: 'Xác nhận', dataIndex: 'confirmed', width: 100, render: (c) => c ? <Tag color="green">Đã lấy</Tag> : <Tag>Chưa</Tag> },
+  ]
+
+  return (
+    <Card size="small" style={{ marginTop: 16 }} title={<Space><ProfileOutlined /> Gom hàng</Space>}
+      extra={
+        <Space>
+          <Button icon={<ReloadOutlined />} onClick={() => picking.refetch()} loading={picking.isFetching} />
+          <Can permission={P.TRANSFER_DISPATCH}>
+            <Button type="primary" icon={<ScanOutlined />} disabled={allDone} onClick={() => setScanOpen(true)}>Quét lấy hàng</Button>
+          </Can>
+          <Can permission={P.TRANSFER_DISPATCH}>
+            <Button type="primary" icon={<CarOutlined />} disabled={!allDone} onClick={onDispatch}>Xuất chuyển</Button>
+          </Can>
+        </Space>
+      }>
+      <Progress percent={details.length ? Math.round((done / details.length) * 100) : 0} format={() => `${done}/${details.length}`} />
+      <Table style={{ marginTop: 8 }} rowKey="id" size="small" pagination={false}
+        loading={picking.isLoading} dataSource={details} columns={columns} scroll={{ x: 'max-content' }} />
+      {!allDone && <Typography.Text type="secondary">* Quét đủ tất cả dòng rồi mới "Xuất chuyển" được.</Typography.Text>}
+
+      <TransferScanModal open={scanOpen} onClose={() => setScanOpen(false)} transferId={transferId} productMap={productMap} />
+    </Card>
+  )
+}
+
+function TransferScanModal({ open, onClose, transferId, productMap }) {
+  const { message } = AntdApp.useApp()
+  const { user } = useAuth()
+  const qc = useQueryClient()
+  const [busy, setBusy] = useState(false)
+
+  const picking = useQuery({ queryKey: ['to-picking', transferId], queryFn: () => transferOrdersApi.getPicking(transferId), enabled: open })
+  const details = picking.data?.details || []
+  const current = details.find(d => !d.confirmed)
+
+  const scanMut = useMutation({
+    mutationFn: (code) => transferOrdersApi.scanPicking(current.id, code, user?.userId),
+    onSuccess: (u) => { message.success('Đã xác nhận'); qc.setQueryData(['to-picking', transferId], u); setBusy(false) },
+    onError: (e) => { message.error(getErrorMessage(e)); setBusy(false) },
+  })
+
+  const handleScan = (code) => { if (busy || !current) return; setBusy(true); scanMut.mutate(code) }
+  const [manual, setManual] = useState('')
+
+  return (
+    <Modal title="Quét lấy hàng điều chuyển" open={open} onCancel={onClose} footer={null} destroyOnClose width={480}>
+      {!current ? (
+        <Empty description="Đã quét xong tất cả dòng." />
+      ) : (
+        <>
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ fontWeight: 600 }}>{productMap[current.productId]?.name || current.productId}</div>
+            <Space size="large" style={{ fontSize: 13, color: 'rgba(0,0,0,.65)' }}>
+              <span>Ô kệ: <b>{current.binLocationId}</b></span>
+              <span>SL: <b>{current.quantityToPick}</b></span>
+            </Space>
+            <div style={{ marginTop: 4 }}>
+              {current.requiredBatchId
+                ? <Tag color="purple" icon={<LockOutlined />}>Phải quét đúng lô: {current.requiredBatchId}</Tag>
+                : <Tag color="blue">Quét lô ACTIVE bất kỳ còn tồn</Tag>}
+            </div>
+          </div>
+          <BarcodeScanner onScan={handleScan} paused={busy} />
+          <Space.Compact style={{ width: '100%', marginTop: 10 }}>
+            <Input placeholder="Hoặc nhập mã lô tay" value={manual} disabled={busy}
+              onChange={(e) => setManual(e.target.value)}
+              onPressEnter={() => { if (manual.trim()) { handleScan(manual.trim()); setManual('') } }} />
+            <Button disabled={busy || !manual.trim()} onClick={() => { handleScan(manual.trim()); setManual('') }}>Xác nhận</Button>
+          </Space.Compact>
+          <div style={{ marginTop: 8, textAlign: 'right' }}><Typography.Text type="secondary">Còn {details.filter(d => !d.confirmed).length} dòng</Typography.Text></div>
+        </>
+      )}
+    </Modal>
   )
 }
 
@@ -298,7 +449,7 @@ function DispatchModal({ open, onClose, toId, onDone }) {
     <Modal title="Xuất chuyển (dispatch)" open={open} onCancel={onClose}
       onOk={() => carrierId ? mut.mutate() : message.warning('Chọn đơn vị vận chuyển')}
       confirmLoading={mut.isPending} destroyOnClose>
-      <Typography.Paragraph type="secondary">Chọn ĐVVC để tạo vận đơn nội bộ và chuyển phiếu sang "Đang chuyển".</Typography.Paragraph>
+      <Typography.Paragraph type="secondary">Trừ tồn theo lô thực nhặt và chuyển phiếu sang "Đang chuyển".</Typography.Paragraph>
       <Select showSearch optionFilterProp="label" style={{ width: '100%' }} placeholder="Chọn ĐVVC"
         loading={carriers.isLoading} value={carrierId} onChange={setCarrierId}
         options={(carriers.data || []).map(c => ({ value: c.id, label: `${c.name} (${c.code})` }))} />
@@ -345,19 +496,15 @@ function ReceiveModal({ open, onClose, to, productMap, onDone }) {
         {details.map((d, i) => (
           <Row gutter={8} key={d.id} align="middle" style={{ marginBottom: 4 }}>
             <Col flex="auto">
-              <div style={{ paddingBottom: 6 }}>
-                <b>{productMap[d.productId]?.name || d.productId}</b> · chuyển {d.quantity}
-              </div>
+              <div style={{ paddingBottom: 6 }}><b>{productMap[d.productId]?.name || d.productId}</b> · chuyển {d.quantity}</div>
             </Col>
             <Col flex="140px">
-              <Form.Item name={['rows', i, 'quantityReceived']} label="SL nhận"
-                rules={[{ required: true, message: 'SL' }]}>
+              <Form.Item name={['rows', i, 'quantityReceived']} label="SL nhận" rules={[{ required: true, message: 'SL' }]}>
                 <InputNumber min={0} max={d.quantity} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
             <Col flex="200px">
-              <Form.Item name={['rows', i, 'binLocationId']} label="Ô kệ đích"
-                rules={[{ required: true, message: 'Chọn ô kệ' }]}>
+              <Form.Item name={['rows', i, 'binLocationId']} label="Ô kệ đích" rules={[{ required: true, message: 'Chọn ô kệ' }]}>
                 <Select showSearch optionFilterProp="label" placeholder="Ô kệ" options={binOptions} loading={bins.isFetching} />
               </Form.Item>
             </Col>

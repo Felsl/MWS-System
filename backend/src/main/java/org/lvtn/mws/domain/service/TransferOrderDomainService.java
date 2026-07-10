@@ -294,6 +294,22 @@ public class TransferOrderDomainService {
             batchRepository.save(batch);
         }
 
+        // [INC3] Ghi nhận lô THỰC NHẶT thành chi tiết phiếu (mỗi lô = 1 dòng) để kho đích nhận đúng lô.
+        // Xử lý đúng ca 1 dòng tách nhiều lô theo FEFO (VD: cần 15 = 10 lô A + 5 lô B -> 2 dòng).
+        List<TransferOrderDetail> allocated = new ArrayList<>();
+        for (PickingListDetail p : picked) {
+            allocated.add(new TransferOrderDetail.Builder()
+                    .id(idGenerator.generate())
+                    .transferOrderId(order.getId())
+                    .productId(p.getProductId())
+                    .batchId(p.getActualBatchId())
+                    .fromBinLocationId(p.getBinLocationId())
+                    .quantity(p.getQuantityPicked())
+                    .quantityReceived(0)
+                    .build());
+        }
+        order.applyPickedAllocation(allocated);
+
         order.markInTransit();
 
         Shipment savedShipment = shipmentRepository.save(shipment);

@@ -11,4 +11,9 @@ export const transferOrdersApi = {
   cancel: (id) => api.post(`${base}/${id}/cancel`).then(r => r.data),
   dispatch: (id, carrierId) => api.post(`${base}/${id}/dispatch`, { carrierId }).then(r => r.data), // -> ShipmentResponse
   complete: (id, lines) => api.post(`${base}/${id}/complete`, { lines }).then(r => r.data),
+  // --- Gom hàng (picking) cho điều chuyển ---
+  generatePicking: (transferId) => api.post(`${base}/${transferId}/picking`).then(r => r.data), // -> PickingListResponse
+  getPicking: (transferId) => api.get(`${base}/${transferId}/picking`).then(r => r.data),
+  scanPicking: (detailId, scannedBatchNumber, confirmedBy) =>
+    api.post(`${base}/picking/details/${detailId}/scan`, { scannedBatchNumber, confirmedBy }).then(r => r.data),
 }
