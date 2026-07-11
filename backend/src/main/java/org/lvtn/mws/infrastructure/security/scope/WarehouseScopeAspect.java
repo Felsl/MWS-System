@@ -29,6 +29,7 @@ import java.util.List;
 public class WarehouseScopeAspect {
 
     private final IUserWarehouseAccessRepository warehouseAccessRepository;
+    private final CreationDateScope creationDateScope;
 
     @Around("@annotation(org.lvtn.mws.infrastructure.security.scope.WarehouseScoped)")
     public Object applyWarehouseScope(ProceedingJoinPoint joinPoint) throws Throwable {
@@ -47,6 +48,7 @@ public class WarehouseScopeAspect {
                     .findWarehouseIdsByUsername(username);
 
             WarehouseScopeContext.set(allowedWarehouseIds);
+            CreationDateScopeContext.set(creationDateScope.cutoffForCurrentUser());
             log.debug("WarehouseScope applied for user '{}': {} warehouses",
                     username, allowedWarehouseIds.size());
 
@@ -54,6 +56,7 @@ public class WarehouseScopeAspect {
 
         } finally {
             WarehouseScopeContext.clear();
+            CreationDateScopeContext.clear();
         }
     }
 }

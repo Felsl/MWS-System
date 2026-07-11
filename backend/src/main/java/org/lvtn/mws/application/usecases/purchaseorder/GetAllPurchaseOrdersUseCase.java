@@ -18,7 +18,7 @@ public class GetAllPurchaseOrdersUseCase {
 
     /** B4: tìm kiếm + phân trang đơn mua, đã lọc theo kho user được phép (A2). */
     @WarehouseScoped
-    public PageResult<PurchaseOrder> execute(String keyword, String status, int page, int size) {
-        return purchaseOrderDomainService.search(keyword, status, new PageQuery(page, size));
+    public PageResult<PurchaseOrder> execute(String keyword, String status, int page, int size, String sortBy, String sortDir) {
+        return purchaseOrderDomainService.search(keyword, status, new PageQuery(page, size, sortBy, sortDir));
     }
 }

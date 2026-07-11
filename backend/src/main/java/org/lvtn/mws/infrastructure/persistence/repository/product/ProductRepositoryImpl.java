@@ -58,7 +58,7 @@ public class ProductRepositoryImpl implements IProductRepository {
         }
         var pageable = org.springframework.data.domain.PageRequest.of(
                 pageQuery.page(), pageQuery.size(),
-                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.ASC, "name"));
+                resolveSort(pageQuery));
         var pageEntity = jpa.findAll(spec, pageable);
         return new org.lvtn.mws.domain.common.PageResult<>(
                 pageEntity.getContent().stream().map(mapper::toDomain).collect(java.util.stream.Collectors.toList()),
@@ -74,5 +74,19 @@ public class ProductRepositoryImpl implements IProductRepository {
     public boolean existsBySkuExcludingId(String id, String sku) {
         Boolean result = jpa.existsBySkuExcludingId(id, sku);
         return Boolean.TRUE.equals(result);
+    }
+
+    private static org.springframework.data.domain.Sort resolveSort(org.lvtn.mws.domain.common.PageQuery pq) {
+        org.springframework.data.domain.Sort def = org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.ASC, "name");
+        if (pq.sortBy() == null) return def;
+        String col = switch (pq.sortBy()) {
+            case "name" -> "name";
+            case "sku" -> "sku";
+            case "price" -> "price";
+            case "createdAt" -> "createdAt";
+            default -> null;
+        };
+        if (col == null) return def;
+        return org.springframework.data.domain.Sort.by(pq.ascending() ? org.springframework.data.domain.Sort.Direction.ASC : org.springframework.data.domain.Sort.Direction.DESC, col);
     }
 }

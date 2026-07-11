@@ -15,7 +15,7 @@ public class GetAllProductsUseCase {
 
     /** B4: danh sách sản phẩm có tìm kiếm (name/sku/barcode) + phân trang. */
     @Transactional(readOnly = true)
-    public PageResult<Product> execute(String keyword, int page, int size) {
-        return domainService.searchPaged(keyword, new PageQuery(page, size));
+    public PageResult<Product> execute(String keyword, int page, int size, String sortBy, String sortDir) {
+        return domainService.searchPaged(keyword, new PageQuery(page, size, sortBy, sortDir));
     }
 }

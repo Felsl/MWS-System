@@ -18,7 +18,7 @@ public class GetAllTransferOrdersUseCase {
 
     /** B4: tìm kiếm + phân trang phiếu điều chuyển, lọc theo kho user được phép (nguồn hoặc đích). */
     @WarehouseScoped
-    public PageResult<TransferOrder> execute(String keyword, String status, int page, int size) {
-        return transferOrderDomainService.search(keyword, status, new PageQuery(page, size));
+    public PageResult<TransferOrder> execute(String keyword, String status, int page, int size, String sortBy, String sortDir) {
+        return transferOrderDomainService.search(keyword, status, new PageQuery(page, size, sortBy, sortDir));
     }
 }

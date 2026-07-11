@@ -18,7 +18,7 @@ public class GetAllStocktakesUseCase {
 
     /** B4: tìm kiếm theo trạng thái + phân trang, lọc theo kho user được phép. */
     @WarehouseScoped
-    public PageResult<StocktakeSession> execute(String status, int page, int size) {
-        return stocktakeDomainService.search(status, new PageQuery(page, size));
+    public PageResult<StocktakeSession> execute(String status, int page, int size, String sortBy, String sortDir) {
+        return stocktakeDomainService.search(status, new PageQuery(page, size, sortBy, sortDir));
     }
 }

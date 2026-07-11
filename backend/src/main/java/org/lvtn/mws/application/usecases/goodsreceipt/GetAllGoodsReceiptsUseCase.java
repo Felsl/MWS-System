@@ -18,7 +18,7 @@ public class GetAllGoodsReceiptsUseCase {
 
     /** B4: tìm kiếm + phân trang phiếu nhập, đã lọc theo kho user được phép (A2). */
     @WarehouseScoped
-    public PageResult<GoodsReceipt> execute(String keyword, String status, int page, int size) {
-        return goodsReceiptDomainService.search(keyword, status, new PageQuery(page, size));
+    public PageResult<GoodsReceipt> execute(String keyword, String status, int page, int size, String sortBy, String sortDir) {
+        return goodsReceiptDomainService.search(keyword, status, new PageQuery(page, size, sortBy, sortDir));
     }
 }

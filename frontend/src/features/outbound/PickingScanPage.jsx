@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useBinLabels } from '../../hooks/useBinLabels'
 import {
   Card, Button, Input, List, Typography, Tag, Empty, Space, Progress, Modal,
   InputNumber, Form, App as AntdApp,
@@ -75,6 +76,7 @@ function ScanRunner({ pickId, onBack }) {
   const products = useQuery({ queryKey: ['products', 'all'], queryFn: () => productsApi.list({ size: 500 }) })
   const productMap = useMemo(
     () => Object.fromEntries((products.data?.content || []).map(p => [p.id, p])), [products.data])
+  const { labelOf } = useBinLabels()
 
   const refresh = (u) => { if (u) qc.setQueryData(['pl', pickId], u); else qc.invalidateQueries({ queryKey: ['pl', pickId] }); qc.invalidateQueries({ queryKey: ['pl-list'] }) }
 
@@ -128,7 +130,7 @@ function ScanRunner({ pickId, onBack }) {
           <div style={{ marginBottom: 8 }}>
             <div style={{ fontWeight: 600, fontSize: 16 }}>{productMap[current.productId]?.name || current.productId}</div>
             <Space size="large" style={{ fontSize: 13, color: 'rgba(0,0,0,.65)' }}>
-              <span>Ô kệ: <b>{current.binLocationId}</b></span>
+              <span>Ô kệ: <b>{labelOf(current.binLocationId)}</b></span>
               <span>SL: <b>{current.quantityToPick}</b></span>
               {current.batchId && <span>Lô: {current.batchId}</span>}
             </Space>
@@ -150,7 +152,7 @@ function ScanRunner({ pickId, onBack }) {
           <List.Item>
             <List.Item.Meta
               title={productMap[d.productId]?.name || d.productId}
-              description={`Ô ${d.binLocationId} · SL ${d.quantityToPick}`} />
+              description={`Ô ${labelOf(d.binLocationId)} · SL ${d.quantityToPick}`} />
             {d.confirmed ? <Tag color="green">Đã lấy</Tag> : <Tag>Chưa</Tag>}
           </List.Item>
         )} />

@@ -60,8 +60,10 @@ public class StocktakeController {
     public ResponseEntity<org.lvtn.mws.interfaces.dto.response.common.PageResponse<StocktakeSessionResponse>> list(
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        var result = getAllUseCase.execute(status, page, size);
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) String dir) {
+        var result = getAllUseCase.execute(status, page, size, sort, dir);
         return ResponseEntity.ok(
                 org.lvtn.mws.interfaces.dto.response.common.PageResponse.from(result, webMapper::toSessionResponse));
     }

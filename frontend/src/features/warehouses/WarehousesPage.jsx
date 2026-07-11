@@ -1,3 +1,4 @@
+import FitTable from '../../components/FitTable'
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -99,8 +100,8 @@ export default function WarehousesPage() {
         </Space>
       </div>
 
-      <Table rowKey="id" loading={list.isLoading} dataSource={list.data || []}
-        columns={columns} scroll={{ x: 'max-content' }} pagination={{ pageSize: 10 }} />
+      <FitTable rowKey="id" loading={list.isLoading} dataSource={list.data || []}
+        columns={columns} pagination={{ pageSize: 10 }} />
 
       <Modal title={editing ? 'Sửa kho' : 'Thêm kho'} open={open}
         onOk={submit} onCancel={() => setOpen(false)}

@@ -18,7 +18,7 @@ public class GetAllSalesOrdersUseCase {
 
     /** B4: tìm kiếm + phân trang đơn xuất, đã lọc theo kho user được phép (A2). */
     @WarehouseScoped
-    public PageResult<SalesOrder> execute(String keyword, String status, int page, int size) {
-        return salesOrderDomainService.search(keyword, status, new PageQuery(page, size));
+    public PageResult<SalesOrder> execute(String keyword, String status, int page, int size, String sortBy, String sortDir) {
+        return salesOrderDomainService.search(keyword, status, new PageQuery(page, size, sortBy, sortDir));
     }
 }

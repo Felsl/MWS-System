@@ -1,6 +1,9 @@
+import ExportButton from '../../components/ExportButton'
+import FitTable from '../../components/FitTable'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { sorterToParams, columnSortOrder } from '../../utils/sort'
 import {
   Card, Button, Input, Form, Select, DatePicker, InputNumber, Row, Col,
   Table, Space, Typography, Tag, Descriptions, Empty, Popconfirm, Divider, App as AntdApp,
@@ -43,60 +46,64 @@ export default function SalesOrdersPage() {
   const openDetail = (id) => setView({ mode: 'detail', id })
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Space>
-          {view.mode !== 'list' && (
+      {view.mode !== 'list' && (
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+          <Space>
             <Button icon={<ArrowLeftOutlined />} onClick={() => setView({ mode: 'list', id: null })}>Danh sách</Button>
-          )}
-          <Typography.Title level={4} style={{ margin: 0 }}>Đơn bán hàng (SO)</Typography.Title>
-        </Space>
-        <Can permission={P.OUTBOUND_CREATE_SO}>
-          <Button type="primary" icon={<PlusOutlined />}
-            onClick={() => setView({ mode: 'create', id: null })}>Tạo đơn bán</Button>
-        </Can>
-      </div>
-      {view.mode === 'list' && <SOList onOpen={openDetail} />}
+            <Typography.Title level={4} style={{ margin: 0 }}>Đơn bán hàng (SO)</Typography.Title>
+          </Space>
+        </div>
+      )}
+      {view.mode === 'list' && <SOList onOpen={openDetail} onCreate={() => setView({ mode: 'create', id: null })} />}
       {view.mode === 'create' && <CreateSO onCreated={(so) => openDetail(so.id)} />}
       {view.mode === 'detail' && view.id && <SODetail id={view.id} />}
     </div>
   )
 }
 
-function SOList({ onOpen }) {
+function SOList({ onOpen, onCreate }) {
   const [keyword, setKeyword] = useState('')
   const [status, setStatus] = useState()
   const [pager, setPager] = useState({ page: 0, size: 20 })
+  const [sorter, setSorter] = useState(null)
+  const { sort, dir } = sorterToParams(sorter)
   const { customerMap, warehouseMap } = useNameMaps()
 
   const list = useQuery({
-    queryKey: ['so-list', keyword, status, pager.page, pager.size],
-    queryFn: () => salesOrdersApi.list({ keyword, status, page: pager.page, size: pager.size }),
+    queryKey: ['so-list', keyword, status, pager.page, pager.size, sort, dir],
+    queryFn: () => salesOrdersApi.list({ keyword, status, page: pager.page, size: pager.size, sort, dir }),
     placeholderData: keepPreviousData,
   })
   const pageData = list.data
 
   const columns = [
-    { title: 'Mã đơn', dataIndex: 'soNumber', render: (v, r) => <a onClick={() => onOpen(r.id)}>{v || r.id}</a> },
-    { title: 'Trạng thái', dataIndex: 'status', width: 140, render: soTag },
+    { title: 'Mã đơn', dataIndex: 'soNumber', sorter: true, sortOrder: columnSortOrder(sorter, 'soNumber'), render: (v, r) => <a onClick={() => onOpen(r.id)}>{v || r.id}</a> },
+    { title: 'Trạng thái', dataIndex: 'status', width: 140, sorter: true, sortOrder: columnSortOrder(sorter, 'status'), render: soTag },
     { title: 'Khách hàng', dataIndex: 'customerId', render: (v) => customerMap[v]?.name || v },
     { title: 'Kho', dataIndex: 'warehouseId', render: (v) => warehouseMap[v]?.name || v, width: 150 },
-    { title: 'Cần giao', dataIndex: 'requiredDate', width: 120, render: (v) => v ? dayjs(v).format('DD/MM/YYYY') : '—' },
+    { title: 'Cần giao', dataIndex: 'requiredDate', width: 120, sorter: true, sortOrder: columnSortOrder(sorter, 'requiredDate'), render: (v) => v ? dayjs(v).format('DD/MM/YYYY') : '—' },
     { title: 'Người tạo', dataIndex: 'createdBy', width: 130 },
-    { title: 'Tạo lúc', dataIndex: 'createdAt', width: 150, render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
+    { title: 'Tạo lúc', dataIndex: 'createdAt', width: 150, sorter: true, sortOrder: columnSortOrder(sorter, 'createdAt'), render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
   ]
 
   return (
     <>
-      <Space style={{ marginBottom: 12 }} wrap>
+      <Space style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between' }} wrap>
+        <Typography.Title level={4} style={{ marginLeft: 20, marginTop: 0 }}>Đơn bán hàng (SO)</Typography.Title>
+        <Space wrap>
+        <ExportButton filename="don-ban-hang.xlsx" fetchRows={() => salesOrdersApi.list({ keyword, status, sort, dir, size: 10000 }).then(r => r.content)} />
         <Input.Search allowClear placeholder="Tìm theo mã đơn" style={{ width: 220 }} prefix={<SearchOutlined />}
           onSearch={(v) => { setKeyword(v); setPager(p => ({ ...p, page: 0 })) }} />
         <Select allowClear placeholder="Lọc trạng thái" style={{ width: 180 }}
           options={SO_STATUS_OPTS} value={status}
           onChange={(v) => { setStatus(v); setPager(p => ({ ...p, page: 0 })) }} />
         <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching} />
+          <Can permission={P.OUTBOUND_CREATE_SO}><Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>Tạo đơn bán</Button></Can>
+        </Space>
       </Space>
-      <Table rowKey="id" loading={list.isLoading} dataSource={pageData?.content || []}
+      <FitTable rowKey="id" loading={list.isLoading} dataSource={pageData?.content || []}
         columns={columns} scroll={{ x: 'max-content' }}
+        onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') { setSorter(s); setPager(p => ({ ...p, page: 0 })) } }}
         pagination={{
           current: (pageData?.page ?? 0) + 1, pageSize: pageData?.size ?? 20,
           total: pageData?.totalElements ?? 0, showSizeChanger: true, showTotal: (t) => `Tổng ${t}`,
@@ -133,6 +140,7 @@ function CreateSO({ onCreated }) {
       warehouseId: v.warehouseId,
       customerId: v.customerId,
       discountAmount: v.discountAmount ?? null,
+      priority: v.priority ?? 0,
       requiredDate: v.requiredDate ? v.requiredDate.format('YYYY-MM-DD') : null,
       createdBy: user?.userId,               // BE yêu cầu createdBy
       lines: v.lines.map(l => ({
@@ -146,7 +154,7 @@ function CreateSO({ onCreated }) {
 
   return (
     <Card title="Tạo đơn bán mới">
-      <Form form={form} layout="vertical" initialValues={{ lines: [{}] }}>
+      <Form form={form} layout="vertical" initialValues={{ lines: [{}], priority: 0 }}>
         <Row gutter={16}>
           <Col xs={24} md={8}>
             <Form.Item name="customerId" label="Khách hàng" rules={[{ required: true, message: 'Chọn KH' }]}>
@@ -168,6 +176,11 @@ function CreateSO({ onCreated }) {
           <Col xs={12} md={4}>
             <Form.Item name="discountAmount" label="Giảm giá (đ)">
               <InputNumber min={0} style={{ width: '100%' }} formatter={fmt} parser={parse} />
+            </Form.Item>
+          </Col>
+          <Col xs={12} md={4}>
+            <Form.Item name="priority" label="Ưu tiên" tooltip="Số càng lớn càng ưu tiên (mặc định 0)">
+              <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
             </Form.Item>
           </Col>
         </Row>

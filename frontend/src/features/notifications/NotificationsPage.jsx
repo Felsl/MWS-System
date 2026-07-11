@@ -2,9 +2,11 @@ import { List, Button, Typography, Tag, Space, Empty, Badge } from 'antd'
 import { CheckOutlined, ReloadOutlined, WifiOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useNotifications } from '../../context/NotificationContext'
+import { useFitY } from '../../hooks/useFitY'
 
 export default function NotificationsPage() {
   const { notifications, loading, unreadCount, connected, markRead, markAllRead, refetch } = useNotifications()
+  const { ref: listRef, y: listH } = useFitY()
 
   return (
     <div>
@@ -25,6 +27,7 @@ export default function NotificationsPage() {
       {(!notifications || notifications.length === 0)
         ? <Empty description="Chưa có thông báo" />
         : (
+          <div ref={listRef} style={{ height: listH, overflowY: 'auto', paddingRight: 4 }}>
           <List
             loading={loading}
             itemLayout="horizontal"
@@ -55,6 +58,7 @@ export default function NotificationsPage() {
               </List.Item>
             )}
           />
+          </div>
         )}
     </div>
   )

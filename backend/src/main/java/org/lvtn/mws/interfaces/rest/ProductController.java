@@ -45,8 +45,10 @@ public class ProductController {
     public org.lvtn.mws.interfaces.dto.response.common.PageResponse<ProductResponse> getAll(
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        var result = getAllUseCase.execute(keyword, page, size);
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) String dir) {
+        var result = getAllUseCase.execute(keyword, page, size, sort, dir);
         return org.lvtn.mws.interfaces.dto.response.common.PageResponse.from(result, mapper::toResponse);
     }
 

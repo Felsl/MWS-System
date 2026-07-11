@@ -93,9 +93,14 @@ public class TransferOrderRepositoryImpl implements ITransferOrderRepository {
                 spec = spec.and((root, q, cb) -> cb.equal(root.get("status"), st));
             } catch (IllegalArgumentException ignored) { }
         }
+        java.time.LocalDateTime __cutoff = org.lvtn.mws.infrastructure.security.scope.CreationDateScopeContext.get();
+        if (__cutoff != null) {
+            final java.time.LocalDateTime __cf = __cutoff;
+            spec = spec.and((root, q, cb) -> cb.greaterThanOrEqualTo(root.<java.time.LocalDateTime>get("createdAt"), __cf));
+        }
         var pageable = PageRequest.of(
                 pageQuery.page(), pageQuery.size(),
-                Sort.by(Sort.Direction.DESC, "createdAt"));
+                resolveSort(pageQuery));
         var pageEntity = jpaTransferOrderRepository.findAll(spec, pageable);
         List<TransferOrder> content = new ArrayList<>();
         for (TransferOrderEntity e : pageEntity.getContent()) content.add(assemble(e));
@@ -124,5 +129,19 @@ public class TransferOrderRepositoryImpl implements ITransferOrderRepository {
             details.add(detailMapper.toDomain(de));
         }
         return orderMapper.toDomain(headerEntity, details);
+    }
+
+    private static org.springframework.data.domain.Sort resolveSort(org.lvtn.mws.domain.common.PageQuery pq) {
+        org.springframework.data.domain.Sort def = org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt");
+        if (pq.sortBy() == null) return def;
+        String col = switch (pq.sortBy()) {
+            case "transferNumber" -> "transferNumber";
+            case "status" -> "status";
+            case "approvedAt" -> "approvedAt";
+            case "createdAt" -> "createdAt";
+            default -> null;
+        };
+        if (col == null) return def;
+        return org.springframework.data.domain.Sort.by(pq.ascending() ? org.springframework.data.domain.Sort.Direction.ASC : org.springframework.data.domain.Sort.Direction.DESC, col);
     }
 }

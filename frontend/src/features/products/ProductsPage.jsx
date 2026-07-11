@@ -1,3 +1,6 @@
+import ExportButton from '../../components/ExportButton'
+import { sorterToParams, columnSortOrder } from '../../utils/sort'
+import FitTable from '../../components/FitTable'
 import { useState } from 'react'
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -22,11 +25,13 @@ export default function ProductsPage() {
   const [editing, setEditing] = useState(null)
   const [keyword, setKeyword] = useState('')
   const [pager, setPager] = useState({ page: 0, size: 20 })
+  const [sorter, setSorter] = useState(null)
+  const { sort, dir } = sorterToParams(sorter)
 
   const categories = useQuery({ queryKey: ['categories'], queryFn: categoriesApi.list })
   const list = useQuery({
-    queryKey: ['products', keyword, pager.page, pager.size],
-    queryFn: () => productsApi.list({ keyword: keyword || undefined, page: pager.page, size: pager.size }),
+    queryKey: ['products', keyword, pager.page, pager.size, sort, dir],
+    queryFn: () => productsApi.list({ keyword: keyword || undefined, page: pager.page, size: pager.size, sort, dir }),
     placeholderData: keepPreviousData,
   })
 
@@ -62,12 +67,12 @@ export default function ProductsPage() {
   const catOptions = (categories.data || []).map(c => ({ value: c.id, label: c.name }))
 
   const columns = [
-    { title: 'SKU', dataIndex: 'sku', width: 140 },
-    { title: 'Tên', dataIndex: 'name' },
+    { title: 'SKU', dataIndex: 'sku', sorter: true, sortOrder: columnSortOrder(sorter, 'sku'), width: 140 },
+    { title: 'Tên', dataIndex: 'name', sorter: true, sortOrder: columnSortOrder(sorter, 'name') },
     { title: 'Nhóm', dataIndex: 'categoryName', width: 140 },
     { title: 'ĐVT', dataIndex: 'unit', width: 90, render: (u) => UNIT_LABEL[u] || u },
     {
-      title: 'Giá bán', dataIndex: 'price', width: 120, align: 'right',
+      title: 'Giá bán', dataIndex: 'price', sorter: true, sortOrder: columnSortOrder(sorter, 'price'), width: 120, align: 'right',
       render: (v) => v != null ? Number(v).toLocaleString('vi-VN') : '—',
     },
     { title: 'Tồn an toàn', dataIndex: 'safetyStock', width: 110, align: 'right' },
@@ -100,6 +105,7 @@ export default function ProductsPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
         <Typography.Title level={4} style={{ margin: 0 }}>Sản phẩm</Typography.Title>
         <Space wrap>
+          <ExportButton filename="san-pham.xlsx" fetchRows={() => productsApi.list({ keyword: keyword || undefined, sort, dir, size: 10000 }).then(r => r.content)} />
           <Input.Search allowClear placeholder="Tìm theo tên / SKU" prefix={<SearchOutlined />}
             style={{ width: 240 }}
             onSearch={(v) => { setKeyword(v); setPager(p => ({ ...p, page: 0 })) }} />
@@ -110,12 +116,13 @@ export default function ProductsPage() {
         </Space>
       </div>
 
-      <Table
+      <FitTable
         rowKey="id"
         loading={list.isLoading}
         dataSource={page?.content || []}
         columns={columns}
         scroll={{ x: 'max-content' }}
+        onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') { setSorter(s); setPager(p => ({ ...p, page: 0 })) } }}
         pagination={{
           current: (page?.page ?? 0) + 1,
           pageSize: page?.size ?? 20,

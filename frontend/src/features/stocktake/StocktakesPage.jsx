@@ -1,3 +1,6 @@
+import ExportButton from '../../components/ExportButton'
+import { sorterToParams, columnSortOrder } from '../../utils/sort'
+import FitTable from '../../components/FitTable'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -17,6 +20,7 @@ import { P } from '../../constants/permissions'
 import { stocktakesApi } from '../../api/stocktakes.api'
 import { productsApi } from '../../api/products.api'
 import { warehousesApi } from '../../api/warehouses.api'
+import { useBinLabels } from '../../hooks/useBinLabels'
 
 const ST_STATUS = {
   OPEN: { color: 'gold', label: 'Đang kiểm kê' },
@@ -43,52 +47,57 @@ export default function StocktakesPage() {
   const openDetail = (id) => setView({ mode: 'detail', id })
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Space>
-          {view.mode !== 'list' && (
+      {view.mode !== 'list' && (
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+          <Space>
             <Button icon={<ArrowLeftOutlined />} onClick={() => setView({ mode: 'list', id: null })}>Danh sách</Button>
-          )}
-          <Typography.Title level={4} style={{ margin: 0 }}>Kiểm kê kho (Stocktake)</Typography.Title>
-        </Space>
-        <Can permission={P.STOCKTAKE_MANAGE}>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setStartOpen(true)}>Bắt đầu kiểm kê</Button>
-        </Can>
-      </div>
-      {view.mode === 'list' && <STList onOpen={openDetail} />}
+            <Typography.Title level={4} style={{ margin: 0 }}>Kiểm kê kho (Stocktake)</Typography.Title>
+          </Space>
+        </div>
+      )}
+      {view.mode === 'list' && <STList onOpen={openDetail} onCreate={() => setStartOpen(true)} />}
       {view.mode === 'detail' && view.id && <STDetail id={view.id} />}
       <StartModal open={startOpen} onClose={() => setStartOpen(false)} onStarted={(r) => openDetail(r.session.id)} />
     </div>
   )
 }
 
-function STList({ onOpen }) {
+function STList({ onOpen, onCreate }) {
   const [status, setStatus] = useState()
   const [pager, setPager] = useState({ page: 0, size: 20 })
+  const [sorter, setSorter] = useState(null)
+  const { sort, dir } = sorterToParams(sorter)
   const { warehouseMap } = useWarehouseMap()
   const list = useQuery({
-    queryKey: ['stk-list', status, pager.page, pager.size],
-    queryFn: () => stocktakesApi.list({ status, page: pager.page, size: pager.size }),
+    queryKey: ['stk-list', status, pager.page, pager.size, sort, dir],
+    queryFn: () => stocktakesApi.list({ status, page: pager.page, size: pager.size, sort, dir }),
     placeholderData: keepPreviousData,
   })
   const pageData = list.data
   const columns = [
     { title: 'Mã phiên', dataIndex: 'id', render: (v) => <a onClick={() => onOpen(v)}>{v}</a> },
-    { title: 'Trạng thái', dataIndex: 'status', width: 150, render: stTag },
+    { title: 'Trạng thái', dataIndex: 'status', sorter: true, sortOrder: columnSortOrder(sorter, 'status'), width: 150, render: stTag },
     { title: 'Kho', dataIndex: 'warehouseId', render: (v) => warehouseMap[v]?.name || v },
-    { title: 'Đóng băng từ', dataIndex: 'freezeStartedAt', width: 160, render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
+    { title: 'Đóng băng từ', dataIndex: 'freezeStartedAt', sorter: true, sortOrder: columnSortOrder(sorter, 'freezeStartedAt'), width: 160, render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
     { title: 'Người tạo', dataIndex: 'createdBy', width: 130 },
-    { title: 'Tạo lúc', dataIndex: 'createdAt', width: 150, render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
+    { title: 'Tạo lúc', dataIndex: 'createdAt', sorter: true, sortOrder: columnSortOrder(sorter, 'createdAt'), width: 150, render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
   ]
   return (
     <>
-      <Space style={{ marginBottom: 12 }} wrap>
+      <Space style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between' }} wrap>
+        <Typography.Title level={4} style={{ marginLeft: 20, marginTop: 0 }}>Kiểm kê kho (Stocktake)</Typography.Title>
+        <Space wrap>
+        <ExportButton filename="phien-kiem-ke.xlsx" fetchRows={() => stocktakesApi.list({ status, sort, dir, size: 10000 }).then(r => r.content)} />
         <Select allowClear placeholder="Lọc trạng thái" style={{ width: 180 }}
           options={ST_STATUS_OPTS} value={status}
           onChange={(v) => { setStatus(v); setPager(p => ({ ...p, page: 0 })) }} />
         <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching} />
+          <Can permission={P.STOCKTAKE_MANAGE}><Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>Bắt đầu kiểm kê</Button></Can>
+        </Space>
       </Space>
-      <Table rowKey="id" loading={list.isLoading} dataSource={pageData?.content || []} columns={columns}
+      <FitTable rowKey="id" loading={list.isLoading} dataSource={pageData?.content || []} columns={columns}
         scroll={{ x: 'max-content' }}
+        onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') { setSorter(s); setPager(p => ({ ...p, page: 0 })) } }}
         pagination={{
           current: (pageData?.page ?? 0) + 1, pageSize: pageData?.size ?? 20,
           total: pageData?.totalElements ?? 0, showSizeChanger: true, showTotal: (t) => `Tổng ${t}`,
@@ -127,6 +136,7 @@ function STDetail({ id }) {
   const qc = useQueryClient()
   const { warehouseMap } = useWarehouseMap()
   const { map: productMap } = useProductMap()
+  const { labelOf } = useBinLabels()
   const [countLine, setCountLine] = useState(null)
 
   const { data, isLoading, isError, error } = useQuery({
@@ -158,7 +168,7 @@ function STDetail({ id }) {
 
   const columns = [
     { title: 'Sản phẩm', dataIndex: 'productId', render: (pid) => productMap[pid]?.name || pid },
-    { title: 'Ô kệ', dataIndex: 'binLocationId', width: 120 },
+    { title: 'Ô kệ', dataIndex: 'binLocationId', width: 130, render: (v) => labelOf(v) },
     { title: 'Lô', dataIndex: 'batchId', width: 120, render: (v) => v || '—' },
     { title: 'Tồn hệ thống', dataIndex: 'systemQuantity', width: 110, align: 'right' },
     { title: 'Đếm thực', dataIndex: 'countedQuantity', width: 100, align: 'right', render: (v) => v ?? '—' },

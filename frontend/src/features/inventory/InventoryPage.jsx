@@ -1,3 +1,4 @@
+import FitTable from '../../components/FitTable'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -88,7 +89,7 @@ function StockByWarehouse() {
       </Space>
       {!warehouseId
         ? <Empty description="Chọn kho để xem tồn" />
-        : <Table rowKey="productId" loading={inv.isLoading} dataSource={inv.data || []} columns={columns}
+        : <FitTable rowKey="productId" loading={inv.isLoading} dataSource={inv.data || []} columns={columns}
             scroll={{ x: 'max-content' }} pagination={{ pageSize: 20, showSizeChanger: true }} />}
     </>
   )
@@ -154,7 +155,7 @@ function BatchView() {
       </Space>
       {!enabled
         ? <Empty description="Chọn sản phẩm và kho để xem lô" />
-        : <Table rowKey="id" loading={batches.isLoading} dataSource={batches.data || []} columns={columns}
+        : <FitTable rowKey="id" loading={batches.isLoading} dataSource={batches.data || []} columns={columns}
             scroll={{ x: 'max-content' }} pagination={{ pageSize: 20 }} />}
       {enabled && !canAdjust && (
         <Typography.Text type="secondary">* Cần quyền INVENTORY_ADJUST để niêm phong / mở lô.</Typography.Text>

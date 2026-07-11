@@ -5,6 +5,7 @@ import org.lvtn.mws.domain.model.TransferOrder;
 import org.lvtn.mws.domain.service.TransferOrderDomainService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.lvtn.mws.infrastructure.security.scope.CreationDateScope;
 
 @Service
 @RequiredArgsConstructor
@@ -12,8 +13,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class GetTransferOrderByIdUseCase {
 
     private final TransferOrderDomainService transferOrderDomainService;
+    private final CreationDateScope creationDateScope;
 
     public TransferOrder execute(String transferId) {
-        return transferOrderDomainService.findById(transferId);
+        TransferOrder rec = transferOrderDomainService.findById(transferId);
+        creationDateScope.assertVisible(rec.getCreatedAt());
+        return rec;
     }
 }

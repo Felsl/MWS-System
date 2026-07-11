@@ -25,6 +25,7 @@ import AdjustmentsPage from '../features/stocktake/AdjustmentsPage'
 import InventoryPage from '../features/inventory/InventoryPage'
 import StockMovementsPage from '../features/inventory/StockMovementsPage'
 import NotificationsPage from '../features/notifications/NotificationsPage'
+import DataIOPage from '../features/data-io/DataIOPage'
 
 export default function AppRoutes() {
   return (
@@ -36,6 +37,9 @@ export default function AppRoutes() {
         <Route element={<AppLayout />}>
           <Route index element={<DashboardPage />} />
           <Route path="notifications" element={<NotificationsPage />} />
+          <Route element={<ProtectedRoute permission={P.MASTER_PRODUCT_MANAGE} />}>
+            <Route path="data-io" element={<DataIOPage />} />
+          </Route>
 
           <Route element={<ProtectedRoute permission={P.MASTER_PRODUCT_VIEW} />}>
             <Route path="products" element={<ProductsPage />} />

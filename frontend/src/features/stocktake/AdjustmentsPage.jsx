@@ -1,3 +1,6 @@
+import ExportButton from '../../components/ExportButton'
+import { sorterToParams, columnSortOrder } from '../../utils/sort'
+import FitTable from '../../components/FitTable'
 import { useMemo, useState } from 'react'
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -12,6 +15,7 @@ import { P } from '../../constants/permissions'
 import { adjustmentsApi } from '../../api/adjustments.api'
 import { productsApi } from '../../api/products.api'
 import { warehousesApi } from '../../api/warehouses.api'
+import { useBinLabels } from '../../hooks/useBinLabels'
 
 const AV_STATUS = {
   DRAFT: { color: 'gold', label: 'Chờ duyệt' },
@@ -34,14 +38,14 @@ export default function AdjustmentsPage() {
   const openDetail = (id) => setView({ mode: 'detail', id })
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Space>
-          {view.mode !== 'list' && (
+      {view.mode !== 'list' && (
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+          <Space>
             <Button icon={<ArrowLeftOutlined />} onClick={() => setView({ mode: 'list', id: null })}>Danh sách</Button>
-          )}
-          <Typography.Title level={4} style={{ margin: 0 }}>Phiếu điều chỉnh tồn</Typography.Title>
-        </Space>
-      </div>
+            <Typography.Title level={4} style={{ margin: 0 }}>Phiếu điều chỉnh tồn</Typography.Title>
+          </Space>
+        </div>
+      )}
       {view.mode === 'list' ? <AVList onOpen={openDetail} /> : <AVDetail id={view.id} />}
     </div>
   )
@@ -51,34 +55,41 @@ function AVList({ onOpen }) {
   const [keyword, setKeyword] = useState('')
   const [status, setStatus] = useState()
   const [pager, setPager] = useState({ page: 0, size: 20 })
+  const [sorter, setSorter] = useState(null)
+  const { sort, dir } = sorterToParams(sorter)
   const { warehouseMap } = useMaps()
   const list = useQuery({
-    queryKey: ['av-list', keyword, status, pager.page, pager.size],
-    queryFn: () => adjustmentsApi.list({ keyword, status, page: pager.page, size: pager.size }),
+    queryKey: ['av-list', keyword, status, pager.page, pager.size, sort, dir],
+    queryFn: () => adjustmentsApi.list({ keyword, status, page: pager.page, size: pager.size, sort, dir }),
     placeholderData: keepPreviousData,
   })
   const pageData = list.data
   const columns = [
-    { title: 'Mã phiếu', dataIndex: 'voucherNumber', render: (v, r) => <a onClick={() => onOpen(r.id)}>{v || r.id}</a> },
-    { title: 'Trạng thái', dataIndex: 'status', width: 130, render: avTag },
+    { title: 'Mã phiếu', dataIndex: 'voucherNumber', sorter: true, sortOrder: columnSortOrder(sorter, 'voucherNumber'), render: (v, r) => <a onClick={() => onOpen(r.id)}>{v || r.id}</a> },
+    { title: 'Trạng thái', dataIndex: 'status', sorter: true, sortOrder: columnSortOrder(sorter, 'status'), width: 130, render: avTag },
     { title: 'Kho', dataIndex: 'warehouseId', render: (v) => warehouseMap[v]?.name || v },
     { title: 'Phiên kiểm kê', dataIndex: 'sessionId', render: (v) => v || '—' },
     { title: 'Lý do', dataIndex: 'reason', render: (v) => v || '—' },
     { title: 'Người tạo', dataIndex: 'createdBy', width: 120 },
-    { title: 'Tạo lúc', dataIndex: 'createdAt', width: 150, render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
+    { title: 'Tạo lúc', dataIndex: 'createdAt', sorter: true, sortOrder: columnSortOrder(sorter, 'createdAt'), width: 150, render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
   ]
   return (
     <>
-      <Space style={{ marginBottom: 12 }} wrap>
+      <Space style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between' }} wrap>
+        <Typography.Title level={4} style={{ marginLeft: 20, marginTop: 0 }}>Phiếu điều chỉnh tồn</Typography.Title>
+        <Space wrap>
+        <ExportButton filename="phieu-dieu-chinh.xlsx" fetchRows={() => adjustmentsApi.list({ keyword, status, sort, dir, size: 10000 }).then(r => r.content)} />
         <Input.Search allowClear placeholder="Tìm theo mã phiếu" style={{ width: 220 }} prefix={<SearchOutlined />}
           onSearch={(v) => { setKeyword(v); setPager(p => ({ ...p, page: 0 })) }} />
         <Select allowClear placeholder="Lọc trạng thái" style={{ width: 160 }}
           options={AV_STATUS_OPTS} value={status}
           onChange={(v) => { setStatus(v); setPager(p => ({ ...p, page: 0 })) }} />
         <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching} />
+        </Space>
       </Space>
-      <Table rowKey="id" loading={list.isLoading} dataSource={pageData?.content || []} columns={columns}
+      <FitTable rowKey="id" loading={list.isLoading} dataSource={pageData?.content || []} columns={columns}
         scroll={{ x: 'max-content' }}
+        onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') { setSorter(s); setPager(p => ({ ...p, page: 0 })) } }}
         pagination={{
           current: (pageData?.page ?? 0) + 1, pageSize: pageData?.size ?? 20,
           total: pageData?.totalElements ?? 0, showSizeChanger: true, showTotal: (t) => `Tổng ${t}`,
@@ -92,6 +103,7 @@ function AVDetail({ id }) {
   const { message } = AntdApp.useApp()
   const qc = useQueryClient()
   const { warehouseMap, productMap } = useMaps()
+  const { labelOf } = useBinLabels()
   const { data: av, isLoading, isError, error } = useQuery({
     queryKey: ['av', id], queryFn: () => adjustmentsApi.get(id),
   })
@@ -106,7 +118,7 @@ function AVDetail({ id }) {
 
   const columns = [
     { title: 'Sản phẩm', dataIndex: 'productId', render: (pid) => productMap[pid]?.name || pid },
-    { title: 'Ô kệ', dataIndex: 'binLocationId', width: 120, render: (v) => v || '—' },
+    { title: 'Ô kệ', dataIndex: 'binLocationId', width: 130, render: (v) => labelOf(v) },
     { title: 'Lô', dataIndex: 'batchId', width: 120, render: (v) => v || '—' },
     { title: 'Tồn trước', dataIndex: 'beforeQuantity', width: 100, align: 'right' },
     { title: 'Thay đổi', dataIndex: 'quantityChange', width: 100, align: 'right',

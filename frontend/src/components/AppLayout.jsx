@@ -7,7 +7,7 @@ import {
   InboxOutlined, FileDoneOutlined,
   ShoppingCartOutlined, ProfileOutlined, CarOutlined, SwapOutlined,
   AuditOutlined, ReconciliationOutlined,
-  DatabaseOutlined, HistoryOutlined, ScanOutlined,
+  DatabaseOutlined, HistoryOutlined, ScanOutlined, ImportOutlined,
 } from '@ant-design/icons'
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
@@ -19,6 +19,7 @@ const { Header, Sider, Content } = Layout
 // Mỗi mục gắn quyền tối thiểu để hiện. Không có quyền => ẩn khỏi menu.
 const NAV = [
   { key: '/', icon: <DashboardOutlined />, label: 'Tổng quan' },
+  { key: '/data-io', icon: <ImportOutlined />, label: 'Nhập/Xuất Excel', perm: P.MASTER_PRODUCT_MANAGE },
   {
     type: 'group', label: 'Danh mục gốc', children: [
       { key: '/products', icon: <AppstoreOutlined />, label: 'Sản phẩm', perm: P.MASTER_PRODUCT_VIEW },
@@ -103,19 +104,21 @@ export default function AppLayout() {
   }
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout className="app-shell">
       <Sider collapsible collapsed={collapsed} trigger={null} theme="light"
-        style={{ borderRight: `1px solid ${token.colorBorderSecondary}` }}>
+        style={{ borderRight: `1px solid ${token.colorBorderSecondary}`, height: '100vh' }}>
         <div style={{ height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontWeight: 700, fontSize: 18, color: token.colorPrimary }}>
           {collapsed ? 'MWS' : 'MWS · Kho'}
         </div>
-        <Menu mode="inline" selectedKeys={[selectedKey]} items={items}
-          onClick={({ key }) => navigate(key)} />
+        <div className="app-sider-menu">
+          <Menu mode="inline" selectedKeys={[selectedKey]} items={items}
+            onClick={({ key }) => navigate(key)} />
+        </div>
       </Sider>
 
-      <Layout>
-        <Header style={{ background: token.colorBgContainer, padding: '0 16px',
+      <Layout style={{ height: '100vh' }}>
+        <Header style={{ background: token.colorBgContainer, padding: '0 16px', flex: '0 0 auto',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
           <Button type="text" onClick={() => setCollapsed(v => !v)}
@@ -131,8 +134,8 @@ export default function AppLayout() {
           </div>
         </Header>
 
-        <Content style={{ margin: 16 }}>
-          <div style={{ background: token.colorBgContainer, padding: 20, borderRadius: 8, minHeight: '100%' }}>
+        <Content className="app-content">
+          <div style={{ background: token.colorBgContainer, padding: 16, borderRadius: 8, minHeight: '100%' }}>
             <Outlet />
           </div>
         </Content>

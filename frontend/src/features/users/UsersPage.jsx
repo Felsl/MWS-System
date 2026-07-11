@@ -1,3 +1,4 @@
+import FitTable from '../../components/FitTable'
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -104,7 +105,7 @@ export default function UsersPage() {
         </Space>
       </div>
 
-      <Table rowKey="id" loading={users.isLoading} dataSource={users.data || []}
+      <FitTable rowKey="id" loading={users.isLoading} dataSource={users.data || []}
         columns={columns} scroll={{ x: 'max-content' }}
         pagination={{ pageSize: 10, showSizeChanger: true }} />
 

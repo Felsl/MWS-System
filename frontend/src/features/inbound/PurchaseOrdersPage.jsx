@@ -1,3 +1,6 @@
+import ExportButton from '../../components/ExportButton'
+import { sorterToParams, columnSortOrder } from '../../utils/sort'
+import FitTable from '../../components/FitTable'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -47,20 +50,16 @@ export default function PurchaseOrdersPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Space>
-          {view.mode !== 'list' && (
+      {view.mode !== 'list' && (
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+          <Space>
             <Button icon={<ArrowLeftOutlined />} onClick={() => setView({ mode: 'list', id: null })}>Danh sách</Button>
-          )}
-          <Typography.Title level={4} style={{ margin: 0 }}>Đơn mua hàng (PO)</Typography.Title>
-        </Space>
-        <Can permission={P.INBOUND_CREATE_PO}>
-          <Button type="primary" icon={<PlusOutlined />}
-            onClick={() => setView({ mode: 'create', id: null })}>Tạo đơn mua</Button>
-        </Can>
-      </div>
+            <Typography.Title level={4} style={{ margin: 0 }}>Đơn mua hàng (PO)</Typography.Title>
+          </Space>
+        </div>
+      )}
 
-      {view.mode === 'list' && <POList onOpen={openDetail} />}
+      {view.mode === 'list' && <POList onOpen={openDetail} onCreate={() => setView({ mode: 'create', id: null })} />}
       {view.mode === 'create' && <CreatePO onCreated={(po) => openDetail(po.id)} />}
       {view.mode === 'detail' && view.id && <PODetail id={view.id} />}
     </div>
@@ -68,34 +67,39 @@ export default function PurchaseOrdersPage() {
 }
 
 // ---- Bảng danh sách ----
-function POList({ onOpen }) {
+function POList({ onOpen, onCreate }) {
   const [keyword, setKeyword] = useState('')
   const [status, setStatus] = useState()
   const [pager, setPager] = useState({ page: 0, size: 20 })
+  const [sorter, setSorter] = useState(null)
+  const { sort, dir } = sorterToParams(sorter)
   const { supplierMap, warehouseMap } = useNameMaps()
 
   const list = useQuery({
-    queryKey: ['po-list', keyword, status, pager.page, pager.size],
-    queryFn: () => purchaseOrdersApi.list({ keyword, status, page: pager.page, size: pager.size }),
+    queryKey: ['po-list', keyword, status, pager.page, pager.size, sort, dir],
+    queryFn: () => purchaseOrdersApi.list({ keyword, status, page: pager.page, size: pager.size, sort, dir }),
     placeholderData: keepPreviousData,
   })
   const pageData = list.data
 
   const columns = [
-    { title: 'Mã đơn', dataIndex: 'poNumber', render: (v, r) => <a onClick={() => onOpen(r.id)}>{v || r.id}</a> },
-    { title: 'Trạng thái', dataIndex: 'status', width: 140, render: poTag },
+    { title: 'Mã đơn', dataIndex: 'poNumber', sorter: true, sortOrder: columnSortOrder(sorter, 'poNumber'), render: (v, r) => <a onClick={() => onOpen(r.id)}>{v || r.id}</a> },
+    { title: 'Trạng thái', dataIndex: 'status', sorter: true, sortOrder: columnSortOrder(sorter, 'status'), width: 140, render: poTag },
     { title: 'Nhà cung cấp', dataIndex: 'supplierId', render: (v) => supplierMap[v]?.name || v },
     { title: 'Kho', dataIndex: 'warehouseId', render: (v) => warehouseMap[v]?.name || v, width: 150 },
-    { title: 'Ngày dự kiến', dataIndex: 'expectedDate', width: 120,
+    { title: 'Ngày dự kiến', dataIndex: 'expectedDate', sorter: true, sortOrder: columnSortOrder(sorter, 'expectedDate'), width: 120,
       render: (v) => v ? dayjs(v).format('DD/MM/YYYY') : '—' },
     { title: 'Người tạo', dataIndex: 'createdBy', width: 130 },
-    { title: 'Tạo lúc', dataIndex: 'createdAt', width: 150,
+    { title: 'Tạo lúc', dataIndex: 'createdAt', sorter: true, sortOrder: columnSortOrder(sorter, 'createdAt'), width: 150,
       render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
   ]
 
   return (
     <>
-      <Space style={{ marginBottom: 12 }} wrap>
+      <Space style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between' }} wrap>
+        <Typography.Title level={4} style={{ marginLeft: 20, marginTop: 0 }}>Đơn mua hàng (PO)</Typography.Title>
+        <Space wrap>
+        <ExportButton filename="don-mua-hang.xlsx" fetchRows={() => purchaseOrdersApi.list({ keyword, status, sort, dir, size: 10000 }).then(r => r.content)} />
         <Input.Search allowClear placeholder="Tìm theo mã đơn" style={{ width: 220 }}
           prefix={<SearchOutlined />}
           onSearch={(v) => { setKeyword(v); setPager(p => ({ ...p, page: 0 })) }} />
@@ -103,10 +107,13 @@ function POList({ onOpen }) {
           options={PO_STATUS_OPTS} value={status}
           onChange={(v) => { setStatus(v); setPager(p => ({ ...p, page: 0 })) }} />
         <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching} />
+          <Can permission={P.INBOUND_CREATE_PO}><Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>Tạo đơn mua</Button></Can>
+        </Space>
       </Space>
 
-      <Table rowKey="id" loading={list.isLoading} dataSource={pageData?.content || []}
+      <FitTable rowKey="id" loading={list.isLoading} dataSource={pageData?.content || []}
         columns={columns} scroll={{ x: 'max-content' }}
+        onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') { setSorter(s); setPager(p => ({ ...p, page: 0 })) } }}
         pagination={{
           current: (pageData?.page ?? 0) + 1,
           pageSize: pageData?.size ?? 20,

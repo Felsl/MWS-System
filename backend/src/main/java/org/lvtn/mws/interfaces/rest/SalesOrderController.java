@@ -40,7 +40,7 @@ public class SalesOrderController {
                 .toList();
         var so = createSalesOrderUseCase.execute(
                 req.warehouseId(), req.customerId(), req.discountAmount(),
-                req.priority(), req.requiredDate(), req.createdBy(), lines);
+                req.priority() == null ? 0 : req.priority(), req.requiredDate(), req.createdBy(), lines);
         return ResponseEntity.status(HttpStatus.CREATED).body(mapper.toResponse(so));
     }
 
@@ -54,8 +54,10 @@ public class SalesOrderController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        var result = getAllSalesOrdersUseCase.execute(keyword, status, page, size);
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) String dir) {
+        var result = getAllSalesOrdersUseCase.execute(keyword, status, page, size, sort, dir);
         return ResponseEntity.ok(
                 org.lvtn.mws.interfaces.dto.response.common.PageResponse.from(result, mapper::toResponse));
     }

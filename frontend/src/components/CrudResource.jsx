@@ -5,6 +5,7 @@ import {
 } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons'
 import Can from './Can'
+import FitTable from './FitTable'
 import { getErrorMessage } from '../api/client'
 
 /**
@@ -86,12 +87,11 @@ export default function CrudResource({
         </Space>
       </div>
 
-      <Table
+      <FitTable
         rowKey={rowKey}
         loading={isLoading}
         dataSource={data}
         columns={[...columns, actionCol]}
-        scroll={{ x: 'max-content' }}
         pagination={{ pageSize: 10, showSizeChanger: true }}
         size="middle"
       />

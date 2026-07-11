@@ -1,3 +1,6 @@
+import ExportButton from '../../components/ExportButton'
+import { sorterToParams, columnSortOrder } from '../../utils/sort'
+import FitTable from '../../components/FitTable'
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -17,6 +20,7 @@ import { goodsReceiptsApi } from '../../api/goodsReceipts.api'
 import { purchaseOrdersApi } from '../../api/purchaseOrders.api'
 import { productsApi } from '../../api/products.api'
 import { warehousesApi } from '../../api/warehouses.api'
+import { useBinLabels } from '../../hooks/useBinLabels'
 
 const GRN_STATUS = {
   PENDING: { color: 'gold', label: 'Chờ hoàn thành' },
@@ -46,52 +50,53 @@ export default function GoodsReceiptsPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Space>
-          {view.mode !== 'list' && (
+      {view.mode !== 'list' && (
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+          <Space>
             <Button icon={<ArrowLeftOutlined />} onClick={() => setView({ mode: 'list', id: null })}>Danh sách</Button>
-          )}
-          <Typography.Title level={4} style={{ margin: 0 }}>Phiếu nhập kho (GRN)</Typography.Title>
-        </Space>
-        <Can permission={P.INBOUND_CREATE_GRN}>
-          <Button type="primary" icon={<PlusOutlined />}
-            onClick={() => setView({ mode: 'create', id: null })}>Tạo phiếu nhập</Button>
-        </Can>
-      </div>
+            <Typography.Title level={4} style={{ margin: 0 }}>Phiếu nhập kho (GRN)</Typography.Title>
+          </Space>
+        </div>
+      )}
 
-      {view.mode === 'list' && <GRNList onOpen={openDetail} />}
+      {view.mode === 'list' && <GRNList onOpen={openDetail} onCreate={() => setView({ mode: 'create', id: null })} />}
       {view.mode === 'create' && <CreateGRN initialPoId={poIdFromNav} onCreated={(grn) => openDetail(grn.id)} />}
       {view.mode === 'detail' && view.id && <GRNDetail id={view.id} />}
     </div>
   )
 }
 
-function GRNList({ onOpen }) {
+function GRNList({ onOpen, onCreate }) {
   const [keyword, setKeyword] = useState('')
   const [status, setStatus] = useState()
   const [pager, setPager] = useState({ page: 0, size: 20 })
+  const [sorter, setSorter] = useState(null)
+  const { sort, dir } = sorterToParams(sorter)
   const { warehouseMap } = useWarehouseMap()
 
   const list = useQuery({
-    queryKey: ['grn-list', keyword, status, pager.page, pager.size],
-    queryFn: () => goodsReceiptsApi.list({ keyword, status, page: pager.page, size: pager.size }),
+    queryKey: ['grn-list', keyword, status, pager.page, pager.size, sort, dir],
+    queryFn: () => goodsReceiptsApi.list({ keyword, status, page: pager.page, size: pager.size, sort, dir }),
     placeholderData: keepPreviousData,
   })
   const pageData = list.data
 
   const columns = [
-    { title: 'Mã phiếu', dataIndex: 'grnNumber', render: (v, r) => <a onClick={() => onOpen(r.id)}>{v || r.id}</a> },
-    { title: 'Trạng thái', dataIndex: 'status', width: 150, render: grnTag },
+    { title: 'Mã phiếu', dataIndex: 'grnNumber', sorter: true, sortOrder: columnSortOrder(sorter, 'grnNumber'), render: (v, r) => <a onClick={() => onOpen(r.id)}>{v || r.id}</a> },
+    { title: 'Trạng thái', dataIndex: 'status', sorter: true, sortOrder: columnSortOrder(sorter, 'status'), width: 150, render: grnTag },
     { title: 'Kho', dataIndex: 'warehouseId', render: (v) => warehouseMap[v]?.name || v, width: 160 },
     { title: 'Từ đơn mua', dataIndex: 'poId', render: (v) => v || '— (tự do)' },
     { title: 'Người nhận', dataIndex: 'receivedBy', width: 130 },
-    { title: 'Nhận lúc', dataIndex: 'receivedAt', width: 150,
+    { title: 'Nhận lúc', dataIndex: 'receivedAt', sorter: true, sortOrder: columnSortOrder(sorter, 'receivedAt'), width: 150,
       render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
   ]
 
   return (
     <>
-      <Space style={{ marginBottom: 12 }} wrap>
+      <Space style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between' }} wrap>
+        <Typography.Title level={4} style={{ marginLeft: 20, marginTop: 0 }}>Phiếu nhập kho (GRN)</Typography.Title>
+        <Space wrap>
+        <ExportButton filename="phieu-nhap-kho.xlsx" fetchRows={() => goodsReceiptsApi.list({ keyword, status, sort, dir, size: 10000 }).then(r => r.content)} />
         <Input.Search allowClear placeholder="Tìm theo mã phiếu" style={{ width: 220 }}
           prefix={<SearchOutlined />}
           onSearch={(v) => { setKeyword(v); setPager(p => ({ ...p, page: 0 })) }} />
@@ -99,10 +104,13 @@ function GRNList({ onOpen }) {
           options={GRN_STATUS_OPTS} value={status}
           onChange={(v) => { setStatus(v); setPager(p => ({ ...p, page: 0 })) }} />
         <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching} />
+          <Can permission={P.INBOUND_CREATE_GRN}><Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>Tạo phiếu nhập</Button></Can>
+        </Space>
       </Space>
 
-      <Table rowKey="id" loading={list.isLoading} dataSource={pageData?.content || []}
+      <FitTable rowKey="id" loading={list.isLoading} dataSource={pageData?.content || []}
         columns={columns} scroll={{ x: 'max-content' }}
+        onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') { setSorter(s); setPager(p => ({ ...p, page: 0 })) } }}
         pagination={{
           current: (pageData?.page ?? 0) + 1,
           pageSize: pageData?.size ?? 20,
@@ -259,6 +267,7 @@ function GRNDetail({ id }) {
   const { message } = AntdApp.useApp()
   const qc = useQueryClient()
   const { map: productMap } = useProductMap()
+  const { labelOf } = useBinLabels()
 
   const { data: grn, isLoading, isError, error } = useQuery({
     queryKey: ['grn', id],
@@ -282,7 +291,7 @@ function GRNDetail({ id }) {
     { title: 'SL', dataIndex: 'quantity', width: 80, align: 'right' },
     { title: 'Số lô', dataIndex: 'batchNumber', width: 130, render: (v) => v || '—' },
     { title: 'HSD', dataIndex: 'expiryDate', width: 120, render: (v) => v ? dayjs(v).format('DD/MM/YYYY') : '—' },
-    { title: 'Ô kệ', dataIndex: 'binLocationId', width: 140 },
+    { title: 'Ô kệ', dataIndex: 'binLocationId', width: 140, render: (v) => labelOf(v) },
   ]
 
   return (

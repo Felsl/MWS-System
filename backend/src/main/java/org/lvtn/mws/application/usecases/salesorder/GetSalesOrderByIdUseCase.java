@@ -5,6 +5,7 @@ import org.lvtn.mws.domain.model.SalesOrder;
 import org.lvtn.mws.domain.service.SalesOrderDomainService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.lvtn.mws.infrastructure.security.scope.CreationDateScope;
 
 @Service
 @RequiredArgsConstructor
@@ -12,8 +13,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class GetSalesOrderByIdUseCase {
 
     private final SalesOrderDomainService salesOrderDomainService;
+    private final CreationDateScope creationDateScope;
 
     public SalesOrder execute(String id) {
-        return salesOrderDomainService.findById(id);
+        SalesOrder rec = salesOrderDomainService.findById(id);
+        creationDateScope.assertVisible(rec.getCreatedAt());
+        return rec;
     }
 }

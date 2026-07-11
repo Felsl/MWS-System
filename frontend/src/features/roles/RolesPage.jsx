@@ -1,3 +1,4 @@
+import FitTable from '../../components/FitTable'
 import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -90,7 +91,7 @@ export default function RolesPage() {
         </Space>
       </div>
 
-      <Table rowKey="id" loading={roles.isLoading} dataSource={roles.data || []}
+      <FitTable rowKey="id" loading={roles.isLoading} dataSource={roles.data || []}
         columns={columns} scroll={{ x: 'max-content' }}
         pagination={{ pageSize: 10 }} />
 

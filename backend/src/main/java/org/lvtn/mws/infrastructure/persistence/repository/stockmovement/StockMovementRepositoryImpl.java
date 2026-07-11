@@ -49,6 +49,11 @@ public class StockMovementRepositoryImpl implements IStockMovementRepository {
         Specification<StockMovementEntity> scoped =
                 WarehouseScopeSpecs.restrict("warehouseId");
         Specification<StockMovementEntity> spec = byProduct.and(scoped);
+        java.time.LocalDateTime __c1 = org.lvtn.mws.infrastructure.security.scope.CreationDateScopeContext.get();
+        if (__c1 != null) {
+            final java.time.LocalDateTime __cf1 = __c1;
+            spec = spec.and((root, q, cb) -> cb.greaterThanOrEqualTo(root.<java.time.LocalDateTime>get("createdAt"), __cf1));
+        }
         return jpa.findAll(spec, Sort.by(Sort.Direction.DESC, "createdAt"))
                 .stream().map(mapper::toDomain).toList();
     }
@@ -63,6 +68,11 @@ public class StockMovementRepositoryImpl implements IStockMovementRepository {
         if (warehouseId != null && !warehouseId.isBlank()) {
             String wh = warehouseId.trim();
             spec = spec.and((root, q, cb) -> cb.equal(root.get("warehouseId"), wh));
+        }
+        java.time.LocalDateTime __c2 = org.lvtn.mws.infrastructure.security.scope.CreationDateScopeContext.get();
+        if (__c2 != null) {
+            final java.time.LocalDateTime __cf2 = __c2;
+            spec = spec.and((root, q, cb) -> cb.greaterThanOrEqualTo(root.<java.time.LocalDateTime>get("createdAt"), __cf2));
         }
         Sort sort = Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id"));
         ScrollPosition position = decodeCursor(cursor);

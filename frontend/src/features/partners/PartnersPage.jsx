@@ -1,3 +1,4 @@
+import FitTable from '../../components/FitTable'
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Tabs, Tag, Table, Button, Modal, Form, Input, App as AntdApp } from 'antd'
@@ -112,7 +113,7 @@ function Carriers() {
           Thêm đơn vị vận chuyển
         </Button>
       </div>
-      <Table rowKey="id" size="middle" loading={list.isLoading} dataSource={list.data || []}
+      <FitTable rowKey="id" size="middle" loading={list.isLoading} dataSource={list.data || []}
         columns={columns} scroll={{ x: 'max-content' }} pagination={{ pageSize: 10 }} />
 
       <Modal title="Thêm đơn vị vận chuyển" open={open} onOk={submit} onCancel={() => setOpen(false)}

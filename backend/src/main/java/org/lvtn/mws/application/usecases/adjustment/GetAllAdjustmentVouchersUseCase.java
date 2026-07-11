@@ -18,7 +18,7 @@ public class GetAllAdjustmentVouchersUseCase {
 
     /** B4: tìm kiếm + phân trang phiếu điều chỉnh, lọc theo kho user được phép. */
     @WarehouseScoped
-    public PageResult<AdjustmentVoucher> execute(String keyword, String status, int page, int size) {
-        return adjustmentDomainService.search(keyword, status, new PageQuery(page, size));
+    public PageResult<AdjustmentVoucher> execute(String keyword, String status, int page, int size, String sortBy, String sortDir) {
+        return adjustmentDomainService.search(keyword, status, new PageQuery(page, size, sortBy, sortDir));
     }
 }

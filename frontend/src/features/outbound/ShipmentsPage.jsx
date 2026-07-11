@@ -1,3 +1,4 @@
+import FitTable from '../../components/FitTable'
 import { useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -44,11 +45,8 @@ export default function ShipmentsPage() {
           {view.mode !== 'list' && (
             <Button icon={<ArrowLeftOutlined />} onClick={() => setView({ mode: 'list', id: null })}>Danh sách</Button>
           )}
-          <Typography.Title level={4} style={{ margin: 0 }}>Vận đơn (Shipment)</Typography.Title>
         </Space>
-        <Can permission={P.OUTBOUND_SHIP}>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setView({ mode: 'create', id: null })}>Tạo vận đơn</Button>
-        </Can>
+
       </div>
       {view.mode === 'list' && <SHList onOpen={openDetail} />}
       {view.mode === 'create' && <CreateSH initialSoId={salesOrderId} onCreated={(sh) => openDetail(sh.id)} />}
@@ -70,10 +68,16 @@ function SHList({ onOpen }) {
   ]
   return (
     <>
-      <Space style={{ marginBottom: 12 }}>
+      <Space style={{  marginBottom: 12,display: 'flex',justifyContent:'space-between' }}>
+        <Typography.Title level={4} style={{ marginLeft: 20,marginTop: 0 }}>Vận đơn (Shipment)</Typography.Title>
+        <Space> 
         <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching}>Làm mới</Button>
+        <Can permission={P.OUTBOUND_SHIP}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setView({ mode: 'create', id: null })}>Tạo vận đơn</Button>
+        </Can>
+        </Space>
       </Space>
-      <Table rowKey="id" loading={list.isLoading} dataSource={list.data || []} columns={columns}
+      <FitTable rowKey="id" loading={list.isLoading} dataSource={list.data || []} columns={columns}
         scroll={{ x: 'max-content' }} pagination={{ pageSize: 10 }} />
     </>
   )

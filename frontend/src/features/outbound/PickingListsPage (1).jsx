@@ -1,4 +1,3 @@
-import FitTable from '../../components/FitTable'
 import { useEffect, useMemo, useState } from 'react'
 import { useBinLabels } from '../../hooks/useBinLabels'
 import { useLocation } from 'react-router-dom'
@@ -40,8 +39,11 @@ export default function PickingListsPage() {
           {view.mode !== 'list' && (
             <Button icon={<ArrowLeftOutlined />} onClick={() => setView({ mode: 'list', id: null })}>Danh sách</Button>
           )}
+          <Typography.Title level={4} style={{ margin: 0 }}>Lệnh lấy hàng (Picking)</Typography.Title>
         </Space>
-
+        <Can permission={P.OUTBOUND_PICK}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setView({ mode: 'create', id: null })}>Tạo lệnh</Button>
+        </Can>
       </div>
       {view.mode === 'list' && <PLList onOpen={openDetail} />}
       {view.mode === 'create' && <CreatePL onCreated={(pl) => openDetail(pl.id)} />}
@@ -61,17 +63,10 @@ function PLList({ onOpen }) {
   ]
   return (
     <>
-      <Space style={{  marginBottom: 12,display: 'flex',justifyContent:'space-between'  }}>
-        <Typography.Title level={4} style={{  marginLeft: 20,marginTop: 0 }}>Lệnh lấy hàng (Picking)</Typography.Title>
-        <Space>
-          <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching}>Làm mới</Button>
-          <Can permission={P.OUTBOUND_PICK}>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setView({ mode: 'create', id: null })}>Tạo lệnh</Button>
-          </Can>
-        </Space>
-        
+      <Space style={{ marginBottom: 12 }}>
+        <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching}>Làm mới</Button>
       </Space>
-      <FitTable rowKey="id" loading={list.isLoading} dataSource={list.data || []} columns={columns}
+      <Table rowKey="id" loading={list.isLoading} dataSource={list.data || []} columns={columns}
         scroll={{ x: 'max-content' }} pagination={{ pageSize: 10 }} />
     </>
   )

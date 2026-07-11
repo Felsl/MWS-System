@@ -1,3 +1,36 @@
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
 body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+
+/* App shell: khoá viewport, không cuộn body — chỉ vùng nội dung mới cuộn. */
+.app-shell { height: 100vh; overflow: hidden; }
+
+/* Vùng nội dung: là ranh giới cuộn duy nhất.
+   - Trang chi tiết/dài: cuộn bình thường trong đây.
+   - Trang danh sách: FitTable tự vừa 1 màn nên vùng này không cuộn, chỉ thân bảng cuộn. */
+.app-content { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 16px; }
+
+/* Sidebar tự cuộn phần menu nếu dài hơn màn hình (logo giữ nguyên trên đỉnh). */
+.app-sider-menu { height: calc(100vh - 56px); overflow-y: auto; overflow-x: hidden; }
+
+/* ── Ẩn thanh cuộn (vẫn cuộn được bằng chuột/trackpad) ─────────────────────── */
+/* Firefox + Edge cũ: áp cho khung app, sidebar, và mọi vùng cuộn trong nội dung
+   (bao gồm thân bảng .ant-table-body và hộp danh sách thông báo). */
+.app-content,
+.app-content *,
+.app-sider-menu,
+.ant-table-body,
+.ant-table-content {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+/* Chrome / Safari / Edge mới */
+.app-content::-webkit-scrollbar,
+.app-content *::-webkit-scrollbar,
+.app-sider-menu::-webkit-scrollbar,
+.ant-table-body::-webkit-scrollbar,
+.ant-table-content::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}

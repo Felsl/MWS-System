@@ -1,3 +1,4 @@
+import FitTable from '../../components/FitTable'
 import { useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query'
@@ -10,6 +11,7 @@ import { getErrorMessage } from '../../api/client'
 import { stockMovementsApi } from '../../api/stockMovements.api'
 import { productsApi } from '../../api/products.api'
 import { warehousesApi } from '../../api/warehouses.api'
+import { useBinLabels } from '../../hooks/useBinLabels'
 
 // Màu theo dấu thay đổi tồn
 const changeTag = (v) => <Tag color={v === 0 ? 'default' : v > 0 ? 'green' : 'red'}>{v > 0 ? `+${v}` : v}</Tag>
@@ -18,6 +20,7 @@ export default function StockMovementsPage() {
   const location = useLocation()
   const products = useQuery({ queryKey: ['products', 'all'], queryFn: () => productsApi.list({ size: 500 }) })
   const warehouses = useQuery({ queryKey: ['warehouses', 'active'], queryFn: () => warehousesApi.list(false) })
+  const { labelOf } = useBinLabels()
   const productList = products.data?.content || []
   const productMap = useMemo(() => Object.fromEntries(productList.map(p => [p.id, p])), [productList])
 
@@ -40,7 +43,7 @@ export default function StockMovementsPage() {
     { title: 'Thay đổi', dataIndex: 'quantityChange', width: 100, align: 'right', render: changeTag },
     { title: 'Trước', dataIndex: 'quantityBefore', width: 90, align: 'right' },
     { title: 'Sau', dataIndex: 'quantityAfter', width: 90, align: 'right' },
-    { title: 'Ô kệ', dataIndex: 'binLocationId', width: 120, render: (v) => v || '—' },
+    { title: 'Ô kệ', dataIndex: 'binLocationId', width: 130, render: (v) => labelOf(v) },
     {
       title: 'Chứng từ', key: 'ref', width: 200,
       render: (_, r) => r.referenceId
@@ -72,8 +75,8 @@ export default function StockMovementsPage() {
           ? <Card><Empty description={getErrorMessage(q.error, 'Không tải được thẻ kho')} /></Card>
           : (
             <>
-              <Table rowKey="id" loading={q.isLoading} dataSource={rows} columns={columns}
-                scroll={{ x: 'max-content' }} pagination={false} size="small" />
+              <FitTable rowKey="id" loading={q.isLoading} dataSource={rows} columns={columns}
+                pagination={false} size="small" bottomGap={80} />
               <div style={{ textAlign: 'center', marginTop: 12 }}>
                 {q.hasNextPage
                   ? <Button onClick={() => q.fetchNextPage()} loading={q.isFetchingNextPage}>Tải thêm</Button>
@@ -89,6 +92,7 @@ export default function StockMovementsPage() {
 
 function ReferenceModal({ state, onClose, productMap }) {
   const open = !!state
+  const { labelOf } = useBinLabels()
   const q = useQuery({
     queryKey: ['ref-moves', state?.referenceType, state?.referenceId],
     queryFn: () => stockMovementsApi.byReference(state.referenceType, state.referenceId),
@@ -98,7 +102,7 @@ function ReferenceModal({ state, onClose, productMap }) {
     { title: 'Sản phẩm', dataIndex: 'productId', render: (pid) => productMap[pid]?.name || pid },
     { title: 'Loại', dataIndex: 'movementType', width: 130, render: (v) => <Tag>{v}</Tag> },
     { title: 'Thay đổi', dataIndex: 'quantityChange', width: 100, align: 'right', render: changeTag },
-    { title: 'Ô kệ', dataIndex: 'binLocationId', width: 120, render: (v) => v || '—' },
+    { title: 'Ô kệ', dataIndex: 'binLocationId', width: 130, render: (v) => labelOf(v) },
     { title: 'Thời gian', dataIndex: 'createdAt', width: 150, render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
   ]
   return (

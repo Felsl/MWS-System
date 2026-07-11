@@ -1,5 +1,8 @@
-import { useMemo, useState } from 'react'
-import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import ExportButton from '../../components/ExportButton'
+import { sorterToParams, columnSortOrder } from '../../utils/sort'
+import FitTable from '../../components/FitTable'
+import { useEffect, useMemo, useState } from 'react'
+import { keepPreviousData, useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Button, Input, Form, Select, InputNumber, Row, Col, Table, Space,
   Typography, Tag, Descriptions, Empty, Popconfirm, Divider, Modal, Progress, App as AntdApp,
@@ -47,60 +50,95 @@ function useProductMap() {
 }
 const productOptions = (list) => list.map(p => ({ value: p.id, label: `${p.name} · ${p.sku}` }))
 
+// Map binLocationId -> nhãn toạ độ ô kệ dạng zone-aisle-rack-bin (VD: A-01-R1-B3) của 1 kho.
+function useBinLabelMap(warehouseId) {
+  const bins = useQuery({
+    queryKey: ['bins', warehouseId],
+    queryFn: () => warehousesApi.listBins(warehouseId),
+    enabled: !!warehouseId,
+  })
+  return useMemo(
+    () => Object.fromEntries((bins.data || []).map(b => [b.id, b.coordinateLabel || b.id])),
+    [bins.data],
+  )
+}
+
+// Map batchId -> batchNumber cho danh sách sản phẩm tại 1 kho (để hiển thị mã lô thay vì ID).
+function useBatchNumberMap(warehouseId, productIds) {
+  const ids = useMemo(() => [...new Set((productIds || []).filter(Boolean))], [productIds])
+  const results = useQueries({
+    queries: ids.map(pid => ({
+      queryKey: ['batches', pid, warehouseId],
+      queryFn: () => inventoryApi.getBatches(pid, warehouseId),
+      enabled: !!warehouseId && !!pid,
+    })),
+  })
+  return useMemo(() => {
+    const m = {}
+    results.forEach(r => (r.data || []).forEach(b => { m[b.id] = b.batchNumber }))
+    return m
+  }, [results])
+}
+
 export default function TransferOrdersPage() {
   const [view, setView] = useState({ mode: 'list', id: null })
   const openDetail = (id) => setView({ mode: 'detail', id })
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Space>
-          {view.mode !== 'list' && (
+      {view.mode !== 'list' && (
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+          <Space>
             <Button icon={<ArrowLeftOutlined />} onClick={() => setView({ mode: 'list', id: null })}>Danh sách</Button>
-          )}
-          <Typography.Title level={4} style={{ margin: 0 }}>Điều chuyển nội bộ (Transfer)</Typography.Title>
-        </Space>
-        <Can permission={P.TRANSFER_CREATE}>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setView({ mode: 'create', id: null })}>Tạo phiếu chuyển</Button>
-        </Can>
-      </div>
-      {view.mode === 'list' && <TOList onOpen={openDetail} />}
+            <Typography.Title level={4} style={{ margin: 0 }}>Điều chuyển nội bộ (Transfer)</Typography.Title>
+          </Space>
+        </div>
+      )}
+      {view.mode === 'list' && <TOList onOpen={openDetail} onCreate={() => setView({ mode: 'create', id: null })} />}
       {view.mode === 'create' && <CreateTO onCreated={(to) => openDetail(to.id)} />}
       {view.mode === 'detail' && view.id && <TODetail id={view.id} />}
     </div>
   )
 }
 
-function TOList({ onOpen }) {
+function TOList({ onOpen, onCreate }) {
   const [keyword, setKeyword] = useState('')
   const [status, setStatus] = useState()
   const [pager, setPager] = useState({ page: 0, size: 20 })
+  const [sorter, setSorter] = useState(null)
+  const { sort, dir } = sorterToParams(sorter)
   const { warehouseMap } = useNameMaps()
   const list = useQuery({
-    queryKey: ['to-list', keyword, status, pager.page, pager.size],
-    queryFn: () => transferOrdersApi.list({ keyword, status, page: pager.page, size: pager.size }),
+    queryKey: ['to-list', keyword, status, pager.page, pager.size, sort, dir],
+    queryFn: () => transferOrdersApi.list({ keyword, status, page: pager.page, size: pager.size, sort, dir }),
     placeholderData: keepPreviousData,
   })
   const pageData = list.data
   const columns = [
-    { title: 'Mã phiếu', dataIndex: 'transferNumber', render: (v, r) => <a onClick={() => onOpen(r.id)}>{v || r.id}</a> },
-    { title: 'Trạng thái', dataIndex: 'status', width: 140, render: toTag },
+    { title: 'Mã phiếu', dataIndex: 'transferNumber', sorter: true, sortOrder: columnSortOrder(sorter, 'transferNumber'), render: (v, r) => <a onClick={() => onOpen(r.id)}>{v || r.id}</a> },
+    { title: 'Trạng thái', dataIndex: 'status', sorter: true, sortOrder: columnSortOrder(sorter, 'status'), width: 140, render: toTag },
     { title: 'Kho nguồn', dataIndex: 'fromWarehouseId', render: (v) => warehouseMap[v]?.name || v },
     { title: 'Kho đích', dataIndex: 'toWarehouseId', render: (v) => warehouseMap[v]?.name || v },
     { title: 'Người tạo', dataIndex: 'createdBy', width: 130 },
-    { title: 'Tạo lúc', dataIndex: 'createdAt', width: 150, render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
+    { title: 'Tạo lúc', dataIndex: 'createdAt', sorter: true, sortOrder: columnSortOrder(sorter, 'createdAt'), width: 150, render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
   ]
   return (
     <>
-      <Space style={{ marginBottom: 12 }} wrap>
+      <Space style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between' }} wrap>
+        <Typography.Title level={4} style={{ marginLeft: 20, marginTop: 0 }}>Điều chuyển nội bộ (Transfer)</Typography.Title>
+        <Space wrap>
+        <ExportButton filename="phieu-dieu-chuyen.xlsx" fetchRows={() => transferOrdersApi.list({ keyword, status, sort, dir, size: 10000 }).then(r => r.content)} />
         <Input.Search allowClear placeholder="Tìm theo mã phiếu" style={{ width: 220 }} prefix={<SearchOutlined />}
           onSearch={(v) => { setKeyword(v); setPager(p => ({ ...p, page: 0 })) }} />
         <Select allowClear placeholder="Lọc trạng thái" style={{ width: 180 }}
           options={TO_STATUS_OPTS} value={status}
           onChange={(v) => { setStatus(v); setPager(p => ({ ...p, page: 0 })) }} />
         <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching} />
+          <Can permission={P.TRANSFER_CREATE}><Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>Tạo phiếu chuyển</Button></Can>
+        </Space>
       </Space>
-      <Table rowKey="id" loading={list.isLoading} dataSource={pageData?.content || []} columns={columns}
+      <FitTable rowKey="id" loading={list.isLoading} dataSource={pageData?.content || []} columns={columns}
         scroll={{ x: 'max-content' }}
+        onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') { setSorter(s); setPager(p => ({ ...p, page: 0 })) } }}
         pagination={{
           current: (pageData?.page ?? 0) + 1, pageSize: pageData?.size ?? 20,
           total: pageData?.totalElements ?? 0, showSizeChanger: true, showTotal: (t) => `Tổng ${t}`,
@@ -112,7 +150,7 @@ function TOList({ onOpen }) {
 
 // Ô chọn lô cho 1 dòng: mặc định "Tự động (FEFO)", có thể chỉ định lô cụ thể (gợi ý theo FEFO).
 const AUTO = '__auto__'
-function BatchLineSelect({ fromWarehouseId, productId, quantity, value, onChange }) {
+function BatchLineSelect({ fromWarehouseId, productId, quantity, value, onChange, binMap = {} }) {
   const enabled = !!fromWarehouseId && !!productId && quantity > 0
   const sug = useQuery({
     queryKey: ['fefo', fromWarehouseId, productId, quantity],
@@ -123,7 +161,7 @@ function BatchLineSelect({ fromWarehouseId, productId, quantity, value, onChange
     { value: AUTO, label: 'Tự động (FEFO) — picker quét lô bất kỳ' },
     ...(sug.data || []).map(s => ({
       value: s.batchId,
-      label: `Chỉ định: ${s.batchNumber} · ${s.binLocationId} · gợi ý ${s.suggestedQuantity}`,
+      label: `Chỉ định: ${s.batchNumber} · ${binMap[s.binLocationId] || s.binLocationId} · gợi ý ${s.suggestedQuantity}`,
     })),
   ]
   return (
@@ -140,6 +178,28 @@ function CreateTO({ onCreated }) {
   const { warehouses } = useNameMaps()
   const { list: productList } = useProductMap()
   const fromId = Form.useWatch('fromWarehouseId', form)
+
+  // Chỉ cho chọn sản phẩm ĐANG CÓ TỒN ở kho nguồn.
+  const invInWh = useQuery({
+    queryKey: ['inv-by-wh', fromId],
+    queryFn: () => inventoryApi.getByWarehouse(fromId),
+    enabled: !!fromId,
+  })
+  const allowedProductIds = useMemo(
+    () => new Set((invInWh.data || []).filter(r => (r.quantity ?? 0) > 0).map(r => r.productId)),
+    [invInWh.data],
+  )
+  const availableProducts = useMemo(
+    () => productList.filter(p => allowedProductIds.has(p.id)),
+    [productList, allowedProductIds],
+  )
+  const binMap = useBinLabelMap(fromId)
+
+  // Đổi kho nguồn -> reset dòng hàng (sản phẩm cũ có thể không còn tồn ở kho mới).
+  useEffect(() => {
+    form.setFieldsValue({ lines: [{ designatedBatchId: AUTO }] })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromId])
 
   const createMut = useMutation({
     mutationFn: transferOrdersApi.create,
@@ -192,7 +252,12 @@ function CreateTO({ onCreated }) {
                 <Row gutter={8} key={key} align="top" style={{ marginBottom: 4 }}>
                   <Col flex="260px">
                     <Form.Item {...rest} name={[name, 'productId']} rules={[{ required: true, message: 'Chọn SP' }]}>
-                      <Select showSearch optionFilterProp="label" placeholder="Sản phẩm" options={productOptions(productList)} />
+                      <Select showSearch optionFilterProp="label"
+                        disabled={!fromId}
+                        loading={!!fromId && invInWh.isFetching}
+                        placeholder={fromId ? (invInWh.isFetching ? 'Đang tải sản phẩm…' : 'Sản phẩm') : 'Chọn kho nguồn trước'}
+                        notFoundContent={fromId && !invInWh.isFetching ? 'Kho nguồn không có sản phẩm tồn' : null}
+                        options={productOptions(availableProducts)} />
                     </Form.Item>
                   </Col>
                   <Col flex="110px">
@@ -207,7 +272,8 @@ function CreateTO({ onCreated }) {
                           <BatchLineSelect
                             fromWarehouseId={fromId}
                             productId={form.getFieldValue(['lines', name, 'productId'])}
-                            quantity={form.getFieldValue(['lines', name, 'quantity'])} />
+                            quantity={form.getFieldValue(['lines', name, 'quantity'])}
+                            binMap={binMap} />
                         </Form.Item>
                       )}
                     </Form.Item>
@@ -242,6 +308,8 @@ function TODetail({ id }) {
   const { data: to, isLoading, isError, error } = useQuery({
     queryKey: ['to', id], queryFn: () => transferOrdersApi.get(id),
   })
+  // Nhãn ô kệ kho đích (binLocationId của dòng là ô kệ cất tại kho nhận).
+  const binMapDest = useBinLabelMap(to?.toWarehouseId)
   const refresh = (u) => { if (u?.id) qc.setQueryData(['to', id], u); else qc.invalidateQueries({ queryKey: ['to', id] }); qc.invalidateQueries({ queryKey: ['to-list'] }) }
 
   const reqMut = useMutation({ mutationFn: () => transferOrdersApi.requestApproval(id),
@@ -272,7 +340,7 @@ function TODetail({ id }) {
     },
     { title: 'SL nhận', dataIndex: 'quantityReceived', width: 90, align: 'right' },
     { title: 'Hao hụt', dataIndex: 'lostQuantity', width: 90, align: 'right', render: (v) => v > 0 ? <Tag color="red">{v}</Tag> : v },
-    { title: 'Ô kệ đích', dataIndex: 'binLocationId', width: 120, render: (v) => v || '—' },
+    { title: 'Ô kệ đích', dataIndex: 'binLocationId', width: 140, render: (v) => (v ? (binMapDest[v] || v) : '—') },
   ]
 
   return (
@@ -331,7 +399,8 @@ function TODetail({ id }) {
         dataSource={to.details || []} columns={columns} scroll={{ x: 'max-content' }} />
 
       {s === 'PICKING' && (
-        <TransferPickingPanel transferId={id} productMap={productMap} onDispatch={() => setDispatchOpen(true)} />
+        <TransferPickingPanel transferId={id} fromWarehouseId={to.fromWarehouseId}
+          productMap={productMap} onDispatch={() => setDispatchOpen(true)} />
       )}
 
       <DispatchModal open={dispatchOpen} onClose={() => setDispatchOpen(false)} toId={id} onDone={refresh} />
@@ -340,21 +409,23 @@ function TODetail({ id }) {
   )
 }
 
-function TransferPickingPanel({ transferId, productMap, onDispatch }) {
+function TransferPickingPanel({ transferId, fromWarehouseId, productMap, onDispatch }) {
   const [scanOpen, setScanOpen] = useState(false)
   const picking = useQuery({ queryKey: ['to-picking', transferId], queryFn: () => transferOrdersApi.getPicking(transferId) })
   const details = picking.data?.details || []
   const done = details.filter(d => d.confirmed).length
   const allDone = details.length > 0 && done === details.length
+  const binMap = useBinLabelMap(fromWarehouseId)
+  const batchMap = useBatchNumberMap(fromWarehouseId, details.map(d => d.productId))
 
   const columns = [
     { title: 'Sản phẩm', dataIndex: 'productId', render: (pid) => productMap[pid]?.name || pid },
-    { title: 'Ô kệ', dataIndex: 'binLocationId', width: 120 },
+    { title: 'Ô kệ', dataIndex: 'binLocationId', width: 130, render: (v) => (v ? (binMap[v] || v) : '—') },
     {
-      title: 'Yêu cầu lô', dataIndex: 'requiredBatchId', width: 150,
-      render: (v) => v ? <Tag color="purple" icon={<LockOutlined />}>{v}</Tag> : <Tag>Lô ACTIVE bất kỳ</Tag>,
+      title: 'Yêu cầu lô', dataIndex: 'requiredBatchId', width: 160,
+      render: (v) => v ? <Tag color="purple" icon={<LockOutlined />}>{batchMap[v] || v}</Tag> : <Tag>Lô ACTIVE bất kỳ</Tag>,
     },
-    { title: 'Lô đã quét', dataIndex: 'actualBatchId', width: 130, render: (v) => v || '—' },
+    { title: 'Lô đã quét', dataIndex: 'actualBatchId', width: 140, render: (v) => (v ? (batchMap[v] || v) : '—') },
     { title: 'SL cần', dataIndex: 'quantityToPick', width: 80, align: 'right' },
     { title: 'Xác nhận', dataIndex: 'confirmed', width: 100, render: (c) => c ? <Tag color="green">Đã lấy</Tag> : <Tag>Chưa</Tag> },
   ]
@@ -377,12 +448,13 @@ function TransferPickingPanel({ transferId, productMap, onDispatch }) {
         loading={picking.isLoading} dataSource={details} columns={columns} scroll={{ x: 'max-content' }} />
       {!allDone && <Typography.Text type="secondary">* Quét đủ tất cả dòng rồi mới "Xuất chuyển" được.</Typography.Text>}
 
-      <TransferScanModal open={scanOpen} onClose={() => setScanOpen(false)} transferId={transferId} productMap={productMap} />
+      <TransferScanModal open={scanOpen} onClose={() => setScanOpen(false)} transferId={transferId}
+        productMap={productMap} binMap={binMap} batchMap={batchMap} />
     </Card>
   )
 }
 
-function TransferScanModal({ open, onClose, transferId, productMap }) {
+function TransferScanModal({ open, onClose, transferId, productMap, binMap = {}, batchMap = {} }) {
   const { message } = AntdApp.useApp()
   const { user } = useAuth()
   const qc = useQueryClient()
@@ -410,12 +482,12 @@ function TransferScanModal({ open, onClose, transferId, productMap }) {
           <div style={{ marginBottom: 8 }}>
             <div style={{ fontWeight: 600 }}>{productMap[current.productId]?.name || current.productId}</div>
             <Space size="large" style={{ fontSize: 13, color: 'rgba(0,0,0,.65)' }}>
-              <span>Ô kệ: <b>{current.binLocationId}</b></span>
+              <span>Ô kệ: <b>{binMap[current.binLocationId] || current.binLocationId}</b></span>
               <span>SL: <b>{current.quantityToPick}</b></span>
             </Space>
             <div style={{ marginTop: 4 }}>
               {current.requiredBatchId
-                ? <Tag color="purple" icon={<LockOutlined />}>Phải quét đúng lô: {current.requiredBatchId}</Tag>
+                ? <Tag color="purple" icon={<LockOutlined />}>Phải quét đúng lô: {batchMap[current.requiredBatchId] || current.requiredBatchId}</Tag>
                 : <Tag color="blue">Quét lô ACTIVE bất kỳ còn tồn</Tag>}
             </div>
           </div>
