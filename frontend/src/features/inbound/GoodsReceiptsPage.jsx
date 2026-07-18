@@ -1,7 +1,10 @@
 import ExportButton from '../../components/ExportButton'
+import PageHeader from '../../components/PageHeader'
+import RowLink from '../../components/RowLink'
 import { sorterToParams, columnSortOrder } from '../../utils/sort'
 import FitTable from '../../components/FitTable'
 import { useEffect, useMemo, useState } from 'react'
+import { useProducts } from '../../hooks/useProducts'
 import { useLocation } from 'react-router-dom'
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -18,7 +21,6 @@ import { getErrorMessage } from '../../api/client'
 import { P } from '../../constants/permissions'
 import { goodsReceiptsApi } from '../../api/goodsReceipts.api'
 import { purchaseOrdersApi } from '../../api/purchaseOrders.api'
-import { productsApi } from '../../api/products.api'
 import { warehousesApi } from '../../api/warehouses.api'
 import { useBinLabels } from '../../hooks/useBinLabels'
 
@@ -35,9 +37,7 @@ function useWarehouseMap() {
   return { warehouses, warehouseMap: map }
 }
 function useProductMap() {
-  const products = useQuery({ queryKey: ['products', 'all'], queryFn: () => productsApi.list({ size: 500 }) })
-  const list = products.data?.content || []
-  const map = useMemo(() => Object.fromEntries(list.map(p => [p.id, p])), [list])
+  const { query: products, list, map } = useProducts()
   return { products, list, map }
 }
 const productOptions = (list) => list.map(p => ({ value: p.id, label: `${p.name} · ${p.sku}` }))
@@ -51,12 +51,8 @@ export default function GoodsReceiptsPage() {
   return (
     <div>
       {view.mode !== 'list' && (
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
-          <Space>
-            <Button icon={<ArrowLeftOutlined />} onClick={() => setView({ mode: 'list', id: null })}>Danh sách</Button>
-            <Typography.Title level={4} style={{ margin: 0 }}>Phiếu nhập kho (GRN)</Typography.Title>
-          </Space>
-        </div>
+        <PageHeader title="Phiếu nhập kho (GRN)"
+          onBack={<Button icon={<ArrowLeftOutlined />} onClick={() => setView({ mode: 'list', id: null })}>Danh sách</Button>} />
       )}
 
       {view.mode === 'list' && <GRNList onOpen={openDetail} onCreate={() => setView({ mode: 'create', id: null })} />}
@@ -82,7 +78,7 @@ function GRNList({ onOpen, onCreate }) {
   const pageData = list.data
 
   const columns = [
-    { title: 'Mã phiếu', dataIndex: 'grnNumber', sorter: true, sortOrder: columnSortOrder(sorter, 'grnNumber'), render: (v, r) => <a onClick={() => onOpen(r.id)}>{v || r.id}</a> },
+    { title: 'Mã phiếu', dataIndex: 'grnNumber', sorter: true, sortOrder: columnSortOrder(sorter, 'grnNumber'), render: (v, r) => <RowLink onClick={() => onOpen(r.id)}>{v || r.id}</RowLink> },
     { title: 'Trạng thái', dataIndex: 'status', sorter: true, sortOrder: columnSortOrder(sorter, 'status'), width: 150, render: grnTag },
     { title: 'Kho', dataIndex: 'warehouseId', render: (v) => warehouseMap[v]?.name || v, width: 160 },
     { title: 'Từ đơn mua', dataIndex: 'poId', render: (v) => v || '— (tự do)' },
@@ -93,9 +89,9 @@ function GRNList({ onOpen, onCreate }) {
 
   return (
     <>
-      <Space style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between' }} wrap>
-        <Typography.Title level={4} style={{ marginLeft: 20, marginTop: 0 }}>Phiếu nhập kho (GRN)</Typography.Title>
-        <Space wrap>
+      <PageHeader
+        title="Phiếu nhập kho (GRN)"
+        extra={<>
         <ExportButton filename="phieu-nhap-kho.xlsx" fetchRows={() => goodsReceiptsApi.list({ keyword, status, sort, dir, size: 10000 }).then(r => r.content)} />
         <Input.Search allowClear placeholder="Tìm theo mã phiếu" style={{ width: 220 }}
           prefix={<SearchOutlined />}
@@ -105,8 +101,8 @@ function GRNList({ onOpen, onCreate }) {
           onChange={(v) => { setStatus(v); setPager(p => ({ ...p, page: 0 })) }} />
         <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching} />
           <Can permission={P.INBOUND_CREATE_GRN}><Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>Tạo phiếu nhập</Button></Can>
-        </Space>
-      </Space>
+        </>}
+      />
 
       <FitTable rowKey="id" loading={list.isLoading} dataSource={pageData?.content || []}
         columns={columns} scroll={{ x: 'max-content' }}

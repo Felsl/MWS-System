@@ -1,18 +1,18 @@
 import FitTable from '../../components/FitTable'
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
+import { useProducts } from '../../hooks/useProducts'
+import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Card, Tabs, Select, Table, Space, Typography, Tag, Empty, Button, App as AntdApp,
+  Tabs, Select, Space, Typography, Tag, Empty, Button, Tooltip, theme, App as AntdApp,
 } from 'antd'
-import { ReloadOutlined, HistoryOutlined } from '@ant-design/icons'
+import { ReloadOutlined, HistoryOutlined, WarningOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import Can from '../../components/Can'
 import { useAuth } from '../../auth/AuthContext'
 import { getErrorMessage } from '../../api/client'
 import { P } from '../../constants/permissions'
 import { inventoryApi } from '../../api/inventory.api'
-import { productsApi } from '../../api/products.api'
 import { warehousesApi } from '../../api/warehouses.api'
 
 const BATCH_STATUS = {
@@ -22,10 +22,8 @@ const BATCH_STATUS = {
 }
 
 function useLookups() {
-  const products = useQuery({ queryKey: ['products', 'all'], queryFn: () => productsApi.list({ size: 500 }) })
+  const { query: products, list: productList, map: productMap } = useProducts()
   const warehouses = useQuery({ queryKey: ['warehouses', 'active'], queryFn: () => warehousesApi.list(false) })
-  const productList = products.data?.content || []
-  const productMap = useMemo(() => Object.fromEntries(productList.map(p => [p.id, p])), [productList])
   return { products, warehouses, productList, productMap }
 }
 
@@ -44,7 +42,6 @@ export default function InventoryPage() {
 }
 
 function StockByWarehouse() {
-  const navigate = useNavigate()
   const { warehouses, productMap } = useLookups()
   const [warehouseId, setWarehouseId] = useState()
 
@@ -64,16 +61,23 @@ function StockByWarehouse() {
       render: (v, r) => {
         const safety = productMap[r.productId]?.safetyStock
         const low = safety != null && v < safety
-        return <Tag color={low ? 'red' : 'blue'}>{v}{low ? ' ⚠' : ''}</Tag>
+        if (!low) return <Tag color="blue">{v}</Tag>
+        // TRƯỚC: chỉ dán ký tự ' ⚠' vào sau số. Người dùng thấy cảnh báo nhưng
+        // không biết ngưỡng là bao nhiêu, thiếu bao nhiêu, hay phải làm gì.
+        return (
+          <Tooltip title={`Dưới tồn an toàn: còn ${v}, mức an toàn là ${safety} (thiếu ${safety - v})`}>
+            <Tag color="red" icon={<WarningOutlined />}>{v}</Tag>
+          </Tooltip>
+        )
       },
     },
     {
       title: '', key: '_a', width: 90,
       render: (_, r) => (
         <Can permission={P.AUDIT_VIEW_MOVEMENTS}>
-          <a onClick={() => navigate('/stock-movements', { state: { productId: r.productId, warehouseId } })}>
+          <Link to={`/stock-movements?productId=${r.productId}${warehouseId ? `&warehouseId=${warehouseId}` : ''}`}>
             <HistoryOutlined /> Thẻ kho
-          </a>
+          </Link>
         </Can>
       ),
     },
@@ -97,10 +101,10 @@ function StockByWarehouse() {
 
 function BatchView() {
   const { message } = AntdApp.useApp()
-  const navigate = useNavigate()
+  const { token } = theme.useToken()   // màu cảnh báo theo token => đúng ở cả nền tối
   const qc = useQueryClient()
   const { hasPermission } = useAuth()
-  const { products, warehouses, productList, productMap } = useLookups()
+  const { products, warehouses, productList } = useLookups()
   const [productId, setProductId] = useState()
   const [warehouseId, setWarehouseId] = useState()
 
@@ -118,7 +122,11 @@ function BatchView() {
   })
 
   const canAdjust = hasPermission(P.INVENTORY_ADJUST)
-  const nearExpiry = (d) => d && dayjs(d).diff(dayjs(), 'day') <= 30
+  // Ngưỡng cảnh báo cận hạn. Đặt tên hằng để con số 30 xuất hiện đúng 1 chỗ và
+  // hiện được ra tooltip cho người dùng, thay vì nằm ẩn trong code.
+  const EXPIRY_WARN_DAYS = 30
+  const daysLeft = (d) => dayjs(d).diff(dayjs(), 'day')
+  const nearExpiry = (d) => d && daysLeft(d) <= EXPIRY_WARN_DAYS
 
   const columns = [
     { title: 'Số lô', dataIndex: 'batchNumber', width: 150 },
@@ -127,7 +135,22 @@ function BatchView() {
     { title: 'NSX', dataIndex: 'manufacturedDate', width: 120, render: (v) => v ? dayjs(v).format('DD/MM/YYYY') : '—' },
     {
       title: 'HSD', dataIndex: 'expiryDate', width: 130,
-      render: (v) => v ? <span style={{ color: nearExpiry(v) ? '#cf1322' : undefined }}>{dayjs(v).format('DD/MM/YYYY')}{nearExpiry(v) ? ' ⚠' : ''}</span> : '—',
+      render: (v) => {
+        if (!v) return '—'
+        const text = dayjs(v).format('DD/MM/YYYY')
+        if (!nearExpiry(v)) return <span>{text}</span>
+        const d = daysLeft(v)
+        const tip = d < 0 ? `Đã quá hạn ${Math.abs(d)} ngày`
+          : d === 0 ? 'Hết hạn hôm nay'
+            : `Còn ${d} ngày là hết hạn (cảnh báo khi dưới ${EXPIRY_WARN_DAYS} ngày)`
+        return (
+          <Tooltip title={tip}>
+            <span style={{ color: token.colorError, whiteSpace: 'nowrap' }}>
+              <WarningOutlined /> {text}
+            </span>
+          </Tooltip>
+        )
+      },
     },
     {
       title: 'Trạng thái', dataIndex: 'status', width: 160,
@@ -150,7 +173,7 @@ function BatchView() {
           options={(warehouses.data || []).map(w => ({ value: w.id, label: `${w.name} (${w.code})` }))} />
         {enabled && <Button icon={<ReloadOutlined />} onClick={() => batches.refetch()} loading={batches.isFetching} />}
         {productId && hasPermission(P.AUDIT_VIEW_MOVEMENTS) && (
-          <a onClick={() => navigate('/stock-movements', { state: { productId, warehouseId } })}><HistoryOutlined /> Thẻ kho SP này</a>
+          <Link to={`/stock-movements?productId=${productId}${warehouseId ? `&warehouseId=${warehouseId}` : ''}`}><HistoryOutlined /> Thẻ kho SP này</Link>
         )}
       </Space>
       {!enabled

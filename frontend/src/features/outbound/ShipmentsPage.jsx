@@ -1,10 +1,11 @@
 import FitTable from '../../components/FitTable'
+import RowLink from '../../components/RowLink'
 import { useMemo, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
+import { useRecordView } from '../../hooks/useRecordView'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Card, Button, Input, Form, Select, Table, Space, Typography, Tag,
-  Descriptions, Empty, Modal, App as AntdApp,
+  Card, Button, Input, Form, Select, Space, Typography, Tag, Descriptions, Empty, Modal, App as AntdApp,
 } from 'antd'
 import {
   PlusOutlined, ReloadOutlined, ArrowLeftOutlined, TagOutlined,
@@ -34,32 +35,33 @@ function useCarrierMap() {
 }
 
 export default function ShipmentsPage() {
-  const location = useLocation()
-  const salesOrderId = location.state?.salesOrderId || null
-  const [view, setView] = useState(salesOrderId ? { mode: 'create', id: null } : { mode: 'list', id: null })
-  const openDetail = (id) => setView({ mode: 'detail', id })
+  // /shipments | /shipments/new?soId=... | /shipments/<id>
+  const { mode, id, openList, openCreate, openDetail } = useRecordView('/shipments')
+  const [sp] = useSearchParams()
+  const salesOrderId = sp.get('soId') || null
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
         <Space>
-          {view.mode !== 'list' && (
-            <Button icon={<ArrowLeftOutlined />} onClick={() => setView({ mode: 'list', id: null })}>Danh sách</Button>
+          {mode !== 'list' && (
+            <Button icon={<ArrowLeftOutlined />} onClick={openList}>Danh sách</Button>
           )}
         </Space>
 
       </div>
-      {view.mode === 'list' && <SHList onOpen={openDetail} />}
-      {view.mode === 'create' && <CreateSH initialSoId={salesOrderId} onCreated={(sh) => openDetail(sh.id)} />}
-      {view.mode === 'detail' && view.id && <SHDetail id={view.id} />}
+      {/* BUG CŨ: SHList gọi setView() của cha => ReferenceError khi bấm "Tạo vận đơn". */}
+      {mode === 'list' && <SHList onOpen={openDetail} onCreate={openCreate} />}
+      {mode === 'create' && <CreateSH initialSoId={salesOrderId} onCreated={(sh) => openDetail(sh.id, { replace: true })} />}
+      {mode === 'detail' && id && <SHDetail id={id} />}
     </div>
   )
 }
 
-function SHList({ onOpen }) {
+function SHList({ onOpen, onCreate }) {
   const list = useQuery({ queryKey: ['sh-list'], queryFn: shipmentsApi.list })
   const { carrierMap } = useCarrierMap()
   const columns = [
-    { title: 'Mã vận đơn', dataIndex: 'shipmentNumber', render: (v, r) => <a onClick={() => onOpen(r.id)}>{v || r.id}</a> },
+    { title: 'Mã vận đơn', dataIndex: 'shipmentNumber', render: (v, r) => <RowLink onClick={() => onOpen(r.id)}>{v || r.id}</RowLink> },
     { title: 'Trạng thái', dataIndex: 'status', width: 130, render: shTag },
     { title: 'Đơn bán', dataIndex: 'salesOrderId', render: (v) => v || '—' },
     { title: 'ĐVVC', dataIndex: 'carrierId', width: 150, render: (v) => carrierMap[v]?.name || v || '—' },
@@ -69,11 +71,11 @@ function SHList({ onOpen }) {
   return (
     <>
       <Space style={{  marginBottom: 12,display: 'flex',justifyContent:'space-between' }}>
-        <Typography.Title level={4} style={{ marginLeft: 20,marginTop: 0 }}>Vận đơn (Shipment)</Typography.Title>
+        <Typography.Title level={4} style={{ margin: 0 }}>Vận đơn (Shipment)</Typography.Title>
         <Space> 
         <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching}>Làm mới</Button>
         <Can permission={P.OUTBOUND_SHIP}>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setView({ mode: 'create', id: null })}>Tạo vận đơn</Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>Tạo vận đơn</Button>
         </Can>
         </Space>
       </Space>

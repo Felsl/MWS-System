@@ -1,9 +1,10 @@
 import FitTable from '../../components/FitTable'
+import EmptyState from '../../components/EmptyState'
+import PageHeader from '../../components/PageHeader'
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Table, Button, Space, Modal, Form, Input, Select, Tag, Popconfirm,
-  Typography, Alert, Empty, App as AntdApp,
+  Button, Space, Modal, Form, Input, Select, Tag, Popconfirm, Typography, Alert, Empty, App as AntdApp,
 } from 'antd'
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, HomeOutlined,
@@ -13,6 +14,7 @@ import { usersApi } from '../../api/users.api'
 import { rolesApi } from '../../api/roles.api'
 import { warehousesApi } from '../../api/warehouses.api'
 import { getErrorMessage } from '../../api/client'
+import { handleFormError } from '../../utils/formErrors'
 import { P } from '../../constants/permissions'
 
 export default function UsersPage() {
@@ -30,17 +32,17 @@ export default function UsersPage() {
   const createMut = useMutation({
     mutationFn: usersApi.create,
     onSuccess: () => { message.success('Đã tạo người dùng'); setOpen(false); invalidate() },
-    onError: (e) => message.error(getErrorMessage(e)),
+    onError: (e) => handleFormError(form, e, message),
   })
   const updateMut = useMutation({
     mutationFn: ({ id, body }) => usersApi.update(id, body),
     onSuccess: () => { message.success('Đã cập nhật'); setOpen(false); invalidate() },
-    onError: (e) => message.error(getErrorMessage(e)),
+    onError: (e) => handleFormError(form, e, message),
   })
   const removeMut = useMutation({
     mutationFn: usersApi.remove,
     onSuccess: () => { message.success('Đã xoá'); invalidate() },
-    onError: (e) => message.error(getErrorMessage(e)),
+    onError: (e) => handleFormError(form, e, message),
   })
 
   const openCreate = () => { setEditing(null); form.resetFields(); setOpen(true) }
@@ -52,6 +54,7 @@ export default function UsersPage() {
   const submit = async () => {
     const body = await form.validateFields()
     if (editing) {
+      // eslint-disable-next-line no-unused-vars -- loại 2 trường này khỏi payload update
       const { password, username, ...rest } = body // không đổi username/password ở update
       updateMut.mutate({ id: editing.id, body: rest })
     } else {
@@ -83,7 +86,9 @@ export default function UsersPage() {
             <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(row)} />
           </Can>
           <Can permission={P.USER_DELETE}>
-            <Popconfirm title="Xoá người dùng?" okText="Xoá" cancelText="Huỷ"
+            <Popconfirm title="Xoá người dùng?"
+              description={<span>Xoá tài khoản <b>{row.username}</b>{row.fullName ? ` (${row.fullName})` : ''}. Không hoàn tác được.</span>}
+              okText="Xoá" okButtonProps={{ danger: true }} cancelText="Huỷ"
               onConfirm={() => removeMut.mutate(row.id)}>
               <Button size="small" danger icon={<DeleteOutlined />} />
             </Popconfirm>
@@ -95,17 +100,18 @@ export default function UsersPage() {
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>Người dùng</Typography.Title>
-        <Space>
+      <PageHeader
+        title="Người dùng"
+        extra={<>
           <Button icon={<ReloadOutlined />} onClick={() => users.refetch()} loading={users.isFetching} />
           <Can permission={P.USER_CREATE}>
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>Thêm người dùng</Button>
           </Can>
-        </Space>
-      </div>
+        </>}
+      />
 
       <FitTable rowKey="id" loading={users.isLoading} dataSource={users.data || []}
+        emptyState={<EmptyState title="Chưa có người dùng nào" action={{ label: 'Thêm người dùng', onClick: openCreate, permission: P.USER_CREATE }} />}
         columns={columns} scroll={{ x: 'max-content' }}
         pagination={{ pageSize: 10, showSizeChanger: true }} />
 

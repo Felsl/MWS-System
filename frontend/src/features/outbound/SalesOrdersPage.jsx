@@ -1,12 +1,17 @@
 import ExportButton from '../../components/ExportButton'
+import PageHeader from '../../components/PageHeader'
 import FitTable from '../../components/FitTable'
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
+import { useProducts } from '../../hooks/useProducts'
+import { useRecordView } from '../../hooks/useRecordView'
+import { useListParams } from '../../hooks/useListParams'
 import { useNavigate } from 'react-router-dom'
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { sorterToParams, columnSortOrder } from '../../utils/sort'
+import { columnSortOrder } from '../../utils/sort'
+import RowLink from '../../components/RowLink'
 import {
   Card, Button, Input, Form, Select, DatePicker, InputNumber, Row, Col,
-  Table, Space, Typography, Tag, Descriptions, Empty, Popconfirm, Divider, App as AntdApp,
+  Table, Space, Tag, Descriptions, Empty, Popconfirm, Divider, App as AntdApp,
 } from 'antd'
 import {
   PlusOutlined, SearchOutlined, DeleteOutlined, ReloadOutlined, ArrowLeftOutlined,
@@ -16,10 +21,10 @@ import dayjs from 'dayjs'
 import Can from '../../components/Can'
 import { useAuth } from '../../auth/AuthContext'
 import { getErrorMessage } from '../../api/client'
+import { handleFormError } from '../../utils/formErrors'
 import { P } from '../../constants/permissions'
 import { salesOrdersApi } from '../../api/salesOrders.api'
 import { pickingListsApi } from '../../api/pickingLists.api'
-import { productsApi } from '../../api/products.api'
 import { customersApi } from '../../api/partners.api'
 import { warehousesApi } from '../../api/warehouses.api'
 
@@ -42,42 +47,40 @@ function useNameMaps() {
 }
 
 export default function SalesOrdersPage() {
-  const [view, setView] = useState({ mode: 'list', id: null })
-  const openDetail = (id) => setView({ mode: 'detail', id })
+  // Chế độ xem nằm ở URL: /sales-orders | /sales-orders/new | /sales-orders/<id>
+  const { mode, id, openList, openCreate, openDetail } = useRecordView('/sales-orders')
   return (
     <div>
-      {view.mode !== 'list' && (
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
-          <Space>
-            <Button icon={<ArrowLeftOutlined />} onClick={() => setView({ mode: 'list', id: null })}>Danh sách</Button>
-            <Typography.Title level={4} style={{ margin: 0 }}>Đơn bán hàng (SO)</Typography.Title>
-          </Space>
-        </div>
+      {mode !== 'list' && (
+        <PageHeader title="Đơn bán hàng (SO)"
+          onBack={<Button icon={<ArrowLeftOutlined />} onClick={openList}>Danh sách</Button>} />
       )}
-      {view.mode === 'list' && <SOList onOpen={openDetail} onCreate={() => setView({ mode: 'create', id: null })} />}
-      {view.mode === 'create' && <CreateSO onCreated={(so) => openDetail(so.id)} />}
-      {view.mode === 'detail' && view.id && <SODetail id={view.id} />}
+      {mode === 'list' && <SOList onOpen={openDetail} onCreate={openCreate} />}
+      {mode === 'create' && <CreateSO onCreated={(r) => openDetail(r.id, { replace: true })} />}
+      {mode === 'detail' && id && <SODetail id={id} />}
     </div>
   )
 }
 
 function SOList({ onOpen, onCreate }) {
-  const [keyword, setKeyword] = useState('')
-  const [status, setStatus] = useState()
-  const [pager, setPager] = useState({ page: 0, size: 20 })
-  const [sorter, setSorter] = useState(null)
-  const { sort, dir } = sorterToParams(sorter)
+  // Bộ lọc nằm trong query string (?q=&status=&page=&size=&sort=&dir=).
+  // Thay cho useState + location.state: F5 không mất bộ lọc, gửi link được,
+  // Back lùi đúng bộ lọc trước, và Dashboard chỉ cần trỏ tới ?status=... .
+  const {
+    keyword, status, page, size, sort, dir, sorter,
+    setKeyword, setStatus, setPager, setSorter,
+  } = useListParams()
   const { customerMap, warehouseMap } = useNameMaps()
 
   const list = useQuery({
-    queryKey: ['so-list', keyword, status, pager.page, pager.size, sort, dir],
-    queryFn: () => salesOrdersApi.list({ keyword, status, page: pager.page, size: pager.size, sort, dir }),
+    queryKey: ['so-list', keyword, status, page, size, sort, dir],
+    queryFn: () => salesOrdersApi.list({ keyword, status, page: page, size: size, sort, dir }),
     placeholderData: keepPreviousData,
   })
   const pageData = list.data
 
   const columns = [
-    { title: 'Mã đơn', dataIndex: 'soNumber', sorter: true, sortOrder: columnSortOrder(sorter, 'soNumber'), render: (v, r) => <a onClick={() => onOpen(r.id)}>{v || r.id}</a> },
+    { title: 'Mã đơn', dataIndex: 'soNumber', sorter: true, sortOrder: columnSortOrder(sorter, 'soNumber'), render: (v, r) => <RowLink onClick={() => onOpen(r.id)}>{v || r.id}</RowLink> },
     { title: 'Trạng thái', dataIndex: 'status', width: 140, sorter: true, sortOrder: columnSortOrder(sorter, 'status'), render: soTag },
     { title: 'Khách hàng', dataIndex: 'customerId', render: (v) => customerMap[v]?.name || v },
     { title: 'Kho', dataIndex: 'warehouseId', render: (v) => warehouseMap[v]?.name || v, width: 150 },
@@ -88,26 +91,26 @@ function SOList({ onOpen, onCreate }) {
 
   return (
     <>
-      <Space style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between' }} wrap>
-        <Typography.Title level={4} style={{ marginLeft: 20, marginTop: 0 }}>Đơn bán hàng (SO)</Typography.Title>
-        <Space wrap>
+      <PageHeader
+        title="Đơn bán hàng (SO)"
+        extra={<>
         <ExportButton filename="don-ban-hang.xlsx" fetchRows={() => salesOrdersApi.list({ keyword, status, sort, dir, size: 10000 }).then(r => r.content)} />
-        <Input.Search allowClear placeholder="Tìm theo mã đơn" style={{ width: 220 }} prefix={<SearchOutlined />}
-          onSearch={(v) => { setKeyword(v); setPager(p => ({ ...p, page: 0 })) }} />
+        <Input.Search allowClear key={`q-${keyword}`} defaultValue={keyword} placeholder="Tìm theo mã đơn" style={{ width: 220 }} prefix={<SearchOutlined />}
+          onSearch={(v) => setKeyword(v)} />
         <Select allowClear placeholder="Lọc trạng thái" style={{ width: 180 }}
           options={SO_STATUS_OPTS} value={status}
-          onChange={(v) => { setStatus(v); setPager(p => ({ ...p, page: 0 })) }} />
+          onChange={(v) => setStatus(v)} />
         <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching} />
           <Can permission={P.OUTBOUND_CREATE_SO}><Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>Tạo đơn bán</Button></Can>
-        </Space>
-      </Space>
+        </>}
+      />
       <FitTable rowKey="id" loading={list.isLoading} dataSource={pageData?.content || []}
         columns={columns} scroll={{ x: 'max-content' }}
-        onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') { setSorter(s); setPager(p => ({ ...p, page: 0 })) } }}
+        onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') setSorter(s) }}
         pagination={{
           current: (pageData?.page ?? 0) + 1, pageSize: pageData?.size ?? 20,
           total: pageData?.totalElements ?? 0, showSizeChanger: true, showTotal: (t) => `Tổng ${t}`,
-          onChange: (p, s) => setPager({ page: p - 1, size: s }),
+          onChange: (p, s) => setPager(p - 1, s),
         }} />
     </>
   )
@@ -115,9 +118,7 @@ function SOList({ onOpen, onCreate }) {
 
 function useLookups() {
   const { customers, warehouses, customerMap, warehouseMap } = useNameMaps()
-  const products = useQuery({ queryKey: ['products', 'all'], queryFn: () => productsApi.list({ size: 500 }) })
-  const productList = products.data?.content || []
-  const productMap = useMemo(() => Object.fromEntries(productList.map(p => [p.id, p])), [productList])
+  const { query: products, list: productList, map: productMap } = useProducts()
   return { customers, warehouses, products, productList, productMap, customerMap, warehouseMap }
 }
 const productOptions = (list) => list.map(p => ({ value: p.id, label: `${p.name} · ${p.sku}` }))
@@ -131,7 +132,7 @@ function CreateSO({ onCreated }) {
   const createMut = useMutation({
     mutationFn: salesOrdersApi.create,
     onSuccess: (so) => { message.success(`Đã tạo đơn ${so.soNumber || ''}`.trim()); onCreated(so) },
-    onError: (e) => message.error(getErrorMessage(e)),
+    onError: (e) => handleFormError(form, e, message),
   })
 
   const submit = async () => {
@@ -253,7 +254,7 @@ function SODetail({ id }) {
   })
   const createPickMut = useMutation({
     mutationFn: () => pickingListsApi.create(id),
-    onSuccess: (pl) => { message.success('Đã tạo lệnh lấy hàng'); navigate('/picking-lists', { state: { openId: pl.id } }) },
+    onSuccess: (pl) => { message.success('Đã tạo lệnh lấy hàng'); navigate(`/picking-lists/${pl.id}`) },
     onError: (e) => message.error(getErrorMessage(e)),
   })
 
@@ -289,11 +290,13 @@ function SODetail({ id }) {
           )}
           {(s === 'PICKING') && hasPermission(P.OUTBOUND_SHIP) && (
             <Button type="primary" icon={<CarOutlined />}
-              onClick={() => navigate('/shipments', { state: { salesOrderId: so.id } })}>Tạo vận đơn</Button>
+              onClick={() => navigate(`/shipments/new?soId=${so.id}`)}>Tạo vận đơn</Button>
           )}
           {(s === 'DRAFT' || s === 'ALLOCATED') && (
             <Can permission={P.OUTBOUND_CREATE_SO}>
-              <Popconfirm title="Huỷ đơn bán này?" okText="Huỷ đơn" cancelText="Không"
+              <Popconfirm title="Huỷ đơn bán này?"
+                description={<span>Huỷ đơn <b>{so.soNumber || so.id}</b>. Hàng đã phân bổ sẽ được trả lại tồn khả dụng.</span>}
+                okText="Huỷ đơn" okButtonProps={{ danger: true }} cancelText="Không"
                 onConfirm={() => cancelMut.mutate()}>
                 <Button danger icon={<CloseOutlined />} loading={cancelMut.isPending}>Huỷ</Button>
               </Popconfirm>

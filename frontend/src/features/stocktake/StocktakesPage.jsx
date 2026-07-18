@@ -1,12 +1,16 @@
 import ExportButton from '../../components/ExportButton'
-import { sorterToParams, columnSortOrder } from '../../utils/sort'
+import PageHeader from '../../components/PageHeader'
+import { columnSortOrder } from '../../utils/sort'
+import RowLink from '../../components/RowLink'
 import FitTable from '../../components/FitTable'
 import { useMemo, useState } from 'react'
+import { useProducts } from '../../hooks/useProducts'
+import { useRecordView } from '../../hooks/useRecordView'
+import { useListParams } from '../../hooks/useListParams'
 import { useNavigate } from 'react-router-dom'
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Card, Button, Select, Table, Space, Typography, Tag, Descriptions, Empty,
-  Modal, Form, InputNumber, Input, App as AntdApp,
+  Card, Button, Select, Table, Space, Typography, Tag, Descriptions, Empty, Modal, Form, InputNumber, App as AntdApp,
 } from 'antd'
 import {
   PlusOutlined, ReloadOutlined, ArrowLeftOutlined, EditOutlined,
@@ -14,11 +18,9 @@ import {
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import Can from '../../components/Can'
-import { useAuth } from '../../auth/AuthContext'
 import { getErrorMessage } from '../../api/client'
 import { P } from '../../constants/permissions'
 import { stocktakesApi } from '../../api/stocktakes.api'
-import { productsApi } from '../../api/products.api'
 import { warehousesApi } from '../../api/warehouses.api'
 import { useBinLabels } from '../../hooks/useBinLabels'
 
@@ -36,46 +38,44 @@ function useWarehouseMap() {
   return { warehouses, warehouseMap: map }
 }
 function useProductMap() {
-  const products = useQuery({ queryKey: ['products', 'all'], queryFn: () => productsApi.list({ size: 500 }) })
-  const map = useMemo(() => Object.fromEntries((products.data?.content || []).map(p => [p.id, p])), [products.data])
+  const { map } = useProducts()
   return { map }
 }
 
 export default function StocktakesPage() {
-  const [view, setView] = useState({ mode: 'list', id: null })
+  // Chế độ xem nằm ở URL: /stocktakes | /stocktakes/<id>
+  const { mode, id, openList, openDetail } = useRecordView('/stocktakes')
   const [startOpen, setStartOpen] = useState(false)
-  const openDetail = (id) => setView({ mode: 'detail', id })
   return (
     <div>
-      {view.mode !== 'list' && (
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
-          <Space>
-            <Button icon={<ArrowLeftOutlined />} onClick={() => setView({ mode: 'list', id: null })}>Danh sách</Button>
-            <Typography.Title level={4} style={{ margin: 0 }}>Kiểm kê kho (Stocktake)</Typography.Title>
-          </Space>
-        </div>
+      {mode !== 'list' && (
+        <PageHeader title="Kiểm kê kho (Stocktake)"
+          onBack={<Button icon={<ArrowLeftOutlined />} onClick={openList}>Danh sách</Button>} />
       )}
-      {view.mode === 'list' && <STList onOpen={openDetail} onCreate={() => setStartOpen(true)} />}
-      {view.mode === 'detail' && view.id && <STDetail id={view.id} />}
+      {mode === 'list' && <STList onOpen={openDetail} onCreate={() => setStartOpen(true)} />}
+      {mode === 'detail' && id && <STDetail id={id} />}
       <StartModal open={startOpen} onClose={() => setStartOpen(false)} onStarted={(r) => openDetail(r.session.id)} />
     </div>
   )
 }
 
 function STList({ onOpen, onCreate }) {
-  const [status, setStatus] = useState()
-  const [pager, setPager] = useState({ page: 0, size: 20 })
-  const [sorter, setSorter] = useState(null)
-  const { sort, dir } = sorterToParams(sorter)
+  // Bộ lọc nằm trong query string (?q=&status=&page=&size=&sort=&dir=).
+  // Thay cho useState + location.state: F5 không mất bộ lọc, gửi link được,
+  // Back lùi đúng bộ lọc trước, và Dashboard chỉ cần trỏ tới ?status=... .
+  const {
+    status, page, size, sort, dir, sorter,
+    setStatus, setPager, setSorter,
+  } = useListParams()
   const { warehouseMap } = useWarehouseMap()
   const list = useQuery({
-    queryKey: ['stk-list', status, pager.page, pager.size, sort, dir],
-    queryFn: () => stocktakesApi.list({ status, page: pager.page, size: pager.size, sort, dir }),
+    queryKey: ['stk-list', status, page, size, sort, dir],
+    queryFn: () => stocktakesApi.list({ status, page: page, size: size, sort, dir }),
     placeholderData: keepPreviousData,
   })
   const pageData = list.data
   const columns = [
-    { title: 'Mã phiên', dataIndex: 'id', render: (v) => <a onClick={() => onOpen(v)}>{v}</a> },
+    { title: 'Mã phiên', dataIndex: 'id', render: (v) => <RowLink onClick={() => onOpen(v)}>{v}</RowLink> },
     { title: 'Trạng thái', dataIndex: 'status', sorter: true, sortOrder: columnSortOrder(sorter, 'status'), width: 150, render: stTag },
     { title: 'Kho', dataIndex: 'warehouseId', render: (v) => warehouseMap[v]?.name || v },
     { title: 'Đóng băng từ', dataIndex: 'freezeStartedAt', sorter: true, sortOrder: columnSortOrder(sorter, 'freezeStartedAt'), width: 160, render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
@@ -84,24 +84,24 @@ function STList({ onOpen, onCreate }) {
   ]
   return (
     <>
-      <Space style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between' }} wrap>
-        <Typography.Title level={4} style={{ marginLeft: 20, marginTop: 0 }}>Kiểm kê kho (Stocktake)</Typography.Title>
-        <Space wrap>
+      <PageHeader
+        title="Kiểm kê kho (Stocktake)"
+        extra={<>
         <ExportButton filename="phien-kiem-ke.xlsx" fetchRows={() => stocktakesApi.list({ status, sort, dir, size: 10000 }).then(r => r.content)} />
         <Select allowClear placeholder="Lọc trạng thái" style={{ width: 180 }}
           options={ST_STATUS_OPTS} value={status}
-          onChange={(v) => { setStatus(v); setPager(p => ({ ...p, page: 0 })) }} />
+          onChange={(v) => setStatus(v)} />
         <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching} />
           <Can permission={P.STOCKTAKE_MANAGE}><Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>Bắt đầu kiểm kê</Button></Can>
-        </Space>
-      </Space>
+        </>}
+      />
       <FitTable rowKey="id" loading={list.isLoading} dataSource={pageData?.content || []} columns={columns}
         scroll={{ x: 'max-content' }}
-        onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') { setSorter(s); setPager(p => ({ ...p, page: 0 })) } }}
+        onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') setSorter(s) }}
         pagination={{
           current: (pageData?.page ?? 0) + 1, pageSize: pageData?.size ?? 20,
           total: pageData?.totalElements ?? 0, showSizeChanger: true, showTotal: (t) => `Tổng ${t}`,
-          onChange: (p, s) => setPager({ page: p - 1, size: s }),
+          onChange: (p, s) => setPager(p - 1, s),
         }} />
     </>
   )

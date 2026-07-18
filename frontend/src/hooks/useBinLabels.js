@@ -27,7 +27,6 @@ export function useBinLabels() {
     const m = {}
     results.forEach(r => (r.data || []).forEach(b => { m[b.id] = b.coordinateLabel || b.id }))
     return m
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [results])
 
   // Trả nhãn ô kệ; nếu chưa nạp được thì fallback về id (không vỡ giao diện).

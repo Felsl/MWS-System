@@ -1,0 +1,2715 @@
+diff --git a/frontend/package.json b/frontend/package.json
+index 4da1773..87fbdfd 100644
+--- a/frontend/package.json
++++ b/frontend/package.json
+@@ -7,7 +7,10 @@
+     "dev": "vite",
+     "build": "vite build",
+     "preview": "vite preview",
+-    "dev:mobile": "vite --host --mode mobile"
++    "dev:mobile": "vite --host --mode mobile",
++    "lint": "eslint src",
++    "test": "vitest run",
++    "test:watch": "vitest"
+   },
+   "dependencies": {
+     "@ant-design/icons": "^5.5.2",
+@@ -26,7 +29,15 @@
+     "xlsx": "^0.18.5"
+   },
+   "devDependencies": {
++    "@eslint/js": "^10.0.1",
++    "@testing-library/react": "^16.3.2",
+     "@vitejs/plugin-react": "^4.3.4",
+-    "vite": "^6.0.5"
++    "eslint": "^10.7.0",
++    "eslint-plugin-react-hooks": "^7.1.1",
++    "eslint-plugin-react-refresh": "^0.5.3",
++    "globals": "^17.7.0",
++    "jsdom": "^29.1.1",
++    "vite": "^6.0.5",
++    "vitest": "^4.1.10"
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/frontend/src/__smoke__/smoke.test.jsx b/frontend/src/__smoke__/smoke.test.jsx
+new file mode 100644
+index 0000000..c9804d6
+--- /dev/null
++++ b/frontend/src/__smoke__/smoke.test.jsx
+@@ -0,0 +1,200 @@
++/**
++ * Smoke test: chỉ trả lời MỘT câu hỏi — "app có render nổi không, hay nổ?".
++ *
++ * Không phải unit test nghiệp vụ. Mục đích là chặn đúng loại lỗi đã suýt lọt
++ * trong lần refactor này: biến ngoài scope (ReferenceError), provider mắc sai
++ * thứ tự, route trỏ vào component không tồn tại. `vite build` KHÔNG bắt được
++ * những lỗi đó — chúng chỉ nổ lúc chạy.
++ *
++ * Chạy: npx vitest run
++ */
++import { describe, it, expect, vi, beforeEach } from 'vitest'
++import { render, screen, waitFor, fireEvent } from '@testing-library/react'
++import { MemoryRouter } from 'react-router-dom'
++import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
++import { ConfigProvider, App as AntdApp } from 'antd'
++import React from 'react'
++
++// Chặn mọi lời gọi API: test này không cần BE.
++// Hình dạng trả về phải KHỚP BE thật, nếu không thì test báo lỗi giả:
++//   - endpoint phân trang -> PageResponse { content, totalElements, totalPages }
++//   - endpoint danh sách phẳng (kho, ĐVVC, người dùng...) -> mảng
++const PAGED = ['/products', '/purchase-orders', '/sales-orders', '/transfer-orders',
++  '/adjustment-vouchers', '/stocktakes', '/stock-movements', '/inventory']
++vi.mock('../api/client', async () => {
++  const actual = await vi.importActual('../api/client')
++  const get = vi.fn((url) => {
++    const paged = PAGED.some(u => String(url).includes(u))
++    return Promise.resolve({
++      data: paged ? { content: [], page: 0, size: 20, totalElements: 0, totalPages: 0, hasNext: false } : [],
++    })
++  })
++  return {
++    ...actual,
++    default: {
++      get,
++      post: vi.fn(() => Promise.resolve({ data: {} })),
++      put: vi.fn(() => Promise.resolve({ data: {} })),
++      delete: vi.fn(() => Promise.resolve({ data: {} })),
++      interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
++    },
++    getErrorMessage: (e) => e?.message || 'lỗi',
++    tokenStore: { access: null, refresh: null, set: vi.fn(), clear: vi.fn() },
++  }
++})
++// Quyền: cho full quyền để nút/nhánh nào cũng được render (nơi bug hay nấp).
++vi.mock('../auth/AuthContext', async () => {
++  const actual = await vi.importActual('../auth/AuthContext')
++  return { ...actual, useAuth: () => ({
++    user: { userId: 'u1', username: 'test', fullName: 'Test', role: 'ADMIN', permissions: [] },
++    hasPermission: () => true, logout: vi.fn(),
++  }) }
++})
++// WebSocket: không kết nối thật trong test.
++vi.mock('../ws/notificationClient', () => ({
++  createNotificationClient: () => ({ deactivate: vi.fn() }),
++}))
++
++// jsdom chưa có 2 API này; antd + FitTable cần.
++beforeEach(() => {
++  global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} }
++  window.matchMedia = window.matchMedia || ((q) => ({
++    matches: false, media: q, onchange: null,
++    addEventListener: () => {}, removeEventListener: () => {},
++    addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false,
++  }))
++})
++
++function renderAt(path, ui) {
++  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
++  return render(
++    <ConfigProvider><AntdApp>
++      <QueryClientProvider client={qc}>
++        <MemoryRouter initialEntries={[path]}>{ui}</MemoryRouter>
++      </QueryClientProvider>
++    </AntdApp></ConfigProvider>,
++  )
++}
++
++describe('Hook điều khiển URL', () => {
++  it('useRecordView suy ra đúng mode từ đường dẫn', async () => {
++    const { useRecordView } = await import('../hooks/useRecordView')
++    const seen = []
++    function Probe() {
++      const v = useRecordView('/transfer-orders')
++      seen.push(v.mode)
++      return <div data-testid="m">{v.mode}:{v.id || '-'}</div>
++    }
++    const { Routes, Route } = await import('react-router-dom')
++    const tree = (
++      <Routes>
++        <Route path="/transfer-orders" element={<Probe />} />
++        <Route path="/transfer-orders/new" element={<Probe />} />
++        <Route path="/transfer-orders/:id" element={<Probe />} />
++      </Routes>
++    )
++    renderAt('/transfer-orders', tree)
++    expect(screen.getByTestId('m').textContent).toBe('list:-')
++
++    renderAt('/transfer-orders/new', tree)
++    expect(screen.getAllByTestId('m').at(-1).textContent).toBe('create:-')
++
++    renderAt('/transfer-orders/abc-123', tree)
++    expect(screen.getAllByTestId('m').at(-1).textContent).toBe('detail:abc-123')
++  })
++
++  it('useListParams đọc bộ lọc từ query string', async () => {
++    const { useListParams } = await import('../hooks/useListParams')
++    function Probe() {
++      const p = useListParams()
++      return <div data-testid="p">{p.status}|{p.keyword}|{p.page}|{p.dir}</div>
++    }
++    renderAt('/x?status=PENDING_APPROVAL&q=abc&page=2&sort=code&dir=desc', <Probe />)
++    expect(screen.getByTestId('p').textContent).toBe('PENDING_APPROVAL|abc|2|desc')
++  })
++})
++
++describe('Tách lỗi validate của BE', () => {
++  it('tách đúng định dạng "field: msg; field: msg"', async () => {
++    const { parseFieldErrors } = await import('../utils/formErrors')
++    expect(parseFieldErrors('sku: must not be blank; price: must be > 0'))
++      .toEqual([{ field: 'sku', msg: 'must not be blank' }, { field: 'price', msg: 'must be > 0' }])
++  })
++  it('KHÔNG nuốt nhầm câu văn xuôi có dấu hai chấm', async () => {
++    const { parseFieldErrors } = await import('../utils/formErrors')
++    expect(parseFieldErrors('Không đủ tồn: cần 10, còn 3')).toEqual([])
++  })
++})
++
++describe('Bấm nút "Tạo ..." không nổ', () => {
++  // Bug thật đã tìm thấy trên branch fe: PLList/SHList gọi setView() của
++  // component CHA => ReferenceError. Render không bắt được (arrow function chỉ
++  // chạy khi click), nên phải bấm thật.
++  const CREATE_BTNS = [
++    ['PickingListsPage', () => import('../features/outbound/PickingListsPage'), '/picking-lists', 'Tạo lệnh'],
++    ['ShipmentsPage', () => import('../features/outbound/ShipmentsPage'), '/shipments', 'Tạo vận đơn'],
++  ]
++  for (const [name, load, path, label] of CREATE_BTNS) {
++    it(`${name}: bấm "${label}"`, async () => {
++      const errors = []
++      const spy = vi.spyOn(console, 'error').mockImplementation((...a) => errors.push(String(a[0])))
++      // Lỗi ném từ trong event handler của React KHÔNG đi qua console.error —
++      // nó nổi lên window.onerror. Không nghe chỗ này thì test báo xanh trong
++      // khi trình duyệt thật đang nổ (đúng cái bẫy vừa mắc phải).
++      const onWinErr = (e) => { errors.push(String(e.error?.message || e.message)); e.preventDefault() }
++      window.addEventListener('error', onWinErr)
++      try {
++        const Mod = (await load()).default
++        const { Routes, Route } = await import('react-router-dom')
++        renderAt(path, (
++          <Routes>
++            <Route path={path} element={<Mod />} />
++            <Route path={`${path}/new`} element={<Mod />} />
++            <Route path={`${path}/:id`} element={<Mod />} />
++          </Routes>
++        ))
++        const btn = await screen.findByRole('button', { name: new RegExp(label) })
++        fireEvent.click(btn)
++        await waitFor(() => expect(document.body.textContent.length).toBeGreaterThan(0))
++        await new Promise(r => setTimeout(r, 30)) // để lỗi bất đồng bộ kịp nổi lên
++        const fatal = errors.filter(e => /is not defined|is not a function/.test(e))
++        expect(fatal, `Bấm "${label}" trong ${name} gây lỗi:\n${fatal.join('\n')}`).toEqual([])
++      } finally {
++        window.removeEventListener('error', onWinErr)
++        spy.mockRestore()
++      }
++    })
++  }
++})
++
++describe('Trang render được (không ReferenceError)', () => {
++  // Đây chính là loại bug đã tìm thấy: setView gọi ngoài scope ở PLList/SHList.
++  const PAGES = [
++    ['PickingListsPage', () => import('../features/outbound/PickingListsPage'), '/picking-lists'],
++    ['ShipmentsPage', () => import('../features/outbound/ShipmentsPage'), '/shipments'],
++    ['StocktakesPage', () => import('../features/stocktake/StocktakesPage'), '/stocktakes'],
++    ['AdjustmentsPage', () => import('../features/stocktake/AdjustmentsPage'), '/adjustment-vouchers'],
++    ['TransferOrdersPage', () => import('../features/transfer/TransferOrdersPage'), '/transfer-orders'],
++    ['PurchaseOrdersPage', () => import('../features/inbound/PurchaseOrdersPage'), '/purchase-orders'],
++    ['SalesOrdersPage', () => import('../features/outbound/SalesOrdersPage'), '/sales-orders'],
++  ]
++  for (const [name, load, path] of PAGES) {
++    it(`${name} render không nổ`, async () => {
++      const errors = []
++      const spy = vi.spyOn(console, 'error').mockImplementation((...a) => errors.push(String(a[0])))
++      const Mod = (await load()).default
++      const { Routes, Route } = await import('react-router-dom')
++      renderAt(path, (
++        <Routes>
++          <Route path={path} element={<Mod />} />
++          <Route path={`${path}/new`} element={<Mod />} />
++          <Route path={`${path}/:id`} element={<Mod />} />
++        </Routes>
++      ))
++      await waitFor(() => expect(document.body.textContent.length).toBeGreaterThan(0))
++      const fatal = errors.filter(e => /is not defined|is not a function|Cannot read/.test(e))
++      expect(fatal, `Lỗi runtime trong ${name}:\n${fatal.join('\n')}`).toEqual([])
++      spy.mockRestore()
++    })
++  }
++})
+diff --git a/frontend/src/api/products.api.js b/frontend/src/api/products.api.js
+index 946beac..c6b7f97 100644
+--- a/frontend/src/api/products.api.js
++++ b/frontend/src/api/products.api.js
+@@ -4,6 +4,30 @@ export const productsApi = {
+   // Trả PageResponse { content, page, size, totalElements, totalPages, hasNext }
+   list: ({ keyword, page = 0, size = 20, sort, dir } = {}) =>
+     api.get(base, { params: { keyword, page, size, sort: sort || undefined, dir: dir || undefined } }).then(r => r.data),
++  /**
++   * Lấy TOÀN BỘ sản phẩm bằng cách lặp qua các trang cho tới hết.
++   *
++   * Trước đây 10 chỗ trong FE gọi `list({ size: 500 })` để dựng map id -> tên.
++   * Đó là bom hẹn giờ: BE trả tối đa 500 dòng, nên sản phẩm thứ 501 trở đi sẽ
++   * KHÔNG có trong map và giao diện lặng lẽ hiển thị UUID thay vì tên — không
++   * lỗi, không cảnh báo, chỉ sai. Dữ liệu demo đã có 210 sản phẩm.
++   *
++   * `hardCap` chặn vòng lặp vô hạn nếu BE trả totalPages sai.
++   */
++  listAll: async ({ pageSize = 500, hardCap = 20 } = {}) => {
++    const first = await productsApi.list({ page: 0, size: pageSize })
++    const totalPages = first.totalPages ?? 1
++    if (totalPages <= 1) return first.content || []
++    const pages = Math.min(totalPages, hardCap)
++    const rest = await Promise.all(
++      Array.from({ length: pages - 1 }, (_, i) => productsApi.list({ page: i + 1, size: pageSize })),
++    )
++    const all = [first, ...rest].flatMap(r => r.content || [])
++    if (totalPages > hardCap) {
++      console.warn(`[MWS] products.listAll: ${totalPages} trang > hardCap ${hardCap}, đã cắt bớt.`)
++    }
++    return all
++  },
+   get: (id) => api.get(`${base}/${id}`).then(r => r.data),
+   create: (body) => api.post(base, body).then(r => r.data),
+   update: (id, body) => api.put(`${base}/${id}`, body).then(r => r.data),
+diff --git a/frontend/src/components/AppLayout.jsx b/frontend/src/components/AppLayout.jsx
+index a980146..4d7b0af 100644
+--- a/frontend/src/components/AppLayout.jsx
++++ b/frontend/src/components/AppLayout.jsx
+@@ -1,11 +1,12 @@
+ import { useEffect, useState } from 'react'
+ import {
+-  Layout, Menu, Avatar, Dropdown, Button, Typography, Drawer, Grid, theme,
++  Layout, Menu, Avatar, Dropdown, Button, Typography, Drawer, Grid, Tooltip, theme,
+ } from 'antd'
+ import {
+   DashboardOutlined, UserOutlined, SafetyCertificateOutlined, KeyOutlined,
+   HomeOutlined, AppstoreOutlined, TagsOutlined, TeamOutlined,
+   LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MenuOutlined,
++  BulbOutlined, BulbFilled,
+   InboxOutlined, FileDoneOutlined,
+   ShoppingCartOutlined, ProfileOutlined, CarOutlined, SwapOutlined,
+   AuditOutlined, ReconciliationOutlined,
+@@ -15,6 +16,7 @@ import { useNavigate, useLocation, Outlet } from 'react-router-dom'
+ import { useAuth } from '../auth/AuthContext'
+ import NotificationBell from './NotificationBell'
+ import ErrorBoundary from './ErrorBoundary'
++import { useThemeMode } from '../context/ThemeContext'
+ import { P } from '../constants/permissions'
+ 
+ const { Header, Sider, Content } = Layout
+@@ -87,6 +89,7 @@ function buildMenu(nav, hasPermission) {
+         return children.length ? { ...item, children } : null
+       }
+       if (item.perm && !hasPermission(item.perm)) return null
++      // eslint-disable-next-line no-unused-vars -- bóc `perm` ra khỏi item menu
+       const { perm, ...rest } = item
+       return rest
+     })
+@@ -99,6 +102,7 @@ export default function AppLayout() {
+   const location = useLocation()
+   const { token } = theme.useToken()
+   const screens = Grid.useBreakpoint()
++  const { isDark, toggle: toggleTheme } = useThemeMode()
+ 
+   // lg trở xuống (<992px): sidebar cố định chiếm nửa màn hình điện thoại
+   // => chuyển sang Drawer trượt. Trang /picking-scan chạy trên máy cầm tay.
+@@ -110,16 +114,15 @@ export default function AppLayout() {
+   const items = buildMenu(NAV, hasPermission)
+   const selectedKey = '/' + (location.pathname.split('/')[1] || '')
+ 
+-  // Đóng drawer mỗi khi đổi trang (không thì nó che nội dung vừa mở).
+-  useEffect(() => { setDrawerOpen(false) }, [location.pathname])
+-
+   // Tiêu đề tab theo trang: phục vụ mở nhiều tab, lịch sử và bookmark.
+   useEffect(() => {
+     const name = TITLE_BY_PATH[selectedKey]
+     document.title = name ? `${name} · MWS` : 'MWS · Quản lý kho'
+   }, [selectedKey])
+ 
+-  const go = (key) => navigate(key)
++  // Điều hướng + đóng drawer trong CÙNG một handler: đóng bằng useEffect theo
++  // pathname sẽ gây thêm một lượt render thừa (react-hooks/set-state-in-effect).
++  const go = (key) => { setDrawerOpen(false); navigate(key) }
+ 
+   const menu = (
+     <Menu mode="inline" selectedKeys={[selectedKey]} items={items}
+@@ -193,6 +196,13 @@ export default function AppLayout() {
+           )}
+ 
+           <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 4 : 16 }}>
++            {/* Kho có ca đêm => cho đổi sáng/tối. Lựa chọn lưu localStorage;
++                mặc định theo cài đặt của hệ điều hành. */}
++            <Tooltip title={isDark ? 'Chuyển sang nền sáng' : 'Chuyển sang nền tối'}>
++              <Button type="text" onClick={toggleTheme}
++                aria-label={isDark ? 'Chuyển sang nền sáng' : 'Chuyển sang nền tối'}
++                icon={isDark ? <BulbFilled /> : <BulbOutlined />} />
++            </Tooltip>
+             <NotificationBell />
+             <Dropdown menu={userMenu} trigger={['click']}>
+               <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+diff --git a/frontend/src/components/BarcodeScanner.jsx b/frontend/src/components/BarcodeScanner.jsx
+index 920bea5..9da5b8f 100644
+--- a/frontend/src/components/BarcodeScanner.jsx
++++ b/frontend/src/components/BarcodeScanner.jsx
+@@ -1,7 +1,6 @@
+ import { useEffect, useRef, useState } from 'react'
+ import { Alert, Button, Select, Space } from 'antd'
+ import { CameraOutlined, PoweroffOutlined } from '@ant-design/icons'
+-import { BrowserMultiFormatReader } from '@zxing/browser'
+ 
+ // Quét mã vạch qua camera. onScan(text) mỗi lần đọc được (đã chống lặp).
+ // paused=true: bỏ qua kết quả (vd đang gọi API) nhưng KHÔNG tắt camera.
+@@ -40,6 +39,11 @@ export default function BarcodeScanner({ onScan, paused, onActiveChange }) {
+         const rear = cams.find(d => /back|rear|sau|environment/i.test(d.label || ''))
+         const chosen = deviceId || rear?.deviceId || cams[cams.length - 1]?.deviceId
+         if (chosen !== deviceId) setDeviceId(chosen)
++        // @zxing nặng ~600KB và chỉ trang này dùng => nạp lúc bấm "Bật camera",
++        // không nhét vào bundle chính. Người dùng đã chờ xin quyền camera nên
++        // vài trăm ms tải chunk ở đây không cảm nhận được.
++        const { BrowserMultiFormatReader } = await import('@zxing/browser')
++        if (cancelled) return
+         const reader = new BrowserMultiFormatReader()
+         controlsRef.current = await reader.decodeFromVideoDevice(chosen, videoRef.current, (result) => {
+           if (!result || pausedRef.current) return
+diff --git a/frontend/src/components/CrudResource.jsx b/frontend/src/components/CrudResource.jsx
+index 1b43f66..a3afdad 100644
+--- a/frontend/src/components/CrudResource.jsx
++++ b/frontend/src/components/CrudResource.jsx
+@@ -1,12 +1,13 @@
+ import { useState } from 'react'
+ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+ import {
+-  Table, Button, Space, Modal, Form, Input, Popconfirm, Typography, App as AntdApp,
++  Button, Space, Modal, Form, Input, Popconfirm, Typography, App as AntdApp,
+ } from 'antd'
+ import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons'
+ import Can from './Can'
+ import FitTable from './FitTable'
+ import { getErrorMessage } from '../api/client'
++import { handleFormError } from '../utils/formErrors'
+ 
+ /**
+  * CRUD chuẩn cho tài nguyên trả List thuần (category, supplier, customer, carrier, permission).
+@@ -33,15 +34,16 @@ export default function CrudResource({
+ 
+   const invalidate = () => qc.invalidateQueries({ queryKey: [queryKey] })
+ 
++  // Lỗi validate BE -> gắn vào đúng Form.Item; lỗi khác -> toast.
+   const createMut = useMutation({
+     mutationFn: api.create,
+     onSuccess: () => { message.success('Đã tạo'); setOpen(false); invalidate() },
+-    onError: (e) => message.error(getErrorMessage(e)),
++    onError: (e) => handleFormError(form, e, message),
+   })
+   const updateMut = useMutation({
+     mutationFn: ({ id, body }) => api.update(id, body),
+     onSuccess: () => { message.success('Đã cập nhật'); setOpen(false); invalidate() },
+-    onError: (e) => message.error(getErrorMessage(e)),
++    onError: (e) => handleFormError(form, e, message),
+   })
+   const removeMut = useMutation({
+     mutationFn: api.remove,
+diff --git a/frontend/src/components/ExportButton.jsx b/frontend/src/components/ExportButton.jsx
+index 403b6de..28758e5 100644
+--- a/frontend/src/components/ExportButton.jsx
++++ b/frontend/src/components/ExportButton.jsx
+@@ -1,7 +1,7 @@
+ import { useState } from 'react'
+ import { Button, App as AntdApp } from 'antd'
+ import { DownloadOutlined } from '@ant-design/icons'
+-import { exportRows } from '../utils/excel'
++import { exportRows, preloadXLSX } from '../utils/excel'
+ 
+ /**
+  * Nút "Xuất Excel" cho trang danh sách. Gọi `fetchRows()` để lấy TẤT CẢ dòng
+@@ -9,6 +9,9 @@ import { exportRows } from '../utils/excel'
+  *  - fetchRows: () => Promise<row[]>  (dòng dạng object; mỗi key thành 1 cột)
+  *  - filename:  tên file .xlsx
+  *  - map:       (tuỳ chọn) (row) => object đã chọn/đổi tên cột trước khi xuất
++ *
++ * Thư viện xlsx nay được nạp động (xem utils/excel.js). Rê chuột vào nút là bắt
++ * đầu tải chunk ngầm, nên tới lúc bấm thật thì thường đã sẵn sàng.
+  */
+ export default function ExportButton({ fetchRows, filename = 'export.xlsx', map }) {
+   const { message } = AntdApp.useApp()
+@@ -20,8 +23,8 @@ export default function ExportButton({ fetchRows, filename = 'export.xlsx', map
+       const raw = await fetchRows()
+       const rows = Array.isArray(raw) ? raw : (raw?.content || raw?.data || [])
+       if (!rows.length) { message.info('Không có dữ liệu để xuất'); return }
+-      exportRows(map ? rows.map(map) : rows, filename)
+-    } catch (e) {
++      await exportRows(map ? rows.map(map) : rows, filename)
++    } catch {
+       message.error('Xuất Excel thất bại')
+     } finally {
+       setLoading(false)
+@@ -29,6 +32,7 @@ export default function ExportButton({ fetchRows, filename = 'export.xlsx', map
+   }
+ 
+   return (
+-    <Button icon={<DownloadOutlined />} loading={loading} onClick={run}>Xuất Excel</Button>
++    <Button icon={<DownloadOutlined />} loading={loading} onClick={run}
++      onMouseEnter={preloadXLSX} onFocus={preloadXLSX}>Xuất Excel</Button>
+   )
+ }
+diff --git a/frontend/src/components/FitTable.jsx b/frontend/src/components/FitTable.jsx
+index 778bfef..3bc4b31 100644
+--- a/frontend/src/components/FitTable.jsx
++++ b/frontend/src/components/FitTable.jsx
+@@ -1,20 +1,38 @@
+-import { useLayoutEffect, useRef, useState, useCallback } from 'react'
++import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+ import { Table } from 'antd'
+ 
+ /**
+- * Bảng "vừa 1 màn hình": chỉ thân bảng cuộn dọc, hàng tiêu đề cột dính (sticky),
+- * phân trang ghim ở đáy vùng nhìn. Chiều cao thân bảng tự đo theo viewport và
+- * cập nhật khi resize cửa sổ / thu gọn sidebar / bộ lọc phía trên xuống dòng.
++ * Bảng "vừa 1 màn hình": chỉ thân bảng cuộn dọc, hàng tiêu đề dính, phân trang
++ * ghim ở đáy vùng nhìn.
+  *
+- * Dùng THAY cho <Table> ở các trang DANH SÁCH. Nhận mọi prop của antd Table;
+- * `scroll.x` mặc định 'max-content' (giữ cuộn ngang), `scroll.y` do component tự tính.
+- *  - bottomGap: khoảng chừa dưới phân trang (mặc định 36 = padding card + padding content).
+- *  - minBodyHeight: chiều cao tối thiểu của thân bảng (màn rất thấp).
++ * ── Vì sao viết lại (bản cũ có 3 vấn đề thật) ──────────────────────────────
++ * 1) `ro.observe(document.body)` + `ro.observe(wrapRef)` cùng lúc: mỗi lần đo
++ *    xong `setY` -> layout đổi -> ResizeObserver bắn tiếp -> đo lại. Vòng này
++ *    tự tắt vì y hội tụ, nhưng trên máy chậm nó gây giật và Chrome đôi khi ném
++ *    "ResizeObserver loop completed with undelivered notifications".
++ *    => Nay CHỈ quan sát wrapper (thứ duy nhất thực sự cần biết vị trí), và
++ *       gộp mọi lần bắn vào 1 lần đo trong rAF kế tiếp.
++ * 2) `setY` gọi cả khi giá trị không đổi -> render thừa. => so sánh trước khi set.
++ * 3) Không có đường thoát: muốn bảng cuộn tự nhiên như ERP bình thường thì phải
++ *    sửa 15 trang. => Nay có công tắc FIT_TABLE_ENABLED và prop `fit={false}`.
++ *
++ * ── Muốn BỎ hẳn cơ chế "vừa 1 màn" ────────────────────────────────────────
++ * Đổi FIT_TABLE_ENABLED = false ở ngay dưới. Toàn bộ trang danh sách lập tức
++ * quay về <Table> thường: trang cuộn tự nhiên, không còn vùng cuộn lồng nhau,
++ * không còn phép đo. Không phải sửa file nào khác. Cần bỏ chỉ 1 trang thì
++ * truyền <FitTable fit={false} ... />.
+  */
+-export default function FitTable({ scroll, bottomGap = 36, minBodyHeight = 140, ...rest }) {
++
++// Công tắc toàn cục — xem khối chú thích ở trên.
++export const FIT_TABLE_ENABLED = true
++
++export default function FitTable({ scroll, bottomGap = 36, minBodyHeight = 140, fit = true, ...rest }) {
+   const wrapRef = useRef(null)
++  const rafRef = useRef(0)
+   const [y, setY] = useState(minBodyHeight)
+ 
++  const enabled = FIT_TABLE_ENABLED && fit
++
+   const measure = useCallback(() => {
+     const wrap = wrapRef.current
+     if (!wrap) return
+@@ -24,22 +42,42 @@ export default function FitTable({ scroll, bottomGap = 36, minBodyHeight = 140,
+     const theadH = thead ? thead.getBoundingClientRect().height : 40
+     const pagerH = pager ? pager.getBoundingClientRect().height + 16 : 0
+     const avail = window.innerHeight - top - theadH - pagerH - bottomGap
+-    setY(Math.max(minBodyHeight, Math.floor(avail)))
++    const next = Math.max(minBodyHeight, Math.floor(avail))
++    // Chỉ set khi đổi thật -> cắt vòng đo-render-đo.
++    setY((prev) => (prev === next ? prev : next))
+   }, [bottomGap, minBodyHeight])
+ 
++  // Gộp nhiều tín hiệu (resize + observer + mount) vào 1 lần đo ở frame kế tiếp.
++  const scheduleMeasure = useCallback(() => {
++    if (rafRef.current) return
++    rafRef.current = requestAnimationFrame(() => { rafRef.current = 0; measure() })
++  }, [measure])
++
+   useLayoutEffect(() => {
+-    measure()
+-    const raf = requestAnimationFrame(measure)
+-    const ro = new ResizeObserver(measure)
+-    ro.observe(document.body)
++    if (!enabled) return
++    scheduleMeasure()
++    // CHỈ quan sát wrapper: nó dịch chuyển khi thanh lọc phía trên xuống dòng
++    // hoặc sidebar thu gọn — đủ để biết cần đo lại. Không quan sát document.body.
++    const ro = new ResizeObserver(scheduleMeasure)
+     if (wrapRef.current) ro.observe(wrapRef.current)
+-    window.addEventListener('resize', measure)
++    window.addEventListener('resize', scheduleMeasure)
+     return () => {
+-      cancelAnimationFrame(raf)
+       ro.disconnect()
+-      window.removeEventListener('resize', measure)
++      window.removeEventListener('resize', scheduleMeasure)
++      if (rafRef.current) cancelAnimationFrame(rafRef.current)
++      rafRef.current = 0
+     }
+-  }, [measure])
++  }, [enabled, scheduleMeasure])
++
++  // Đổi số dòng (lọc, chuyển trang) làm bảng cao/thấp khác đi -> đo lại.
++  useEffect(() => {
++    if (enabled) scheduleMeasure()
++  }, [enabled, scheduleMeasure, rest.dataSource])
++
++  if (!enabled) {
++    // Bảng thường: trang cuộn tự nhiên, không đo đạc, không vùng cuộn lồng nhau.
++    return <Table {...rest} scroll={{ x: 'max-content', ...(scroll || {}) }} />
++  }
+ 
+   return (
+     <div ref={wrapRef}>
+diff --git a/frontend/src/components/NotificationBell.jsx b/frontend/src/components/NotificationBell.jsx
+index 754a52b..cabf77b 100644
+--- a/frontend/src/components/NotificationBell.jsx
++++ b/frontend/src/components/NotificationBell.jsx
+@@ -1,4 +1,4 @@
+-import { Badge, Button, Dropdown, List, Typography, Tag, Empty, Tooltip } from 'antd'
++import { Badge, Button, Dropdown, List, Typography, Empty, Tooltip, theme } from 'antd'
+ import { BellOutlined } from '@ant-design/icons'
+ import { useNavigate } from 'react-router-dom'
+ import dayjs from 'dayjs'
+@@ -7,6 +7,9 @@ import { useNotifications } from '../context/NotificationContext'
+ export default function NotificationBell() {
+   const navigate = useNavigate()
+   const { notifications, unreadCount, connected, markRead, markAllRead, canRead } = useNotifications()
++  // Toàn bộ màu lấy từ design token của antd thay vì hardcode #fff/#f0f0f0/#e6f4ff.
++  // Bản cũ hardcode nên khi bật dark mode là chữ trắng trên nền trắng.
++  const { token } = theme.useToken()
+ 
+   if (!canRead) return null
+ 
+@@ -17,8 +20,14 @@ export default function NotificationBell() {
+   }
+ 
+   const dropdownContent = (
+-    <div style={{ width: 340, background: '#fff', borderRadius: 8, boxShadow: '0 6px 16px rgba(0,0,0,.12)', overflow: 'hidden' }}>
+-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
++    <div style={{
++      width: 340, background: token.colorBgElevated, borderRadius: token.borderRadiusLG,
++      boxShadow: token.boxShadowSecondary, overflow: 'hidden',
++    }}>
++      <div style={{
++        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
++        padding: '10px 12px', borderBottom: `1px solid ${token.colorBorderSecondary}`,
++      }}>
+         <b>Thông báo</b>
+         {unreadCount > 0 && <a onClick={markAllRead}>Đánh dấu đã đọc hết</a>}
+       </div>
+@@ -28,13 +37,18 @@ export default function NotificationBell() {
+           <List size="small" dataSource={recent}
+             style={{ maxHeight: 360, overflow: 'auto' }}
+             renderItem={(n) => (
+-              <List.Item style={{ padding: '10px 12px', cursor: 'pointer', background: n.isRead ? '#fff' : '#e6f4ff' }}
++              <List.Item
++                style={{
++                  padding: '10px 12px', cursor: 'pointer',
++                  // chưa đọc: nền nhấn nhẹ theo token (tự đúng ở cả sáng lẫn tối)
++                  background: n.isRead ? 'transparent' : token.controlItemBgActive,
++                }}
+                 onClick={() => onItem(n)}>
+                 <List.Item.Meta
+                   title={<span style={{ fontWeight: n.isRead ? 400 : 600 }}>{n.title || n.type || 'Thông báo'}</span>}
+                   description={
+                     <div>
+-                      <div style={{ color: 'rgba(0,0,0,.65)' }}>{n.message}</div>
++                      <div style={{ color: token.colorText }}>{n.message}</div>
+                       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                         {n.createdAt ? dayjs(n.createdAt).format('DD/MM HH:mm') : ''}
+                       </Typography.Text>
+@@ -43,7 +57,7 @@ export default function NotificationBell() {
+               </List.Item>
+             )} />
+         )}
+-      <div style={{ padding: 10, borderTop: '1px solid #f0f0f0', textAlign: 'center' }}>
++      <div style={{ padding: 10, borderTop: `1px solid ${token.colorBorderSecondary}`, textAlign: 'center' }}>
+         <a onClick={() => navigate('/notifications')}>Xem tất cả</a>
+       </div>
+     </div>
+@@ -53,7 +67,8 @@ export default function NotificationBell() {
+     <Dropdown popupRender={() => dropdownContent} trigger={['click']} placement="bottomRight">
+       <Tooltip title={connected ? 'Realtime đang kết nối' : 'Realtime chưa kết nối'}>
+         <Badge count={unreadCount} size="small" offset={[-2, 2]}>
+-          <Button type="text" icon={<BellOutlined style={{ color: connected ? undefined : '#bbb' }} />} />
++          <Button type="text" aria-label="Thông báo"
++            icon={<BellOutlined style={{ color: connected ? undefined : token.colorTextDisabled }} />} />
+         </Badge>
+       </Tooltip>
+     </Dropdown>
+diff --git a/frontend/src/context/ThemeContext.jsx b/frontend/src/context/ThemeContext.jsx
+new file mode 100644
+index 0000000..db87315
+--- /dev/null
++++ b/frontend/src/context/ThemeContext.jsx
+@@ -0,0 +1,54 @@
++import { createContext, useContext, useEffect, useMemo, useState } from 'react'
++
++const KEY = 'mws_theme' // 'light' | 'dark' | 'system'
++const ThemeCtx = createContext(null)
++
++function systemPrefersDark() {
++  return typeof window !== 'undefined'
++    && window.matchMedia?.('(prefers-color-scheme: dark)').matches
++}
++
++/**
++ * Chế độ sáng/tối. Mặc định 'system' — theo cài đặt của máy.
++ *
++ * Kho có ca đêm; màn hình trắng 100% trong kho tối là thứ người trực đêm phàn
++ * nàn đầu tiên. Antd đã có sẵn thuật toán darkAlgorithm nên phần khó không nằm
++ * ở đây, mà ở chỗ dọn hết màu hardcode trong code (#fff, #f0f0f0, #e6f4ff...)
++ * sang design token — nếu không, bật dark là chữ trắng trên nền trắng.
++ *
++ * Đặt data-theme lên <html> để CSS thuần (thanh cuộn trong index.css) đổi theo.
++ */
++export function ThemeProvider({ children }) {
++  const [pref, setPref] = useState(() => localStorage.getItem(KEY) || 'system')
++  const [sysDark, setSysDark] = useState(systemPrefersDark)
++
++  // Theo dõi khi người dùng đổi cài đặt sáng/tối của hệ điều hành.
++  useEffect(() => {
++    const mq = window.matchMedia?.('(prefers-color-scheme: dark)')
++    if (!mq) return
++    const on = (e) => setSysDark(e.matches)
++    mq.addEventListener('change', on)
++    return () => mq.removeEventListener('change', on)
++  }, [])
++
++  const isDark = pref === 'dark' || (pref === 'system' && sysDark)
++
++  useEffect(() => {
++    localStorage.setItem(KEY, pref)
++    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
++  }, [pref, isDark])
++
++  const value = useMemo(() => ({
++    pref, isDark,
++    setPref,
++    toggle: () => setPref(isDark ? 'light' : 'dark'),
++  }), [pref, isDark])
++
++  return <ThemeCtx.Provider value={value}>{children}</ThemeCtx.Provider>
++}
++
++export function useThemeMode() {
++  const v = useContext(ThemeCtx)
++  if (!v) throw new Error('useThemeMode phải nằm trong <ThemeProvider>')
++  return v
++}
+diff --git a/frontend/src/features/auth/LoginPage.jsx b/frontend/src/features/auth/LoginPage.jsx
+index edf9f10..561ae34 100644
+--- a/frontend/src/features/auth/LoginPage.jsx
++++ b/frontend/src/features/auth/LoginPage.jsx
+@@ -1,5 +1,5 @@
+ import { useState } from 'react'
+-import { Card, Form, Input, Button, Typography, App as AntdApp } from 'antd'
++import { Card, Form, Input, Button, Typography, App as AntdApp, theme } from 'antd'
+ import { UserOutlined, LockOutlined } from '@ant-design/icons'
+ import { useNavigate, useLocation, Navigate } from 'react-router-dom'
+ import { useAuth } from '../../auth/AuthContext'
+@@ -11,6 +11,7 @@ export default function LoginPage() {
+   const navigate = useNavigate()
+   const location = useLocation()
+   const [loading, setLoading] = useState(false)
++  const { token } = theme.useToken()
+ 
+   if (isAuthenticated) return <Navigate to="/" replace />
+ 
+@@ -29,7 +30,7 @@ export default function LoginPage() {
+   }
+ 
+   return (
+-    <div style={{ display: 'grid', placeItems: 'center', height: '100vh', background: '#f0f2f5' }}>
++    <div style={{ display: 'grid', placeItems: 'center', height: '100vh', background: token.colorBgLayout }}>
+       <Card style={{ width: 380 }}>
+         <div style={{ textAlign: 'center', marginBottom: 24 }}>
+           <Typography.Title level={3} style={{ marginBottom: 0 }}>MWS · Quản lý kho</Typography.Title>
+diff --git a/frontend/src/features/dashboard/DashboardPage.jsx b/frontend/src/features/dashboard/DashboardPage.jsx
+index cadbe59..5dac3af 100644
+--- a/frontend/src/features/dashboard/DashboardPage.jsx
++++ b/frontend/src/features/dashboard/DashboardPage.jsx
+@@ -23,9 +23,12 @@ import { adjustmentsApi } from '../../api/adjustments.api'
+  * là sang thẳng trang danh sách ĐÃ LỌC SẴN (truyền qua location.state — đúng
+  * quy ước sẵn có của dự án, xem InventoryPage -> StockMovementsPage).
+  */
+-function KpiCard({ icon, title, q, to, state, hint }) {
++function KpiCard({ icon, title, q, to, hint }) {
+   const navigate = useNavigate()
+-  const go = () => navigate(to, state ? { state } : undefined)
++  // `to` đã chứa sẵn query lọc (vd '/purchase-orders?status=PENDING_APPROVAL').
++  // Dùng query string thay vì location.state: state chết sau F5, query thì không,
++  // và người duyệt có thể bookmark/gửi lại đúng danh sách đó.
++  const go = () => navigate(to)
+   const value = q.isError ? '—' : (q.data ?? (q.isLoading ? undefined : '—'))
+ 
+   return (
+@@ -83,21 +86,21 @@ export default function DashboardPage() {
+     ),
+     has(P.INBOUND_VIEW_PO) && (
+       <KpiCard key="po" icon={<FileDoneOutlined />} title="PO chờ duyệt" q={poPending}
+-        to="/purchase-orders" state={{ status: 'PENDING_APPROVAL' }} hint="Đơn chờ duyệt" />
++        to="/purchase-orders?status=PENDING_APPROVAL" hint="Đơn chờ duyệt" />
+     ),
+     has(P.OUTBOUND_VIEW_SO) && (
+       <KpiCard key="so" icon={<ShoppingCartOutlined />} title="Đơn bán nháp" q={soDraft}
+-        to="/sales-orders" state={{ status: 'DRAFT' }} hint="Đơn bán nháp" />
++        to="/sales-orders?status=DRAFT" hint="Đơn bán nháp" />
+     ),
+     has(P.TRANSFER_VIEW) && (
+       <KpiCard key="to" icon={<SwapOutlined />} title="Điều chuyển chờ duyệt" q={toPending}
+-        to="/transfer-orders" state={{ status: 'PENDING_APPROVAL' }} hint="Phiếu chờ duyệt" />
++        to="/transfer-orders?status=PENDING_APPROVAL" hint="Phiếu chờ duyệt" />
+     ),
+     // NOTE: thẻ này trước đây ghi "chờ duyệt" nhưng lại đếm status=DRAFT.
+     // Đã sửa nhãn cho khớp truy vấn (nhấn vào là lọc đúng DRAFT).
+     has(P.ADJUSTMENT_VIEW) && (
+       <KpiCard key="av" icon={<ReconciliationOutlined />} title="Điều chỉnh nháp" q={avDraft}
+-        to="/adjustment-vouchers" state={{ status: 'DRAFT' }} hint="Phiếu nháp" />
++        to="/adjustment-vouchers?status=DRAFT" hint="Phiếu nháp" />
+     ),
+   ].filter(Boolean)
+ 
+diff --git a/frontend/src/features/data-io/DataIOPage.jsx b/frontend/src/features/data-io/DataIOPage.jsx
+index 2efe6eb..cc1cc97 100644
+--- a/frontend/src/features/data-io/DataIOPage.jsx
++++ b/frontend/src/features/data-io/DataIOPage.jsx
+@@ -160,7 +160,7 @@ export default function DataIOPage() {
+                 options={Object.entries(TYPES).map(([k, v]) => ({ value: k, label: v.label }))} />
+             </div>
+             <Button icon={<DownloadOutlined />}
+-              onClick={() => downloadTemplate(headers, `mau-${type}.xlsx`)}>
++              onClick={() => { downloadTemplate(headers, `mau-${type}.xlsx`) }}>
+               Tải file mẫu
+             </Button>
+             <Upload beforeUpload={beforeUpload} maxCount={1} showUploadList={false}
+diff --git a/frontend/src/features/inbound/GoodsReceiptsPage.jsx b/frontend/src/features/inbound/GoodsReceiptsPage.jsx
+index a341503..b172b18 100644
+--- a/frontend/src/features/inbound/GoodsReceiptsPage.jsx
++++ b/frontend/src/features/inbound/GoodsReceiptsPage.jsx
+@@ -2,6 +2,7 @@ import ExportButton from '../../components/ExportButton'
+ import { sorterToParams, columnSortOrder } from '../../utils/sort'
+ import FitTable from '../../components/FitTable'
+ import { useEffect, useMemo, useState } from 'react'
++import { useProducts } from '../../hooks/useProducts'
+ import { useLocation } from 'react-router-dom'
+ import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+ import {
+@@ -18,7 +19,6 @@ import { getErrorMessage } from '../../api/client'
+ import { P } from '../../constants/permissions'
+ import { goodsReceiptsApi } from '../../api/goodsReceipts.api'
+ import { purchaseOrdersApi } from '../../api/purchaseOrders.api'
+-import { productsApi } from '../../api/products.api'
+ import { warehousesApi } from '../../api/warehouses.api'
+ import { useBinLabels } from '../../hooks/useBinLabels'
+ 
+@@ -35,9 +35,7 @@ function useWarehouseMap() {
+   return { warehouses, warehouseMap: map }
+ }
+ function useProductMap() {
+-  const products = useQuery({ queryKey: ['products', 'all'], queryFn: () => productsApi.list({ size: 500 }) })
+-  const list = products.data?.content || []
+-  const map = useMemo(() => Object.fromEntries(list.map(p => [p.id, p])), [list])
++  const { query: products, list, map } = useProducts()
+   return { products, list, map }
+ }
+ const productOptions = (list) => list.map(p => ({ value: p.id, label: `${p.name} · ${p.sku}` }))
+diff --git a/frontend/src/features/inbound/PurchaseOrdersPage.jsx b/frontend/src/features/inbound/PurchaseOrdersPage.jsx
+index ab2599f..1a2173c 100644
+--- a/frontend/src/features/inbound/PurchaseOrdersPage.jsx
++++ b/frontend/src/features/inbound/PurchaseOrdersPage.jsx
+@@ -1,8 +1,11 @@
+ import ExportButton from '../../components/ExportButton'
+-import { sorterToParams, columnSortOrder } from '../../utils/sort'
++import { columnSortOrder } from '../../utils/sort'
+ import FitTable from '../../components/FitTable'
+-import { useMemo, useState } from 'react'
+-import { useNavigate, useLocation } from 'react-router-dom'
++import { useMemo } from 'react'
++import { useProducts } from '../../hooks/useProducts'
++import { useRecordView } from '../../hooks/useRecordView'
++import { useListParams } from '../../hooks/useListParams'
++import { useNavigate } from 'react-router-dom'
+ import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+ import {
+   Card, Button, Input, Form, Select, DatePicker, InputNumber, Row, Col,
+@@ -16,9 +19,9 @@ import dayjs from 'dayjs'
+ import Can from '../../components/Can'
+ import { useAuth } from '../../auth/AuthContext'
+ import { getErrorMessage } from '../../api/client'
++import { handleFormError } from '../../utils/formErrors'
+ import { P } from '../../constants/permissions'
+ import { purchaseOrdersApi } from '../../api/purchaseOrders.api'
+-import { productsApi } from '../../api/products.api'
+ import { suppliersApi } from '../../api/partners.api'
+ import { warehousesApi } from '../../api/warehouses.api'
+ 
+@@ -45,41 +48,41 @@ function useNameMaps() {
+ }
+ 
+ export default function PurchaseOrdersPage() {
+-  const [view, setView] = useState({ mode: 'list', id: null })
+-  const openDetail = (id) => setView({ mode: 'detail', id })
++  // Chế độ xem nằm ở URL: /purchase-orders | /purchase-orders/new | /purchase-orders/<id>
++  const { mode, id, openList, openCreate, openDetail } = useRecordView('/purchase-orders')
+ 
+   return (
+     <div>
+-      {view.mode !== 'list' && (
++      {mode !== 'list' && (
+         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+           <Space>
+-            <Button icon={<ArrowLeftOutlined />} onClick={() => setView({ mode: 'list', id: null })}>Danh sách</Button>
++            <Button icon={<ArrowLeftOutlined />} onClick={openList}>Danh sách</Button>
+             <Typography.Title level={4} style={{ margin: 0 }}>Đơn mua hàng (PO)</Typography.Title>
+           </Space>
+         </div>
+       )}
+ 
+-      {view.mode === 'list' && <POList onOpen={openDetail} onCreate={() => setView({ mode: 'create', id: null })} />}
+-      {view.mode === 'create' && <CreatePO onCreated={(po) => openDetail(po.id)} />}
+-      {view.mode === 'detail' && view.id && <PODetail id={view.id} />}
++      {mode === 'list' && <POList onOpen={openDetail} onCreate={openCreate} />}
++      {mode === 'create' && <CreatePO onCreated={(r) => openDetail(r.id, { replace: true })} />}
++      {mode === 'detail' && id && <PODetail id={id} />}
+     </div>
+   )
+ }
+ 
+ // ---- Bảng danh sách ----
+ function POList({ onOpen, onCreate }) {
+-  const [keyword, setKeyword] = useState('')
+-  // Nhận trạng thái lọc sẵn khi được điều hướng từ thẻ KPI ở Dashboard.
+-  const location = useLocation()
+-  const [status, setStatus] = useState(location.state?.status)
+-  const [pager, setPager] = useState({ page: 0, size: 20 })
+-  const [sorter, setSorter] = useState(null)
+-  const { sort, dir } = sorterToParams(sorter)
++  // Bộ lọc nằm trong query string (?q=&status=&page=&size=&sort=&dir=).
++  // Thay cho useState + location.state: F5 không mất bộ lọc, gửi link được,
++  // Back lùi đúng bộ lọc trước, và Dashboard chỉ cần trỏ tới ?status=... .
++  const {
++    keyword, status, page, size, sort, dir, sorter,
++    setKeyword, setStatus, setPager, setSorter,
++  } = useListParams()
+   const { supplierMap, warehouseMap } = useNameMaps()
+ 
+   const list = useQuery({
+-    queryKey: ['po-list', keyword, status, pager.page, pager.size, sort, dir],
+-    queryFn: () => purchaseOrdersApi.list({ keyword, status, page: pager.page, size: pager.size, sort, dir }),
++    queryKey: ['po-list', keyword, status, page, size, sort, dir],
++    queryFn: () => purchaseOrdersApi.list({ keyword, status, page: page, size: size, sort, dir }),
+     placeholderData: keepPreviousData,
+   })
+   const pageData = list.data
+@@ -102,12 +105,12 @@ function POList({ onOpen, onCreate }) {
+         <Typography.Title level={4} style={{ marginLeft: 20, marginTop: 0 }}>Đơn mua hàng (PO)</Typography.Title>
+         <Space wrap>
+         <ExportButton filename="don-mua-hang.xlsx" fetchRows={() => purchaseOrdersApi.list({ keyword, status, sort, dir, size: 10000 }).then(r => r.content)} />
+-        <Input.Search allowClear placeholder="Tìm theo mã đơn" style={{ width: 220 }}
++        <Input.Search allowClear key={`q-${keyword}`} defaultValue={keyword} placeholder="Tìm theo mã đơn" style={{ width: 220 }}
+           prefix={<SearchOutlined />}
+-          onSearch={(v) => { setKeyword(v); setPager(p => ({ ...p, page: 0 })) }} />
++          onSearch={(v) => setKeyword(v)} />
+         <Select allowClear placeholder="Lọc trạng thái" style={{ width: 180 }}
+           options={PO_STATUS_OPTS} value={status}
+-          onChange={(v) => { setStatus(v); setPager(p => ({ ...p, page: 0 })) }} />
++          onChange={(v) => setStatus(v)} />
+         <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching} />
+           <Can permission={P.INBOUND_CREATE_PO}><Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>Tạo đơn mua</Button></Can>
+         </Space>
+@@ -115,14 +118,14 @@ function POList({ onOpen, onCreate }) {
+ 
+       <FitTable rowKey="id" loading={list.isLoading} dataSource={pageData?.content || []}
+         columns={columns} scroll={{ x: 'max-content' }}
+-        onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') { setSorter(s); setPager(p => ({ ...p, page: 0 })) } }}
++        onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') setSorter(s) }}
+         pagination={{
+           current: (pageData?.page ?? 0) + 1,
+           pageSize: pageData?.size ?? 20,
+           total: pageData?.totalElements ?? 0,
+           showSizeChanger: true,
+           showTotal: (t) => `Tổng ${t}`,
+-          onChange: (p, s) => setPager({ page: p - 1, size: s }),
++          onChange: (p, s) => setPager(p - 1, s),
+         }} />
+     </>
+   )
+@@ -131,9 +134,7 @@ function POList({ onOpen, onCreate }) {
+ // ---- Lookups cho form tạo & chi tiết (kèm sản phẩm) ----
+ function useLookups() {
+   const { suppliers, warehouses, supplierMap, warehouseMap } = useNameMaps()
+-  const products = useQuery({ queryKey: ['products', 'all'], queryFn: () => productsApi.list({ size: 500 }) })
+-  const productList = products.data?.content || []
+-  const productMap = useMemo(() => Object.fromEntries(productList.map(p => [p.id, p])), [productList])
++  const { query: products, list: productList, map: productMap } = useProducts()
+   return { suppliers, warehouses, products, productList, productMap, supplierMap, warehouseMap }
+ }
+ const productOptions = (list) => list.map(p => ({ value: p.id, label: `${p.name} · ${p.sku}` }))
+@@ -147,7 +148,7 @@ function CreatePO({ onCreated }) {
+   const createMut = useMutation({
+     mutationFn: purchaseOrdersApi.create,
+     onSuccess: (po) => { message.success(`Đã tạo đơn ${po.poNumber || ''}`.trim()); onCreated(po) },
+-    onError: (e) => message.error(getErrorMessage(e)),
++    onError: (e) => handleFormError(form, e, message),
+   })
+ 
+   const submit = async () => {
+diff --git a/frontend/src/features/inventory/InventoryPage.jsx b/frontend/src/features/inventory/InventoryPage.jsx
+index b602f0e..4854ebb 100644
+--- a/frontend/src/features/inventory/InventoryPage.jsx
++++ b/frontend/src/features/inventory/InventoryPage.jsx
+@@ -1,9 +1,10 @@
+ import FitTable from '../../components/FitTable'
+-import { useMemo, useState } from 'react'
++import { useState } from 'react'
++import { useProducts } from '../../hooks/useProducts'
+ import { useNavigate } from 'react-router-dom'
+ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+ import {
+-  Card, Tabs, Select, Table, Space, Typography, Tag, Empty, Button, App as AntdApp,
++  Tabs, Select, Space, Typography, Tag, Empty, Button, App as AntdApp,
+ } from 'antd'
+ import { ReloadOutlined, HistoryOutlined } from '@ant-design/icons'
+ import dayjs from 'dayjs'
+@@ -12,7 +13,6 @@ import { useAuth } from '../../auth/AuthContext'
+ import { getErrorMessage } from '../../api/client'
+ import { P } from '../../constants/permissions'
+ import { inventoryApi } from '../../api/inventory.api'
+-import { productsApi } from '../../api/products.api'
+ import { warehousesApi } from '../../api/warehouses.api'
+ 
+ const BATCH_STATUS = {
+@@ -22,10 +22,8 @@ const BATCH_STATUS = {
+ }
+ 
+ function useLookups() {
+-  const products = useQuery({ queryKey: ['products', 'all'], queryFn: () => productsApi.list({ size: 500 }) })
++  const { query: products, list: productList, map: productMap } = useProducts()
+   const warehouses = useQuery({ queryKey: ['warehouses', 'active'], queryFn: () => warehousesApi.list(false) })
+-  const productList = products.data?.content || []
+-  const productMap = useMemo(() => Object.fromEntries(productList.map(p => [p.id, p])), [productList])
+   return { products, warehouses, productList, productMap }
+ }
+ 
+@@ -100,7 +98,7 @@ function BatchView() {
+   const navigate = useNavigate()
+   const qc = useQueryClient()
+   const { hasPermission } = useAuth()
+-  const { products, warehouses, productList, productMap } = useLookups()
++  const { products, warehouses, productList } = useLookups()
+   const [productId, setProductId] = useState()
+   const [warehouseId, setWarehouseId] = useState()
+ 
+diff --git a/frontend/src/features/inventory/StockMovementsPage.jsx b/frontend/src/features/inventory/StockMovementsPage.jsx
+index 2c49d22..01056ea 100644
+--- a/frontend/src/features/inventory/StockMovementsPage.jsx
++++ b/frontend/src/features/inventory/StockMovementsPage.jsx
+@@ -1,5 +1,6 @@
+ import FitTable from '../../components/FitTable'
+-import { useMemo, useState } from 'react'
++import { useState } from 'react'
++import { useProducts } from '../../hooks/useProducts'
+ import { useLocation } from 'react-router-dom'
+ import { useQuery, useInfiniteQuery } from '@tanstack/react-query'
+ import {
+@@ -9,7 +10,6 @@ import { ReloadOutlined } from '@ant-design/icons'
+ import dayjs from 'dayjs'
+ import { getErrorMessage } from '../../api/client'
+ import { stockMovementsApi } from '../../api/stockMovements.api'
+-import { productsApi } from '../../api/products.api'
+ import { warehousesApi } from '../../api/warehouses.api'
+ import { useBinLabels } from '../../hooks/useBinLabels'
+ 
+@@ -18,11 +18,9 @@ const changeTag = (v) => <Tag color={v === 0 ? 'default' : v > 0 ? 'green' : 're
+ 
+ export default function StockMovementsPage() {
+   const location = useLocation()
+-  const products = useQuery({ queryKey: ['products', 'all'], queryFn: () => productsApi.list({ size: 500 }) })
++  const { query: products, list: productList, map: productMap } = useProducts()
+   const warehouses = useQuery({ queryKey: ['warehouses', 'active'], queryFn: () => warehousesApi.list(false) })
+   const { labelOf } = useBinLabels()
+-  const productList = products.data?.content || []
+-  const productMap = useMemo(() => Object.fromEntries(productList.map(p => [p.id, p])), [productList])
+ 
+   const [productId, setProductId] = useState(location.state?.productId || undefined)
+   const [warehouseId, setWarehouseId] = useState(location.state?.warehouseId || undefined)
+diff --git a/frontend/src/features/notifications/NotificationsPage.jsx b/frontend/src/features/notifications/NotificationsPage.jsx
+index f2baf5f..64e0db8 100644
+--- a/frontend/src/features/notifications/NotificationsPage.jsx
++++ b/frontend/src/features/notifications/NotificationsPage.jsx
+@@ -1,5 +1,5 @@
+-import { List, Button, Typography, Tag, Space, Empty, Badge } from 'antd'
+-import { CheckOutlined, ReloadOutlined, WifiOutlined } from '@ant-design/icons'
++import { List, Button, Typography, Tag, Space, Empty, Badge , theme } from 'antd'
++import { CheckOutlined, ReloadOutlined } from '@ant-design/icons'
+ import dayjs from 'dayjs'
+ import { useNotifications } from '../../context/NotificationContext'
+ import { useFitY } from '../../hooks/useFitY'
+@@ -7,6 +7,7 @@ import { useFitY } from '../../hooks/useFitY'
+ export default function NotificationsPage() {
+   const { notifications, loading, unreadCount, connected, markRead, markAllRead, refetch } = useNotifications()
+   const { ref: listRef, y: listH } = useFitY()
++  const { token } = theme.useToken()
+ 
+   return (
+     <div>
+@@ -34,7 +35,7 @@ export default function NotificationsPage() {
+             dataSource={notifications}
+             renderItem={(n) => (
+               <List.Item
+-                style={{ background: n.isRead ? undefined : '#e6f4ff', padding: '12px 16px', borderRadius: 8, marginBottom: 6 }}
++                style={{ background: n.isRead ? undefined : token.controlItemBgActive, padding: '12px 16px', borderRadius: token.borderRadiusLG, marginBottom: 6 }}
+                 actions={n.isRead ? [] : [<a key="r" onClick={() => markRead(n.id)}>Đánh dấu đã đọc</a>]}
+               >
+                 <List.Item.Meta
+@@ -47,7 +48,7 @@ export default function NotificationsPage() {
+                   }
+                   description={
+                     <div>
+-                      <div style={{ color: 'rgba(0,0,0,.75)' }}>{n.message}</div>
++                      <div style={{ color: token.colorText }}>{n.message}</div>
+                       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                         {n.referenceType ? `${n.referenceType}: ${n.referenceId} · ` : ''}
+                         {n.createdAt ? dayjs(n.createdAt).format('DD/MM/YYYY HH:mm') : ''}
+diff --git a/frontend/src/features/outbound/PickingListsPage.jsx b/frontend/src/features/outbound/PickingListsPage.jsx
+index 6cde919..dc0aae8 100644
+--- a/frontend/src/features/outbound/PickingListsPage.jsx
++++ b/frontend/src/features/outbound/PickingListsPage.jsx
+@@ -1,7 +1,9 @@
+ import FitTable from '../../components/FitTable'
+-import { useEffect, useMemo, useState } from 'react'
++import { useState } from 'react'
++import { useProducts } from '../../hooks/useProducts'
+ import { useBinLabels } from '../../hooks/useBinLabels'
+-import { useLocation } from 'react-router-dom'
++import { useSearchParams } from 'react-router-dom'
++import { useRecordView } from '../../hooks/useRecordView'
+ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+ import {
+   Card, Button, Input, Form, Select, InputNumber, Table, Space, Typography, Tag,
+@@ -17,7 +19,6 @@ import { useAuth } from '../../auth/AuthContext'
+ import { getErrorMessage } from '../../api/client'
+ import { P } from '../../constants/permissions'
+ import { pickingListsApi } from '../../api/pickingLists.api'
+-import { productsApi } from '../../api/products.api'
+ import { usersApi } from '../../api/users.api'
+ 
+ const PL_STATUS = {
+@@ -28,29 +29,30 @@ const PL_STATUS = {
+ const plTag = (s) => <Tag color={PL_STATUS[s]?.color || 'default'}>{PL_STATUS[s]?.label || s}</Tag>
+ 
+ export default function PickingListsPage() {
+-  const location = useLocation()
+-  const openId = location.state?.openId || null
+-  const [view, setView] = useState(openId ? { mode: 'detail', id: openId } : { mode: 'list', id: null })
+-  const openDetail = (id) => setView({ mode: 'detail', id })
++  // Chế độ xem nằm ở URL: /picking-lists | /picking-lists/new | /picking-lists/<id>
++  // (thay location.state?.openId — state chết sau F5).
++  const { mode, id, openList, openCreate, openDetail } = useRecordView('/picking-lists')
+ 
+   return (
+     <div>
+       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+         <Space>
+-          {view.mode !== 'list' && (
+-            <Button icon={<ArrowLeftOutlined />} onClick={() => setView({ mode: 'list', id: null })}>Danh sách</Button>
++          {mode !== 'list' && (
++            <Button icon={<ArrowLeftOutlined />} onClick={openList}>Danh sách</Button>
+           )}
+         </Space>
+ 
+       </div>
+-      {view.mode === 'list' && <PLList onOpen={openDetail} />}
+-      {view.mode === 'create' && <CreatePL onCreated={(pl) => openDetail(pl.id)} />}
+-      {view.mode === 'detail' && view.id && <PLDetail id={view.id} />}
++      {/* BUG CŨ: PLList gọi setView() của component cha => ReferenceError khi bấm
++          "Tạo lệnh". Nay truyền hẳn onCreate xuống. */}
++      {mode === 'list' && <PLList onOpen={openDetail} onCreate={openCreate} />}
++      {mode === 'create' && <CreatePL onCreated={(pl) => openDetail(pl.id, { replace: true })} />}
++      {mode === 'detail' && id && <PLDetail id={id} />}
+     </div>
+   )
+ }
+ 
+-function PLList({ onOpen }) {
++function PLList({ onOpen, onCreate }) {
+   const list = useQuery({ queryKey: ['pl-list'], queryFn: pickingListsApi.list })
+   const columns = [
+     { title: 'Mã lệnh', dataIndex: 'id', render: (v) => <a onClick={() => onOpen(v)}>{v}</a> },
+@@ -66,7 +68,7 @@ function PLList({ onOpen }) {
+         <Space>
+           <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching}>Làm mới</Button>
+           <Can permission={P.OUTBOUND_PICK}>
+-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setView({ mode: 'create', id: null })}>Tạo lệnh</Button>
++            <Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>Tạo lệnh</Button>
+           </Can>
+         </Space>
+         
+@@ -79,8 +81,9 @@ function PLList({ onOpen }) {
+ 
+ function CreatePL({ onCreated }) {
+   const { message } = AntdApp.useApp()
+-  const location = useLocation()
+-  const [soId, setSoId] = useState(location.state?.soId || '')
++  // ?soId=... khi được điều hướng từ trang Đơn bán hàng (thay location.state).
++  const [sp] = useSearchParams()
++  const [soId, setSoId] = useState(sp.get('soId') || '')
+   const createMut = useMutation({
+     mutationFn: () => pickingListsApi.create(soId.trim()),
+     onSuccess: (pl) => { message.success('Đã tạo lệnh lấy hàng'); onCreated(pl) },
+@@ -107,9 +110,7 @@ function PLDetail({ id }) {
+   const { data: pl, isLoading, isError, error } = useQuery({
+     queryKey: ['pl', id], queryFn: () => pickingListsApi.get(id),
+   })
+-  const products = useQuery({ queryKey: ['products', 'all'], queryFn: () => productsApi.list({ size: 500 }) })
+-  const productMap = useMemo(
+-    () => Object.fromEntries((products.data?.content || []).map(p => [p.id, p])), [products.data])
++  const { map: productMap } = useProducts()
+   const { labelOf } = useBinLabels()
+ 
+   const refresh = (u) => { qc.setQueryData(['pl', id], u); qc.invalidateQueries({ queryKey: ['pl-list'] }) }
+diff --git a/frontend/src/features/outbound/PickingScanPage.jsx b/frontend/src/features/outbound/PickingScanPage.jsx
+index ff08eb1..2a9494a 100644
+--- a/frontend/src/features/outbound/PickingScanPage.jsx
++++ b/frontend/src/features/outbound/PickingScanPage.jsx
+@@ -1,4 +1,5 @@
+-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
++import { useCallback, useEffect, useRef, useState } from 'react'
++import { useProducts } from '../../hooks/useProducts'
+ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+ import { useBinLabels } from '../../hooks/useBinLabels'
+ import {
+@@ -14,7 +15,6 @@ import { useAuth } from '../../auth/AuthContext'
+ import { getErrorMessage } from '../../api/client'
+ import { P } from '../../constants/permissions'
+ import { pickingListsApi } from '../../api/pickingLists.api'
+-import { productsApi } from '../../api/products.api'
+ import { beepOk, beepError, beepDone } from '../../utils/feedback'
+ 
+ const PL_STATUS = {
+@@ -91,9 +91,7 @@ function ScanRunner({ pickId, onBack }) {
+   const { data: pl, isLoading, isError, error } = useQuery({
+     queryKey: ['pl', pickId], queryFn: () => pickingListsApi.get(pickId),
+   })
+-  const products = useQuery({ queryKey: ['products', 'all'], queryFn: () => productsApi.list({ size: 500 }) })
+-  const productMap = useMemo(
+-    () => Object.fromEntries((products.data?.content || []).map(p => [p.id, p])), [products.data])
++  const { map: productMap } = useProducts()
+   const { labelOf } = useBinLabels()
+ 
+   const refresh = (u) => {
+diff --git a/frontend/src/features/outbound/SalesOrdersPage.jsx b/frontend/src/features/outbound/SalesOrdersPage.jsx
+index 28be9d4..c615eb1 100644
+--- a/frontend/src/features/outbound/SalesOrdersPage.jsx
++++ b/frontend/src/features/outbound/SalesOrdersPage.jsx
+@@ -1,9 +1,12 @@
+ import ExportButton from '../../components/ExportButton'
+ import FitTable from '../../components/FitTable'
+-import { useMemo, useState } from 'react'
+-import { useNavigate, useLocation } from 'react-router-dom'
++import { useMemo } from 'react'
++import { useProducts } from '../../hooks/useProducts'
++import { useRecordView } from '../../hooks/useRecordView'
++import { useListParams } from '../../hooks/useListParams'
++import { useNavigate } from 'react-router-dom'
+ import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+-import { sorterToParams, columnSortOrder } from '../../utils/sort'
++import { columnSortOrder } from '../../utils/sort'
+ import {
+   Card, Button, Input, Form, Select, DatePicker, InputNumber, Row, Col,
+   Table, Space, Typography, Tag, Descriptions, Empty, Popconfirm, Divider, App as AntdApp,
+@@ -16,10 +19,10 @@ import dayjs from 'dayjs'
+ import Can from '../../components/Can'
+ import { useAuth } from '../../auth/AuthContext'
+ import { getErrorMessage } from '../../api/client'
++import { handleFormError } from '../../utils/formErrors'
+ import { P } from '../../constants/permissions'
+ import { salesOrdersApi } from '../../api/salesOrders.api'
+ import { pickingListsApi } from '../../api/pickingLists.api'
+-import { productsApi } from '../../api/products.api'
+ import { customersApi } from '../../api/partners.api'
+ import { warehousesApi } from '../../api/warehouses.api'
+ 
+@@ -42,38 +45,38 @@ function useNameMaps() {
+ }
+ 
+ export default function SalesOrdersPage() {
+-  const [view, setView] = useState({ mode: 'list', id: null })
+-  const openDetail = (id) => setView({ mode: 'detail', id })
++  // Chế độ xem nằm ở URL: /sales-orders | /sales-orders/new | /sales-orders/<id>
++  const { mode, id, openList, openCreate, openDetail } = useRecordView('/sales-orders')
+   return (
+     <div>
+-      {view.mode !== 'list' && (
++      {mode !== 'list' && (
+         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+           <Space>
+-            <Button icon={<ArrowLeftOutlined />} onClick={() => setView({ mode: 'list', id: null })}>Danh sách</Button>
++            <Button icon={<ArrowLeftOutlined />} onClick={openList}>Danh sách</Button>
+             <Typography.Title level={4} style={{ margin: 0 }}>Đơn bán hàng (SO)</Typography.Title>
+           </Space>
+         </div>
+       )}
+-      {view.mode === 'list' && <SOList onOpen={openDetail} onCreate={() => setView({ mode: 'create', id: null })} />}
+-      {view.mode === 'create' && <CreateSO onCreated={(so) => openDetail(so.id)} />}
+-      {view.mode === 'detail' && view.id && <SODetail id={view.id} />}
++      {mode === 'list' && <SOList onOpen={openDetail} onCreate={openCreate} />}
++      {mode === 'create' && <CreateSO onCreated={(r) => openDetail(r.id, { replace: true })} />}
++      {mode === 'detail' && id && <SODetail id={id} />}
+     </div>
+   )
+ }
+ 
+ function SOList({ onOpen, onCreate }) {
+-  const [keyword, setKeyword] = useState('')
+-  // Nhận trạng thái lọc sẵn khi được điều hướng từ thẻ KPI ở Dashboard.
+-  const location = useLocation()
+-  const [status, setStatus] = useState(location.state?.status)
+-  const [pager, setPager] = useState({ page: 0, size: 20 })
+-  const [sorter, setSorter] = useState(null)
+-  const { sort, dir } = sorterToParams(sorter)
++  // Bộ lọc nằm trong query string (?q=&status=&page=&size=&sort=&dir=).
++  // Thay cho useState + location.state: F5 không mất bộ lọc, gửi link được,
++  // Back lùi đúng bộ lọc trước, và Dashboard chỉ cần trỏ tới ?status=... .
++  const {
++    keyword, status, page, size, sort, dir, sorter,
++    setKeyword, setStatus, setPager, setSorter,
++  } = useListParams()
+   const { customerMap, warehouseMap } = useNameMaps()
+ 
+   const list = useQuery({
+-    queryKey: ['so-list', keyword, status, pager.page, pager.size, sort, dir],
+-    queryFn: () => salesOrdersApi.list({ keyword, status, page: pager.page, size: pager.size, sort, dir }),
++    queryKey: ['so-list', keyword, status, page, size, sort, dir],
++    queryFn: () => salesOrdersApi.list({ keyword, status, page: page, size: size, sort, dir }),
+     placeholderData: keepPreviousData,
+   })
+   const pageData = list.data
+@@ -94,22 +97,22 @@ function SOList({ onOpen, onCreate }) {
+         <Typography.Title level={4} style={{ marginLeft: 20, marginTop: 0 }}>Đơn bán hàng (SO)</Typography.Title>
+         <Space wrap>
+         <ExportButton filename="don-ban-hang.xlsx" fetchRows={() => salesOrdersApi.list({ keyword, status, sort, dir, size: 10000 }).then(r => r.content)} />
+-        <Input.Search allowClear placeholder="Tìm theo mã đơn" style={{ width: 220 }} prefix={<SearchOutlined />}
+-          onSearch={(v) => { setKeyword(v); setPager(p => ({ ...p, page: 0 })) }} />
++        <Input.Search allowClear key={`q-${keyword}`} defaultValue={keyword} placeholder="Tìm theo mã đơn" style={{ width: 220 }} prefix={<SearchOutlined />}
++          onSearch={(v) => setKeyword(v)} />
+         <Select allowClear placeholder="Lọc trạng thái" style={{ width: 180 }}
+           options={SO_STATUS_OPTS} value={status}
+-          onChange={(v) => { setStatus(v); setPager(p => ({ ...p, page: 0 })) }} />
++          onChange={(v) => setStatus(v)} />
+         <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching} />
+           <Can permission={P.OUTBOUND_CREATE_SO}><Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>Tạo đơn bán</Button></Can>
+         </Space>
+       </Space>
+       <FitTable rowKey="id" loading={list.isLoading} dataSource={pageData?.content || []}
+         columns={columns} scroll={{ x: 'max-content' }}
+-        onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') { setSorter(s); setPager(p => ({ ...p, page: 0 })) } }}
++        onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') setSorter(s) }}
+         pagination={{
+           current: (pageData?.page ?? 0) + 1, pageSize: pageData?.size ?? 20,
+           total: pageData?.totalElements ?? 0, showSizeChanger: true, showTotal: (t) => `Tổng ${t}`,
+-          onChange: (p, s) => setPager({ page: p - 1, size: s }),
++          onChange: (p, s) => setPager(p - 1, s),
+         }} />
+     </>
+   )
+@@ -117,9 +120,7 @@ function SOList({ onOpen, onCreate }) {
+ 
+ function useLookups() {
+   const { customers, warehouses, customerMap, warehouseMap } = useNameMaps()
+-  const products = useQuery({ queryKey: ['products', 'all'], queryFn: () => productsApi.list({ size: 500 }) })
+-  const productList = products.data?.content || []
+-  const productMap = useMemo(() => Object.fromEntries(productList.map(p => [p.id, p])), [productList])
++  const { query: products, list: productList, map: productMap } = useProducts()
+   return { customers, warehouses, products, productList, productMap, customerMap, warehouseMap }
+ }
+ const productOptions = (list) => list.map(p => ({ value: p.id, label: `${p.name} · ${p.sku}` }))
+@@ -133,7 +134,7 @@ function CreateSO({ onCreated }) {
+   const createMut = useMutation({
+     mutationFn: salesOrdersApi.create,
+     onSuccess: (so) => { message.success(`Đã tạo đơn ${so.soNumber || ''}`.trim()); onCreated(so) },
+-    onError: (e) => message.error(getErrorMessage(e)),
++    onError: (e) => handleFormError(form, e, message),
+   })
+ 
+   const submit = async () => {
+@@ -255,7 +256,7 @@ function SODetail({ id }) {
+   })
+   const createPickMut = useMutation({
+     mutationFn: () => pickingListsApi.create(id),
+-    onSuccess: (pl) => { message.success('Đã tạo lệnh lấy hàng'); navigate('/picking-lists', { state: { openId: pl.id } }) },
++    onSuccess: (pl) => { message.success('Đã tạo lệnh lấy hàng'); navigate(`/picking-lists/${pl.id}`) },
+     onError: (e) => message.error(getErrorMessage(e)),
+   })
+ 
+@@ -291,7 +292,7 @@ function SODetail({ id }) {
+           )}
+           {(s === 'PICKING') && hasPermission(P.OUTBOUND_SHIP) && (
+             <Button type="primary" icon={<CarOutlined />}
+-              onClick={() => navigate('/shipments', { state: { salesOrderId: so.id } })}>Tạo vận đơn</Button>
++              onClick={() => navigate(`/shipments/new?soId=${so.id}`)}>Tạo vận đơn</Button>
+           )}
+           {(s === 'DRAFT' || s === 'ALLOCATED') && (
+             <Can permission={P.OUTBOUND_CREATE_SO}>
+diff --git a/frontend/src/features/outbound/ShipmentsPage.jsx b/frontend/src/features/outbound/ShipmentsPage.jsx
+index e1f59cf..c1d0898 100644
+--- a/frontend/src/features/outbound/ShipmentsPage.jsx
++++ b/frontend/src/features/outbound/ShipmentsPage.jsx
+@@ -1,10 +1,10 @@
+ import FitTable from '../../components/FitTable'
+ import { useMemo, useState } from 'react'
+-import { useLocation } from 'react-router-dom'
++import { useSearchParams } from 'react-router-dom'
++import { useRecordView } from '../../hooks/useRecordView'
+ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+ import {
+-  Card, Button, Input, Form, Select, Table, Space, Typography, Tag,
+-  Descriptions, Empty, Modal, App as AntdApp,
++  Card, Button, Input, Form, Select, Space, Typography, Tag, Descriptions, Empty, Modal, App as AntdApp,
+ } from 'antd'
+ import {
+   PlusOutlined, ReloadOutlined, ArrowLeftOutlined, TagOutlined,
+@@ -34,28 +34,29 @@ function useCarrierMap() {
+ }
+ 
+ export default function ShipmentsPage() {
+-  const location = useLocation()
+-  const salesOrderId = location.state?.salesOrderId || null
+-  const [view, setView] = useState(salesOrderId ? { mode: 'create', id: null } : { mode: 'list', id: null })
+-  const openDetail = (id) => setView({ mode: 'detail', id })
++  // /shipments | /shipments/new?soId=... | /shipments/<id>
++  const { mode, id, openList, openCreate, openDetail } = useRecordView('/shipments')
++  const [sp] = useSearchParams()
++  const salesOrderId = sp.get('soId') || null
+   return (
+     <div>
+       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+         <Space>
+-          {view.mode !== 'list' && (
+-            <Button icon={<ArrowLeftOutlined />} onClick={() => setView({ mode: 'list', id: null })}>Danh sách</Button>
++          {mode !== 'list' && (
++            <Button icon={<ArrowLeftOutlined />} onClick={openList}>Danh sách</Button>
+           )}
+         </Space>
+ 
+       </div>
+-      {view.mode === 'list' && <SHList onOpen={openDetail} />}
+-      {view.mode === 'create' && <CreateSH initialSoId={salesOrderId} onCreated={(sh) => openDetail(sh.id)} />}
+-      {view.mode === 'detail' && view.id && <SHDetail id={view.id} />}
++      {/* BUG CŨ: SHList gọi setView() của cha => ReferenceError khi bấm "Tạo vận đơn". */}
++      {mode === 'list' && <SHList onOpen={openDetail} onCreate={openCreate} />}
++      {mode === 'create' && <CreateSH initialSoId={salesOrderId} onCreated={(sh) => openDetail(sh.id, { replace: true })} />}
++      {mode === 'detail' && id && <SHDetail id={id} />}
+     </div>
+   )
+ }
+ 
+-function SHList({ onOpen }) {
++function SHList({ onOpen, onCreate }) {
+   const list = useQuery({ queryKey: ['sh-list'], queryFn: shipmentsApi.list })
+   const { carrierMap } = useCarrierMap()
+   const columns = [
+@@ -73,7 +74,7 @@ function SHList({ onOpen }) {
+         <Space> 
+         <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching}>Làm mới</Button>
+         <Can permission={P.OUTBOUND_SHIP}>
+-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setView({ mode: 'create', id: null })}>Tạo vận đơn</Button>
++          <Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>Tạo vận đơn</Button>
+         </Can>
+         </Space>
+       </Space>
+diff --git a/frontend/src/features/partners/PartnersPage.jsx b/frontend/src/features/partners/PartnersPage.jsx
+index 499eb18..482bfec 100644
+--- a/frontend/src/features/partners/PartnersPage.jsx
++++ b/frontend/src/features/partners/PartnersPage.jsx
+@@ -1,11 +1,12 @@
+ import FitTable from '../../components/FitTable'
+ import { useState } from 'react'
+ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+-import { Tabs, Tag, Table, Button, Modal, Form, Input, App as AntdApp } from 'antd'
++import { Tabs, Tag, Button, Modal, Form, Input, App as AntdApp } from 'antd'
+ import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+ import CrudResource from '../../components/CrudResource'
+ import { suppliersApi, customersApi, carriersApi } from '../../api/partners.api'
+-import { getErrorMessage } from '../../api/client'
++
++import { handleFormError } from '../../utils/formErrors'
+ import { P } from '../../constants/permissions'
+ 
+ const partnerPerms = {
+@@ -88,7 +89,7 @@ function Carriers() {
+   const createMut = useMutation({
+     mutationFn: carriersApi.create,
+     onSuccess: () => { message.success('Đã tạo đơn vị vận chuyển'); setOpen(false); qc.invalidateQueries({ queryKey: ['carriers'] }) },
+-    onError: (e) => message.error(getErrorMessage(e)),
++    onError: (e) => handleFormError(form, e, message),
+   })
+ 
+   const submit = async () => {
+diff --git a/frontend/src/features/products/ProductsPage.jsx b/frontend/src/features/products/ProductsPage.jsx
+index 60ab476..efe920d 100644
+--- a/frontend/src/features/products/ProductsPage.jsx
++++ b/frontend/src/features/products/ProductsPage.jsx
+@@ -4,8 +4,7 @@ import FitTable from '../../components/FitTable'
+ import { useState } from 'react'
+ import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+ import {
+-  Table, Button, Space, Modal, Form, Input, Select, InputNumber, Switch, Tag,
+-  Popconfirm, Typography, App as AntdApp,
++  Button, Space, Modal, Form, Input, Select, InputNumber, Switch, Tag, Popconfirm, Typography, App as AntdApp,
+ } from 'antd'
+ import {
+   PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, SearchOutlined,
+@@ -14,6 +13,7 @@ import Can from '../../components/Can'
+ import { productsApi } from '../../api/products.api'
+ import { categoriesApi } from '../../api/categories.api'
+ import { getErrorMessage } from '../../api/client'
++import { handleFormError } from '../../utils/formErrors'
+ import { P } from '../../constants/permissions'
+ import { UNITS, UNIT_LABEL } from '../../constants/units'
+ 
+@@ -36,15 +36,17 @@ export default function ProductsPage() {
+   })
+ 
+   const invalidate = () => qc.invalidateQueries({ queryKey: ['products'] })
++  // onError: lỗi validate của BE được gắn thẳng vào ô sai trong form
++  // (kèm cuộn tới ô đó); lỗi nghiệp vụ/mạng thì rơi về toast như cũ.
+   const createMut = useMutation({
+     mutationFn: productsApi.create,
+     onSuccess: () => { message.success('Đã tạo sản phẩm'); setOpen(false); invalidate() },
+-    onError: (e) => message.error(getErrorMessage(e)),
++    onError: (e) => handleFormError(form, e, message),
+   })
+   const updateMut = useMutation({
+     mutationFn: ({ id, body }) => productsApi.update(id, body),
+     onSuccess: () => { message.success('Đã cập nhật'); setOpen(false); invalidate() },
+-    onError: (e) => message.error(getErrorMessage(e)),
++    onError: (e) => handleFormError(form, e, message),
+   })
+   const removeMut = useMutation({
+     mutationFn: productsApi.remove,
+diff --git a/frontend/src/features/roles/RolesPage.jsx b/frontend/src/features/roles/RolesPage.jsx
+index 925110c..487a40f 100644
+--- a/frontend/src/features/roles/RolesPage.jsx
++++ b/frontend/src/features/roles/RolesPage.jsx
+@@ -2,8 +2,7 @@ import FitTable from '../../components/FitTable'
+ import { useMemo, useState } from 'react'
+ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+ import {
+-  Table, Button, Space, Modal, Form, Input, Popconfirm, Typography,
+-  Checkbox, Collapse, Tag, Empty, App as AntdApp,
++  Button, Space, Modal, Form, Input, Popconfirm, Typography, Checkbox, Collapse, Tag, Empty, App as AntdApp,
+ } from 'antd'
+ import {
+   PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, SafetyCertificateOutlined,
+@@ -12,6 +11,7 @@ import Can from '../../components/Can'
+ import { rolesApi } from '../../api/roles.api'
+ import { permissionsApi } from '../../api/permissions.api'
+ import { getErrorMessage } from '../../api/client'
++import { handleFormError } from '../../utils/formErrors'
+ import { P } from '../../constants/permissions'
+ 
+ export default function RolesPage() {
+@@ -28,17 +28,17 @@ export default function RolesPage() {
+   const createMut = useMutation({
+     mutationFn: rolesApi.create,
+     onSuccess: () => { message.success('Đã tạo vai trò'); setOpen(false); invalidate() },
+-    onError: (e) => message.error(getErrorMessage(e)),
++    onError: (e) => handleFormError(form, e, message),
+   })
+   const updateMut = useMutation({
+     mutationFn: ({ id, body }) => rolesApi.update(id, body),
+     onSuccess: () => { message.success('Đã cập nhật'); setOpen(false); invalidate() },
+-    onError: (e) => message.error(getErrorMessage(e)),
++    onError: (e) => handleFormError(form, e, message),
+   })
+   const removeMut = useMutation({
+     mutationFn: rolesApi.remove,
+     onSuccess: () => { message.success('Đã xoá'); invalidate() },
+-    onError: (e) => message.error(getErrorMessage(e)),
++    onError: (e) => handleFormError(form, e, message),
+   })
+ 
+   const openCreate = () => { setEditing(null); form.resetFields(); setOpen(true) }
+diff --git a/frontend/src/features/stocktake/AdjustmentsPage.jsx b/frontend/src/features/stocktake/AdjustmentsPage.jsx
+index 7409f49..70fa820 100644
+--- a/frontend/src/features/stocktake/AdjustmentsPage.jsx
++++ b/frontend/src/features/stocktake/AdjustmentsPage.jsx
+@@ -1,8 +1,10 @@
+ import ExportButton from '../../components/ExportButton'
+-import { sorterToParams, columnSortOrder } from '../../utils/sort'
++import { columnSortOrder } from '../../utils/sort'
+ import FitTable from '../../components/FitTable'
+-import { useMemo, useState } from 'react'
+-import { useLocation } from 'react-router-dom'
++import { useMemo } from 'react'
++import { useProducts } from '../../hooks/useProducts'
++import { useRecordView } from '../../hooks/useRecordView'
++import { useListParams } from '../../hooks/useListParams'
+ import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+ import {
+   Card, Button, Input, Select, Table, Space, Typography, Tag, Descriptions, Empty,
+@@ -14,7 +16,6 @@ import Can from '../../components/Can'
+ import { getErrorMessage } from '../../api/client'
+ import { P } from '../../constants/permissions'
+ import { adjustmentsApi } from '../../api/adjustments.api'
+-import { productsApi } from '../../api/products.api'
+ import { warehousesApi } from '../../api/warehouses.api'
+ import { useBinLabels } from '../../hooks/useBinLabels'
+ 
+@@ -28,42 +29,41 @@ const AV_STATUS_OPTS = Object.entries(AV_STATUS).map(([value, m]) => ({ value, l
+ 
+ function useMaps() {
+   const warehouses = useQuery({ queryKey: ['warehouses', 'active'], queryFn: () => warehousesApi.list(false) })
+-  const products = useQuery({ queryKey: ['products', 'all'], queryFn: () => productsApi.list({ size: 500 }) })
++  const { map: productMap } = useProducts()
+   const warehouseMap = useMemo(() => Object.fromEntries((warehouses.data || []).map(w => [w.id, w])), [warehouses.data])
+-  const productMap = useMemo(() => Object.fromEntries((products.data?.content || []).map(p => [p.id, p])), [products.data])
+   return { warehouseMap, productMap }
+ }
+ 
+ export default function AdjustmentsPage() {
+-  const [view, setView] = useState({ mode: 'list', id: null })
+-  const openDetail = (id) => setView({ mode: 'detail', id })
++  // Chế độ xem nằm ở URL: /adjustment-vouchers | /adjustment-vouchers/new | /adjustment-vouchers/<id>
++  const { mode, id, openList, openDetail } = useRecordView('/adjustment-vouchers')
+   return (
+     <div>
+-      {view.mode !== 'list' && (
++      {mode !== 'list' && (
+         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+           <Space>
+-            <Button icon={<ArrowLeftOutlined />} onClick={() => setView({ mode: 'list', id: null })}>Danh sách</Button>
++            <Button icon={<ArrowLeftOutlined />} onClick={openList}>Danh sách</Button>
+             <Typography.Title level={4} style={{ margin: 0 }}>Phiếu điều chỉnh tồn</Typography.Title>
+           </Space>
+         </div>
+       )}
+-      {view.mode === 'list' ? <AVList onOpen={openDetail} /> : <AVDetail id={view.id} />}
++      {mode === 'list' ? <AVList onOpen={openDetail} /> : (id && <AVDetail id={id} />)}
+     </div>
+   )
+ }
+ 
+ function AVList({ onOpen }) {
+-  const [keyword, setKeyword] = useState('')
+-  // Nhận trạng thái lọc sẵn khi được điều hướng từ thẻ KPI ở Dashboard.
+-  const location = useLocation()
+-  const [status, setStatus] = useState(location.state?.status)
+-  const [pager, setPager] = useState({ page: 0, size: 20 })
+-  const [sorter, setSorter] = useState(null)
+-  const { sort, dir } = sorterToParams(sorter)
++  // Bộ lọc nằm trong query string (?q=&status=&page=&size=&sort=&dir=).
++  // Thay cho useState + location.state: F5 không mất bộ lọc, gửi link được,
++  // Back lùi đúng bộ lọc trước, và Dashboard chỉ cần trỏ tới ?status=... .
++  const {
++    keyword, status, page, size, sort, dir, sorter,
++    setKeyword, setStatus, setPager, setSorter,
++  } = useListParams()
+   const { warehouseMap } = useMaps()
+   const list = useQuery({
+-    queryKey: ['av-list', keyword, status, pager.page, pager.size, sort, dir],
+-    queryFn: () => adjustmentsApi.list({ keyword, status, page: pager.page, size: pager.size, sort, dir }),
++    queryKey: ['av-list', keyword, status, page, size, sort, dir],
++    queryFn: () => adjustmentsApi.list({ keyword, status, page: page, size: size, sort, dir }),
+     placeholderData: keepPreviousData,
+   })
+   const pageData = list.data
+@@ -82,21 +82,21 @@ function AVList({ onOpen }) {
+         <Typography.Title level={4} style={{ marginLeft: 20, marginTop: 0 }}>Phiếu điều chỉnh tồn</Typography.Title>
+         <Space wrap>
+         <ExportButton filename="phieu-dieu-chinh.xlsx" fetchRows={() => adjustmentsApi.list({ keyword, status, sort, dir, size: 10000 }).then(r => r.content)} />
+-        <Input.Search allowClear placeholder="Tìm theo mã phiếu" style={{ width: 220 }} prefix={<SearchOutlined />}
+-          onSearch={(v) => { setKeyword(v); setPager(p => ({ ...p, page: 0 })) }} />
++        <Input.Search allowClear key={`q-${keyword}`} defaultValue={keyword} placeholder="Tìm theo mã phiếu" style={{ width: 220 }} prefix={<SearchOutlined />}
++          onSearch={(v) => setKeyword(v)} />
+         <Select allowClear placeholder="Lọc trạng thái" style={{ width: 160 }}
+           options={AV_STATUS_OPTS} value={status}
+-          onChange={(v) => { setStatus(v); setPager(p => ({ ...p, page: 0 })) }} />
++          onChange={(v) => setStatus(v)} />
+         <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching} />
+         </Space>
+       </Space>
+       <FitTable rowKey="id" loading={list.isLoading} dataSource={pageData?.content || []} columns={columns}
+         scroll={{ x: 'max-content' }}
+-        onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') { setSorter(s); setPager(p => ({ ...p, page: 0 })) } }}
++        onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') setSorter(s) }}
+         pagination={{
+           current: (pageData?.page ?? 0) + 1, pageSize: pageData?.size ?? 20,
+           total: pageData?.totalElements ?? 0, showSizeChanger: true, showTotal: (t) => `Tổng ${t}`,
+-          onChange: (p, s) => setPager({ page: p - 1, size: s }),
++          onChange: (p, s) => setPager(p - 1, s),
+         }} />
+     </>
+   )
+diff --git a/frontend/src/features/stocktake/StocktakesPage.jsx b/frontend/src/features/stocktake/StocktakesPage.jsx
+index 6da695e..5bc921d 100644
+--- a/frontend/src/features/stocktake/StocktakesPage.jsx
++++ b/frontend/src/features/stocktake/StocktakesPage.jsx
+@@ -1,12 +1,14 @@
+ import ExportButton from '../../components/ExportButton'
+-import { sorterToParams, columnSortOrder } from '../../utils/sort'
++import { columnSortOrder } from '../../utils/sort'
+ import FitTable from '../../components/FitTable'
+ import { useMemo, useState } from 'react'
++import { useProducts } from '../../hooks/useProducts'
++import { useRecordView } from '../../hooks/useRecordView'
++import { useListParams } from '../../hooks/useListParams'
+ import { useNavigate } from 'react-router-dom'
+ import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+ import {
+-  Card, Button, Select, Table, Space, Typography, Tag, Descriptions, Empty,
+-  Modal, Form, InputNumber, Input, App as AntdApp,
++  Card, Button, Select, Table, Space, Typography, Tag, Descriptions, Empty, Modal, Form, InputNumber, App as AntdApp,
+ } from 'antd'
+ import {
+   PlusOutlined, ReloadOutlined, ArrowLeftOutlined, EditOutlined,
+@@ -14,11 +16,9 @@ import {
+ } from '@ant-design/icons'
+ import dayjs from 'dayjs'
+ import Can from '../../components/Can'
+-import { useAuth } from '../../auth/AuthContext'
+ import { getErrorMessage } from '../../api/client'
+ import { P } from '../../constants/permissions'
+ import { stocktakesApi } from '../../api/stocktakes.api'
+-import { productsApi } from '../../api/products.api'
+ import { warehousesApi } from '../../api/warehouses.api'
+ import { useBinLabels } from '../../hooks/useBinLabels'
+ 
+@@ -36,41 +36,43 @@ function useWarehouseMap() {
+   return { warehouses, warehouseMap: map }
+ }
+ function useProductMap() {
+-  const products = useQuery({ queryKey: ['products', 'all'], queryFn: () => productsApi.list({ size: 500 }) })
+-  const map = useMemo(() => Object.fromEntries((products.data?.content || []).map(p => [p.id, p])), [products.data])
++  const { map } = useProducts()
+   return { map }
+ }
+ 
+ export default function StocktakesPage() {
+-  const [view, setView] = useState({ mode: 'list', id: null })
++  // Chế độ xem nằm ở URL: /stocktakes | /stocktakes/<id>
++  const { mode, id, openList, openDetail } = useRecordView('/stocktakes')
+   const [startOpen, setStartOpen] = useState(false)
+-  const openDetail = (id) => setView({ mode: 'detail', id })
+   return (
+     <div>
+-      {view.mode !== 'list' && (
++      {mode !== 'list' && (
+         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+           <Space>
+-            <Button icon={<ArrowLeftOutlined />} onClick={() => setView({ mode: 'list', id: null })}>Danh sách</Button>
++            <Button icon={<ArrowLeftOutlined />} onClick={openList}>Danh sách</Button>
+             <Typography.Title level={4} style={{ margin: 0 }}>Kiểm kê kho (Stocktake)</Typography.Title>
+           </Space>
+         </div>
+       )}
+-      {view.mode === 'list' && <STList onOpen={openDetail} onCreate={() => setStartOpen(true)} />}
+-      {view.mode === 'detail' && view.id && <STDetail id={view.id} />}
++      {mode === 'list' && <STList onOpen={openDetail} onCreate={() => setStartOpen(true)} />}
++      {mode === 'detail' && id && <STDetail id={id} />}
+       <StartModal open={startOpen} onClose={() => setStartOpen(false)} onStarted={(r) => openDetail(r.session.id)} />
+     </div>
+   )
+ }
+ 
+ function STList({ onOpen, onCreate }) {
+-  const [status, setStatus] = useState()
+-  const [pager, setPager] = useState({ page: 0, size: 20 })
+-  const [sorter, setSorter] = useState(null)
+-  const { sort, dir } = sorterToParams(sorter)
++  // Bộ lọc nằm trong query string (?q=&status=&page=&size=&sort=&dir=).
++  // Thay cho useState + location.state: F5 không mất bộ lọc, gửi link được,
++  // Back lùi đúng bộ lọc trước, và Dashboard chỉ cần trỏ tới ?status=... .
++  const {
++    status, page, size, sort, dir, sorter,
++    setStatus, setPager, setSorter,
++  } = useListParams()
+   const { warehouseMap } = useWarehouseMap()
+   const list = useQuery({
+-    queryKey: ['stk-list', status, pager.page, pager.size, sort, dir],
+-    queryFn: () => stocktakesApi.list({ status, page: pager.page, size: pager.size, sort, dir }),
++    queryKey: ['stk-list', status, page, size, sort, dir],
++    queryFn: () => stocktakesApi.list({ status, page: page, size: size, sort, dir }),
+     placeholderData: keepPreviousData,
+   })
+   const pageData = list.data
+@@ -90,18 +92,18 @@ function STList({ onOpen, onCreate }) {
+         <ExportButton filename="phien-kiem-ke.xlsx" fetchRows={() => stocktakesApi.list({ status, sort, dir, size: 10000 }).then(r => r.content)} />
+         <Select allowClear placeholder="Lọc trạng thái" style={{ width: 180 }}
+           options={ST_STATUS_OPTS} value={status}
+-          onChange={(v) => { setStatus(v); setPager(p => ({ ...p, page: 0 })) }} />
++          onChange={(v) => setStatus(v)} />
+         <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching} />
+           <Can permission={P.STOCKTAKE_MANAGE}><Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>Bắt đầu kiểm kê</Button></Can>
+         </Space>
+       </Space>
+       <FitTable rowKey="id" loading={list.isLoading} dataSource={pageData?.content || []} columns={columns}
+         scroll={{ x: 'max-content' }}
+-        onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') { setSorter(s); setPager(p => ({ ...p, page: 0 })) } }}
++        onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') setSorter(s) }}
+         pagination={{
+           current: (pageData?.page ?? 0) + 1, pageSize: pageData?.size ?? 20,
+           total: pageData?.totalElements ?? 0, showSizeChanger: true, showTotal: (t) => `Tổng ${t}`,
+-          onChange: (p, s) => setPager({ page: p - 1, size: s }),
++          onChange: (p, s) => setPager(p - 1, s),
+         }} />
+     </>
+   )
+diff --git a/frontend/src/features/transfer/TransferOrdersPage.jsx b/frontend/src/features/transfer/TransferOrdersPage.jsx
+index 69d288e..2f5658f 100644
+--- a/frontend/src/features/transfer/TransferOrdersPage.jsx
++++ b/frontend/src/features/transfer/TransferOrdersPage.jsx
+@@ -1,8 +1,10 @@
+ import ExportButton from '../../components/ExportButton'
+-import { sorterToParams, columnSortOrder } from '../../utils/sort'
++import { columnSortOrder } from '../../utils/sort'
+ import FitTable from '../../components/FitTable'
+ import { useEffect, useMemo, useState } from 'react'
+-import { useLocation } from 'react-router-dom'
++import { useProducts } from '../../hooks/useProducts'
++import { useRecordView } from '../../hooks/useRecordView'
++import { useListParams } from '../../hooks/useListParams'
+ import { keepPreviousData, useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query'
+ import {
+   Card, Button, Input, Form, Select, InputNumber, Row, Col, Table, Space,
+@@ -18,9 +20,9 @@ import Can from '../../components/Can'
+ import BarcodeScanner from '../../components/BarcodeScanner'
+ import { useAuth } from '../../auth/AuthContext'
+ import { getErrorMessage } from '../../api/client'
++import { handleFormError } from '../../utils/formErrors'
+ import { P } from '../../constants/permissions'
+ import { transferOrdersApi } from '../../api/transferOrders.api'
+-import { productsApi } from '../../api/products.api'
+ import { warehousesApi } from '../../api/warehouses.api'
+ import { carriersApi } from '../../api/partners.api'
+ import { inventoryApi } from '../../api/inventory.api'
+@@ -44,9 +46,7 @@ function useNameMaps() {
+   return { warehouses, warehouseMap }
+ }
+ function useProductMap() {
+-  const products = useQuery({ queryKey: ['products', 'all'], queryFn: () => productsApi.list({ size: 500 }) })
+-  const list = products.data?.content || []
+-  const map = useMemo(() => Object.fromEntries(list.map(p => [p.id, p])), [list])
++  const { query: products, list, map } = useProducts()
+   return { products, list, map }
+ }
+ const productOptions = (list) => list.map(p => ({ value: p.id, label: `${p.name} · ${p.sku}` }))
+@@ -82,37 +82,37 @@ function useBatchNumberMap(warehouseId, productIds) {
+ }
+ 
+ export default function TransferOrdersPage() {
+-  const [view, setView] = useState({ mode: 'list', id: null })
+-  const openDetail = (id) => setView({ mode: 'detail', id })
++  // Chế độ xem nằm ở URL: /transfer-orders | /transfer-orders/new | /transfer-orders/<id>
++  const { mode, id, openList, openCreate, openDetail } = useRecordView('/transfer-orders')
+   return (
+     <div>
+-      {view.mode !== 'list' && (
++      {mode !== 'list' && (
+         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+           <Space>
+-            <Button icon={<ArrowLeftOutlined />} onClick={() => setView({ mode: 'list', id: null })}>Danh sách</Button>
++            <Button icon={<ArrowLeftOutlined />} onClick={openList}>Danh sách</Button>
+             <Typography.Title level={4} style={{ margin: 0 }}>Điều chuyển nội bộ (Transfer)</Typography.Title>
+           </Space>
+         </div>
+       )}
+-      {view.mode === 'list' && <TOList onOpen={openDetail} onCreate={() => setView({ mode: 'create', id: null })} />}
+-      {view.mode === 'create' && <CreateTO onCreated={(to) => openDetail(to.id)} />}
+-      {view.mode === 'detail' && view.id && <TODetail id={view.id} />}
++      {mode === 'list' && <TOList onOpen={openDetail} onCreate={openCreate} />}
++      {mode === 'create' && <CreateTO onCreated={(r) => openDetail(r.id, { replace: true })} />}
++      {mode === 'detail' && id && <TODetail id={id} />}
+     </div>
+   )
+ }
+ 
+ function TOList({ onOpen, onCreate }) {
+-  const [keyword, setKeyword] = useState('')
+-  // Nhận trạng thái lọc sẵn khi được điều hướng từ thẻ KPI ở Dashboard.
+-  const location = useLocation()
+-  const [status, setStatus] = useState(location.state?.status)
+-  const [pager, setPager] = useState({ page: 0, size: 20 })
+-  const [sorter, setSorter] = useState(null)
+-  const { sort, dir } = sorterToParams(sorter)
++  // Bộ lọc nằm trong query string (?q=&status=&page=&size=&sort=&dir=).
++  // Thay cho useState + location.state: F5 không mất bộ lọc, gửi link được,
++  // Back lùi đúng bộ lọc trước, và Dashboard chỉ cần trỏ tới ?status=... .
++  const {
++    keyword, status, page, size, sort, dir, sorter,
++    setKeyword, setStatus, setPager, setSorter,
++  } = useListParams()
+   const { warehouseMap } = useNameMaps()
+   const list = useQuery({
+-    queryKey: ['to-list', keyword, status, pager.page, pager.size, sort, dir],
+-    queryFn: () => transferOrdersApi.list({ keyword, status, page: pager.page, size: pager.size, sort, dir }),
++    queryKey: ['to-list', keyword, status, page, size, sort, dir],
++    queryFn: () => transferOrdersApi.list({ keyword, status, page: page, size: size, sort, dir }),
+     placeholderData: keepPreviousData,
+   })
+   const pageData = list.data
+@@ -130,22 +130,22 @@ function TOList({ onOpen, onCreate }) {
+         <Typography.Title level={4} style={{ marginLeft: 20, marginTop: 0 }}>Điều chuyển nội bộ (Transfer)</Typography.Title>
+         <Space wrap>
+         <ExportButton filename="phieu-dieu-chuyen.xlsx" fetchRows={() => transferOrdersApi.list({ keyword, status, sort, dir, size: 10000 }).then(r => r.content)} />
+-        <Input.Search allowClear placeholder="Tìm theo mã phiếu" style={{ width: 220 }} prefix={<SearchOutlined />}
+-          onSearch={(v) => { setKeyword(v); setPager(p => ({ ...p, page: 0 })) }} />
++        <Input.Search allowClear key={`q-${keyword}`} defaultValue={keyword} placeholder="Tìm theo mã phiếu" style={{ width: 220 }} prefix={<SearchOutlined />}
++          onSearch={(v) => setKeyword(v)} />
+         <Select allowClear placeholder="Lọc trạng thái" style={{ width: 180 }}
+           options={TO_STATUS_OPTS} value={status}
+-          onChange={(v) => { setStatus(v); setPager(p => ({ ...p, page: 0 })) }} />
++          onChange={(v) => setStatus(v)} />
+         <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching} />
+           <Can permission={P.TRANSFER_CREATE}><Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>Tạo phiếu chuyển</Button></Can>
+         </Space>
+       </Space>
+       <FitTable rowKey="id" loading={list.isLoading} dataSource={pageData?.content || []} columns={columns}
+         scroll={{ x: 'max-content' }}
+-        onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') { setSorter(s); setPager(p => ({ ...p, page: 0 })) } }}
++        onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') setSorter(s) }}
+         pagination={{
+           current: (pageData?.page ?? 0) + 1, pageSize: pageData?.size ?? 20,
+           total: pageData?.totalElements ?? 0, showSizeChanger: true, showTotal: (t) => `Tổng ${t}`,
+-          onChange: (p, s) => setPager({ page: p - 1, size: s }),
++          onChange: (p, s) => setPager(p - 1, s),
+         }} />
+     </>
+   )
+@@ -207,7 +207,7 @@ function CreateTO({ onCreated }) {
+   const createMut = useMutation({
+     mutationFn: transferOrdersApi.create,
+     onSuccess: (to) => { message.success(`Đã tạo phiếu ${to.transferNumber || ''}`.trim()); onCreated(to) },
+-    onError: (e) => message.error(getErrorMessage(e)),
++    onError: (e) => handleFormError(form, e, message),
+   })
+ 
+   const submit = async () => {
+@@ -484,7 +484,7 @@ function TransferScanModal({ open, onClose, transferId, productMap, binMap = {},
+         <>
+           <div style={{ marginBottom: 8 }}>
+             <div style={{ fontWeight: 600 }}>{productMap[current.productId]?.name || current.productId}</div>
+-            <Space size="large" style={{ fontSize: 13, color: 'rgba(0,0,0,.65)' }}>
++            <Space size="large" style={{ fontSize: 13 }}>
+               <span>Ô kệ: <b>{binMap[current.binLocationId] || current.binLocationId}</b></span>
+               <span>SL: <b>{current.quantityToPick}</b></span>
+             </Space>
+@@ -546,7 +546,7 @@ function ReceiveModal({ open, onClose, to, productMap, onDone }) {
+   const mut = useMutation({
+     mutationFn: (lines) => transferOrdersApi.complete(to.id, lines),
+     onSuccess: (u) => { message.success('Đã nhận hàng & hoàn thành'); onDone(u); onClose() },
+-    onError: (e) => message.error(getErrorMessage(e)),
++    onError: (e) => handleFormError(form, e, message),
+   })
+ 
+   const submit = async () => {
+diff --git a/frontend/src/features/users/UsersPage.jsx b/frontend/src/features/users/UsersPage.jsx
+index 2f782f2..1bdd984 100644
+--- a/frontend/src/features/users/UsersPage.jsx
++++ b/frontend/src/features/users/UsersPage.jsx
+@@ -2,8 +2,7 @@ import FitTable from '../../components/FitTable'
+ import { useState } from 'react'
+ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+ import {
+-  Table, Button, Space, Modal, Form, Input, Select, Tag, Popconfirm,
+-  Typography, Alert, Empty, App as AntdApp,
++  Button, Space, Modal, Form, Input, Select, Tag, Popconfirm, Typography, Alert, Empty, App as AntdApp,
+ } from 'antd'
+ import {
+   PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, HomeOutlined,
+@@ -13,6 +12,7 @@ import { usersApi } from '../../api/users.api'
+ import { rolesApi } from '../../api/roles.api'
+ import { warehousesApi } from '../../api/warehouses.api'
+ import { getErrorMessage } from '../../api/client'
++import { handleFormError } from '../../utils/formErrors'
+ import { P } from '../../constants/permissions'
+ 
+ export default function UsersPage() {
+@@ -30,17 +30,17 @@ export default function UsersPage() {
+   const createMut = useMutation({
+     mutationFn: usersApi.create,
+     onSuccess: () => { message.success('Đã tạo người dùng'); setOpen(false); invalidate() },
+-    onError: (e) => message.error(getErrorMessage(e)),
++    onError: (e) => handleFormError(form, e, message),
+   })
+   const updateMut = useMutation({
+     mutationFn: ({ id, body }) => usersApi.update(id, body),
+     onSuccess: () => { message.success('Đã cập nhật'); setOpen(false); invalidate() },
+-    onError: (e) => message.error(getErrorMessage(e)),
++    onError: (e) => handleFormError(form, e, message),
+   })
+   const removeMut = useMutation({
+     mutationFn: usersApi.remove,
+     onSuccess: () => { message.success('Đã xoá'); invalidate() },
+-    onError: (e) => message.error(getErrorMessage(e)),
++    onError: (e) => handleFormError(form, e, message),
+   })
+ 
+   const openCreate = () => { setEditing(null); form.resetFields(); setOpen(true) }
+@@ -52,6 +52,7 @@ export default function UsersPage() {
+   const submit = async () => {
+     const body = await form.validateFields()
+     if (editing) {
++      // eslint-disable-next-line no-unused-vars -- loại 2 trường này khỏi payload update
+       const { password, username, ...rest } = body // không đổi username/password ở update
+       updateMut.mutate({ id: editing.id, body: rest })
+     } else {
+diff --git a/frontend/src/features/warehouses/WarehousesPage.jsx b/frontend/src/features/warehouses/WarehousesPage.jsx
+index 02283e9..ae29929 100644
+--- a/frontend/src/features/warehouses/WarehousesPage.jsx
++++ b/frontend/src/features/warehouses/WarehousesPage.jsx
+@@ -11,6 +11,7 @@ import {
+ import Can from '../../components/Can'
+ import { warehousesApi } from '../../api/warehouses.api'
+ import { getErrorMessage } from '../../api/client'
++import { handleFormError } from '../../utils/formErrors'
+ import { P } from '../../constants/permissions'
+ import { useAuth } from '../../auth/AuthContext'
+ 
+@@ -33,17 +34,17 @@ export default function WarehousesPage() {
+   const createMut = useMutation({
+     mutationFn: warehousesApi.create,
+     onSuccess: () => { message.success('Đã tạo kho'); setOpen(false); invalidate() },
+-    onError: (e) => message.error(getErrorMessage(e)),
++    onError: (e) => handleFormError(form, e, message),
+   })
+   const updateMut = useMutation({
+     mutationFn: ({ id, body }) => warehousesApi.update(id, body),
+     onSuccess: () => { message.success('Đã cập nhật'); setOpen(false); invalidate() },
+-    onError: (e) => message.error(getErrorMessage(e)),
++    onError: (e) => handleFormError(form, e, message),
+   })
+   const removeMut = useMutation({
+     mutationFn: warehousesApi.remove,
+     onSuccess: () => { message.success('Đã xoá (mềm)'); invalidate() },
+-    onError: (e) => message.error(getErrorMessage(e)),
++    onError: (e) => handleFormError(form, e, message),
+   })
+ 
+   const openCreate = () => { setEditing(null); form.resetFields(); setOpen(true) }
+diff --git a/frontend/src/hooks/useListParams.js b/frontend/src/hooks/useListParams.js
+new file mode 100644
+index 0000000..0ec92d0
+--- /dev/null
++++ b/frontend/src/hooks/useListParams.js
+@@ -0,0 +1,55 @@
++import { useCallback, useMemo } from 'react'
++import { useSearchParams } from 'react-router-dom'
++
++/**
++ * Đưa bộ lọc danh sách (từ khoá / trạng thái / trang / cỡ trang / sắp xếp) vào
++ * query string thay vì useState.
++ *
++ * Lợi ích thực tế:
++ *  - F5 không mất bộ lọc đang xem.
++ *  - Gửi được link "danh sách PO chờ duyệt" cho người khác.
++ *  - Nút Back của trình duyệt lùi lại bộ lọc trước đó.
++ *  - Dashboard chỉ cần điều hướng tới `/purchase-orders?status=PENDING_APPROVAL`
++ *    là trang tự lọc — không cần location.state (state không sống qua F5).
++ *
++ * Trả về giá trị + các setter đã tự reset về trang 0 khi đổi điều kiện lọc.
++ */
++export function useListParams({ defaultSize = 20 } = {}) {
++  const [sp, setSp] = useSearchParams()
++
++  const keyword = sp.get('q') || ''
++  const status = sp.get('status') || undefined
++  const page = Number(sp.get('page') || 0)
++  const size = Number(sp.get('size') || defaultSize)
++  const sort = sp.get('sort') || undefined
++  const dir = sp.get('dir') || undefined
++
++  // Gộp mọi thay đổi qua 1 chỗ: bỏ key rỗng cho URL sạch, giữ nguyên các key lạ.
++  const patch = useCallback((changes, { resetPage = true } = {}) => {
++    setSp((prev) => {
++      const next = new URLSearchParams(prev)
++      const all = resetPage ? { page: 0, ...changes } : changes
++      Object.entries(all).forEach(([k, v]) => {
++        if (v === undefined || v === null || v === '' || (k === 'page' && Number(v) === 0)) next.delete(k)
++        else next.set(k, String(v))
++      })
++      return next
++    }, { replace: true })
++  }, [setSp])
++
++  const setKeyword = useCallback((v) => patch({ q: v }), [patch])
++  const setStatus = useCallback((v) => patch({ status: v }), [patch])
++  const setPager = useCallback((p, s) => patch({ page: p, size: s === defaultSize ? undefined : s }, { resetPage: false }), [patch, defaultSize])
++
++  // antd sorter -> query. Giữ đúng hình dạng mà utils/sort.js đang dùng.
++  const sorter = useMemo(
++    () => (sort ? { field: sort, order: dir === 'desc' ? 'descend' : 'ascend' } : null),
++    [sort, dir],
++  )
++  const setSorter = useCallback((s) => {
++    if (!s || !s.order) patch({ sort: undefined, dir: undefined })
++    else patch({ sort: s.field, dir: s.order === 'descend' ? 'desc' : 'asc' })
++  }, [patch])
++
++  return { keyword, status, page, size, sort, dir, sorter, setKeyword, setStatus, setPager, setSorter }
++}
+diff --git a/frontend/src/hooks/useProducts.js b/frontend/src/hooks/useProducts.js
+new file mode 100644
+index 0000000..dd79375
+--- /dev/null
++++ b/frontend/src/hooks/useProducts.js
+@@ -0,0 +1,32 @@
++import { useMemo } from 'react'
++import { useQuery } from '@tanstack/react-query'
++import { productsApi } from '../api/products.api'
++
++/**
++ * Nguồn duy nhất cho danh mục sản phẩm dùng để tra cứu id -> tên/SKU.
++ *
++ * Thay cho đoạn `productsApi.list({ size: 500 })` từng bị chép tay ở 10 file:
++ *  - `listAll()` lặp hết các trang => KHÔNG vỡ khi vượt 500 sản phẩm.
++ *  - Chung một queryKey ['products','all'] => React Query dedupe, 10 trang dùng
++ *    lại cùng một kết quả đã cache thay vì mỗi trang tự gọi lại.
++ *  - staleTime 5 phút: danh mục sản phẩm gần như tĩnh trong một phiên làm việc.
++ *
++ * `nameOf`/`skuOf` fallback về chính id để giao diện không vỡ khi chưa nạp xong.
++ */
++export function useProducts() {
++  const query = useQuery({
++    queryKey: ['products', 'all'],
++    queryFn: () => productsApi.listAll(),
++    staleTime: 5 * 60_000,
++  })
++
++  const list = useMemo(() => query.data || [], [query.data])
++  const map = useMemo(() => Object.fromEntries(list.map(p => [p.id, p])), [list])
++
++  const nameOf = (id) => map[id]?.name || id || '—'
++  const skuOf = (id) => map[id]?.sku || '—'
++  // Dùng cho <Select> chọn sản phẩm: nhãn "Tên · SKU".
++  const options = useMemo(() => list.map(p => ({ value: p.id, label: `${p.name} · ${p.sku}` })), [list])
++
++  return { query, list, map, options, nameOf, skuOf, isLoading: query.isLoading }
++}
+diff --git a/frontend/src/hooks/useRecordView.js b/frontend/src/hooks/useRecordView.js
+new file mode 100644
+index 0000000..f42e151
+--- /dev/null
++++ b/frontend/src/hooks/useRecordView.js
+@@ -0,0 +1,41 @@
++import { useCallback } from 'react'
++import { useNavigate, useParams, useLocation } from 'react-router-dom'
++
++/**
++ * Đưa "đang xem bản ghi nào" vào URL thay vì useState.
++ *
++ * Trước đây các trang phiếu dùng:
++ *     const [view, setView] = useState({ mode: 'list', id: null })
++ * Hệ quả: mở 1 phiếu rồi F5 => về danh sách (mất chỗ đang làm); bấm Back của
++ * trình duyệt => thoát thẳng khỏi trang chứ không quay về danh sách; và không
++ * gửi link 1 phiếu cho người duyệt được.
++ *
++ * Nay trạng thái nằm ở URL:
++ *     /transfer-orders          -> mode 'list'
++ *     /transfer-orders/new      -> mode 'create'
++ *     /transfer-orders/<uuid>   -> mode 'detail'
++ *
++ * API trả về giữ nguyên hình dạng cũ ({ mode, id }) nên phần thân trang gần như
++ * không phải sửa gì.
++ *
++ * @param basePath ví dụ '/transfer-orders' (không có dấu / ở cuối)
++ */
++export function useRecordView(basePath) {
++  const navigate = useNavigate()
++  const location = useLocation()
++  const { id } = useParams()
++
++  const isCreate = location.pathname === `${basePath}/new`
++  const mode = isCreate ? 'create' : (id ? 'detail' : 'list')
++
++  const openList = useCallback(() => navigate(basePath), [navigate, basePath])
++  const openCreate = useCallback(() => navigate(`${basePath}/new`), [navigate, basePath])
++  // replace=true khi vừa tạo xong: người dùng bấm Back sẽ về danh sách, chứ
++  // không quay lại form tạo rỗng của phiếu vừa tạo.
++  const openDetail = useCallback(
++    (recId, { replace = false } = {}) => navigate(`${basePath}/${recId}`, { replace }),
++    [navigate, basePath],
++  )
++
++  return { mode, id: isCreate ? null : (id || null), openList, openCreate, openDetail }
++}
+diff --git a/frontend/src/index.css b/frontend/src/index.css
+index 5c01e52..dcf9705 100644
+--- a/frontend/src/index.css
++++ b/frontend/src/index.css
+@@ -62,6 +62,33 @@ body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+ .mws-line-clickable { cursor: pointer; }
+ .mws-line-clickable:hover { background-color: #fafafa; }
+ 
++/* Nền tối: thumb đen trên nền đen = vô hình thật sự (không phải "mờ" mà là mất).
++   ThemeContext đặt data-theme lên <html>, ở đây lật sang thumb sáng cùng độ mờ. */
++[data-theme='dark'] * { scrollbar-color: rgba(255, 255, 255, 0.10) transparent; }
++[data-theme='dark'] *:hover { scrollbar-color: rgba(255, 255, 255, 0.26) transparent; }
++[data-theme='dark'] ::-webkit-scrollbar-thumb { background-color: rgba(255, 255, 255, 0.10); }
++[data-theme='dark'] .app-content:hover::-webkit-scrollbar-thumb,
++[data-theme='dark'] .app-sider-menu:hover::-webkit-scrollbar-thumb,
++[data-theme='dark'] .app-drawer-menu:hover::-webkit-scrollbar-thumb,
++[data-theme='dark'] .ant-table-body:hover::-webkit-scrollbar-thumb,
++[data-theme='dark'] .ant-table-content:hover::-webkit-scrollbar-thumb,
++[data-theme='dark'] .ant-list:hover::-webkit-scrollbar-thumb,
++[data-theme='dark'] .ant-modal-body:hover::-webkit-scrollbar-thumb {
++  background-color: rgba(255, 255, 255, 0.26);
++}
++[data-theme='dark'] ::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, 0.45) !important; }
++[data-theme='dark'] ::-webkit-scrollbar-thumb:active { background-color: rgba(255, 255, 255, 0.6) !important; }
++
++/* Nháy khi quét: bản sáng quá chói trên nền tối */
++[data-theme='dark'] .mws-flash-ok  { animation-name: mws-flash-ok-dark; }
++[data-theme='dark'] .mws-flash-err { animation-name: mws-flash-err-dark; }
++@keyframes mws-flash-ok-dark  { from { background-color: #237804; } to { background-color: transparent; } }
++@keyframes mws-flash-err-dark { from { background-color: #a8071a; } to { background-color: transparent; } }
++
++/* Dòng đang quét / hover: cũng phải theo nền tối */
++[data-theme='dark'] .mws-line-active { background-color: #111d2c; }
++[data-theme='dark'] .mws-line-clickable:hover { background-color: #1f1f1f; }
++
+ @media (prefers-reduced-motion: reduce) {
+   .mws-flash-ok, .mws-flash-err { animation: none; }
+   ::-webkit-scrollbar-thumb { transition: none; }
+diff --git a/frontend/src/main.jsx b/frontend/src/main.jsx
+index 8dc5893..0bcda98 100644
+--- a/frontend/src/main.jsx
++++ b/frontend/src/main.jsx
+@@ -2,12 +2,13 @@ import React from 'react'
+ import { createRoot } from 'react-dom/client'
+ import { BrowserRouter } from 'react-router-dom'
+ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+-import { ConfigProvider, App as AntdApp } from 'antd'
++import { ConfigProvider, App as AntdApp, theme } from 'antd'
+ import viVN from 'antd/locale/vi_VN'
+ import dayjs from 'dayjs'
+ import 'dayjs/locale/vi'
+ import { AuthProvider } from './auth/AuthContext.jsx'
+ import { NotificationProvider } from './context/NotificationContext.jsx'
++import { ThemeProvider, useThemeMode } from './context/ThemeContext.jsx'
+ import ErrorBoundary from './components/ErrorBoundary.jsx'
+ import AppRoutes from './routes/index.jsx'
+ import './index.css'
+@@ -29,9 +30,16 @@ const queryClient = new QueryClient({
+   },
+ })
+ 
+-createRoot(document.getElementById('root')).render(
+-  <React.StrictMode>
+-    <ConfigProvider locale={viVN} theme={{ token: { colorPrimary: '#1677ff' } }}>
++// ConfigProvider phải nằm TRONG ThemeProvider để đọc được chế độ sáng/tối.
++function ThemedApp() {
++  const { isDark } = useThemeMode()
++  return (
++    <ConfigProvider
++      locale={viVN}
++      theme={{
++        algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
++        token: { colorPrimary: '#1677ff' },
++      }}>
+       <AntdApp>
+         {/* Chốt chặn cuối: lỗi ở tầng provider/route cũng không để màn hình trắng.
+             (AppLayout còn 1 boundary nữa bọc riêng từng trang.) */}
+@@ -48,5 +56,13 @@ createRoot(document.getElementById('root')).render(
+         </ErrorBoundary>
+       </AntdApp>
+     </ConfigProvider>
++  )
++}
++
++createRoot(document.getElementById('root')).render(
++  <React.StrictMode>
++    <ThemeProvider>
++      <ThemedApp />
++    </ThemeProvider>
+   </React.StrictMode>
+ )
+diff --git a/frontend/src/routes/index.jsx b/frontend/src/routes/index.jsx
+index 7720ddc..0fc4756 100644
+--- a/frontend/src/routes/index.jsx
++++ b/frontend/src/routes/index.jsx
+@@ -1,103 +1,134 @@
+-import { Routes, Route, Navigate } from 'react-router-dom'
+-import { Result, Button } from 'antd'
++import { lazy, Suspense } from 'react'
++import { Routes, Route } from 'react-router-dom'
++import { Result, Button, Spin } from 'antd'
+ import ProtectedRoute from '../components/ProtectedRoute'
+ import AppLayout from '../components/AppLayout'
+ import { P } from '../constants/permissions'
+ 
+-import LoginPage from '../features/auth/LoginPage'
+-import DashboardPage from '../features/dashboard/DashboardPage'
+-import UsersPage from '../features/users/UsersPage'
+-import RolesPage from '../features/roles/RolesPage'
+-import PermissionsPage from '../features/permissions/PermissionsPage'
+-import WarehousesPage from '../features/warehouses/WarehousesPage'
+-import ProductsPage from '../features/products/ProductsPage'
+-import CategoriesPage from '../features/categories/CategoriesPage'
+-import PartnersPage from '../features/partners/PartnersPage'
+-import PurchaseOrdersPage from '../features/inbound/PurchaseOrdersPage'
+-import GoodsReceiptsPage from '../features/inbound/GoodsReceiptsPage'
+-import SalesOrdersPage from '../features/outbound/SalesOrdersPage'
+-import PickingListsPage from '../features/outbound/PickingListsPage'
+-import PickingScanPage from '../features/outbound/PickingScanPage'
+-import ShipmentsPage from '../features/outbound/ShipmentsPage'
+-import TransferOrdersPage from '../features/transfer/TransferOrdersPage'
+-import StocktakesPage from '../features/stocktake/StocktakesPage'
+-import AdjustmentsPage from '../features/stocktake/AdjustmentsPage'
+-import InventoryPage from '../features/inventory/InventoryPage'
+-import StockMovementsPage from '../features/inventory/StockMovementsPage'
+-import NotificationsPage from '../features/notifications/NotificationsPage'
+-import DataIOPage from '../features/data-io/DataIOPage'
++/**
++ * MỌI trang đều nạp động (React.lazy).
++ *
++ * Trước đây 24 trang + antd + xlsx + zxing + sockjs gói chung 1 file 2,66MB:
++ * người dùng chỉ vào xem tồn kho vẫn phải tải cả mã của trang quét mã vạch và
++ * trang nhập Excel. Nay mỗi trang là 1 chunk riêng, chỉ tải khi thật sự mở.
++ *
++ * Riêng LoginPage cũng lazy: người CHƯA đăng nhập không cần mã của 23 trang kia.
++ */
++const LoginPage = lazy(() => import('../features/auth/LoginPage'))
++const DashboardPage = lazy(() => import('../features/dashboard/DashboardPage'))
++const UsersPage = lazy(() => import('../features/users/UsersPage'))
++const RolesPage = lazy(() => import('../features/roles/RolesPage'))
++const PermissionsPage = lazy(() => import('../features/permissions/PermissionsPage'))
++const WarehousesPage = lazy(() => import('../features/warehouses/WarehousesPage'))
++const ProductsPage = lazy(() => import('../features/products/ProductsPage'))
++const CategoriesPage = lazy(() => import('../features/categories/CategoriesPage'))
++const PartnersPage = lazy(() => import('../features/partners/PartnersPage'))
++const PurchaseOrdersPage = lazy(() => import('../features/inbound/PurchaseOrdersPage'))
++const GoodsReceiptsPage = lazy(() => import('../features/inbound/GoodsReceiptsPage'))
++const SalesOrdersPage = lazy(() => import('../features/outbound/SalesOrdersPage'))
++const PickingListsPage = lazy(() => import('../features/outbound/PickingListsPage'))
++const PickingScanPage = lazy(() => import('../features/outbound/PickingScanPage'))
++const ShipmentsPage = lazy(() => import('../features/outbound/ShipmentsPage'))
++const TransferOrdersPage = lazy(() => import('../features/transfer/TransferOrdersPage'))
++const StocktakesPage = lazy(() => import('../features/stocktake/StocktakesPage'))
++const AdjustmentsPage = lazy(() => import('../features/stocktake/AdjustmentsPage'))
++const InventoryPage = lazy(() => import('../features/inventory/InventoryPage'))
++const StockMovementsPage = lazy(() => import('../features/inventory/StockMovementsPage'))
++const NotificationsPage = lazy(() => import('../features/notifications/NotificationsPage'))
++const DataIOPage = lazy(() => import('../features/data-io/DataIOPage'))
++
++function PageLoading() {
++  return <div style={{ display: 'grid', placeItems: 'center', minHeight: 240 }}><Spin size="large" /></div>
++}
++
++/**
++ * Trang phiếu có 3 chế độ (danh sách / tạo mới / chi tiết) — nay là 3 URL thật
++ * thay vì useState, để F5 không mất phiếu đang mở và Back hoạt động đúng.
++ * Route tĩnh 'new' đặt trước ':id' (React Router tự ưu tiên tĩnh, liệt kê rõ
++ * ra đây cho dễ đọc).
++ */
++function recordRoutes(path, Element, { create = true } = {}) {
++  return [
++    <Route key={path} path={path} element={<Element />} />,
++    // Stocktake tạo phiên qua modal, Adjustment không có màn tạo => không có /new.
++    create && <Route key={`${path}/new`} path={`${path}/new`} element={<Element />} />,
++    <Route key={`${path}/:id`} path={`${path}/:id`} element={<Element />} />,
++  ].filter(Boolean)
++}
+ 
+ export default function AppRoutes() {
+   return (
+-    <Routes>
+-      <Route path="/login" element={<LoginPage />} />
++    <Suspense fallback={<PageLoading />}>
++      <Routes>
++        <Route path="/login" element={<LoginPage />} />
+ 
+-      {/* Khu vực cần đăng nhập */}
+-      <Route element={<ProtectedRoute />}>
+-        <Route element={<AppLayout />}>
+-          <Route index element={<DashboardPage />} />
+-          <Route path="notifications" element={<NotificationsPage />} />
+-          <Route element={<ProtectedRoute permission={P.MASTER_PRODUCT_MANAGE} />}>
+-            <Route path="data-io" element={<DataIOPage />} />
+-          </Route>
++        {/* Khu vực cần đăng nhập */}
++        <Route element={<ProtectedRoute />}>
++          <Route element={<AppLayout />}>
++            <Route index element={<DashboardPage />} />
++            <Route path="notifications" element={<NotificationsPage />} />
++            <Route element={<ProtectedRoute permission={P.MASTER_PRODUCT_MANAGE} />}>
++              <Route path="data-io" element={<DataIOPage />} />
++            </Route>
+ 
+-          <Route element={<ProtectedRoute permission={P.MASTER_PRODUCT_VIEW} />}>
+-            <Route path="products" element={<ProductsPage />} />
+-            <Route path="categories" element={<CategoriesPage />} />
+-          </Route>
+-          <Route element={<ProtectedRoute permission={P.MASTER_PARTNER_MANAGE} />}>
+-            <Route path="partners" element={<PartnersPage />} />
+-          </Route>
+-          <Route element={<ProtectedRoute permission={P.INBOUND_VIEW_PO} />}>
+-            <Route path="purchase-orders" element={<PurchaseOrdersPage />} />
+-          </Route>
+-          <Route element={<ProtectedRoute permission={P.INBOUND_VIEW_GRN} />}>
+-            <Route path="goods-receipts" element={<GoodsReceiptsPage />} />
+-          </Route>
+-          <Route element={<ProtectedRoute permission={P.OUTBOUND_VIEW_SO} />}>
+-            <Route path="sales-orders" element={<SalesOrdersPage />} />
+-          </Route>
+-          <Route element={<ProtectedRoute permission={P.OUTBOUND_VIEW} />}>
+-            <Route path="picking-lists" element={<PickingListsPage />} />
+-            <Route path="shipments" element={<ShipmentsPage />} />
+-          </Route>
+-          <Route element={<ProtectedRoute permission={P.OUTBOUND_PICK} />}>
+-            <Route path="picking-scan" element={<PickingScanPage />} />
+-          </Route>
+-          <Route element={<ProtectedRoute permission={P.TRANSFER_VIEW} />}>
+-            <Route path="transfer-orders" element={<TransferOrdersPage />} />
+-          </Route>
+-          <Route element={<ProtectedRoute permission={P.STOCKTAKE_VIEW} />}>
+-            <Route path="stocktakes" element={<StocktakesPage />} />
+-          </Route>
+-          <Route element={<ProtectedRoute permission={P.ADJUSTMENT_VIEW} />}>
+-            <Route path="adjustment-vouchers" element={<AdjustmentsPage />} />
+-          </Route>
+-          <Route element={<ProtectedRoute permission={P.INVENTORY_VIEW} />}>
+-            <Route path="inventory" element={<InventoryPage />} />
+-          </Route>
+-          <Route element={<ProtectedRoute permission={P.AUDIT_VIEW_MOVEMENTS} />}>
+-            <Route path="stock-movements" element={<StockMovementsPage />} />
+-          </Route>
+-          <Route element={<ProtectedRoute permission={P.WAREHOUSE_VIEW} />}>
+-            <Route path="warehouses" element={<WarehousesPage />} />
+-          </Route>
+-          <Route element={<ProtectedRoute permission={P.USER_VIEW} />}>
+-            <Route path="users" element={<UsersPage />} />
+-          </Route>
+-          <Route element={<ProtectedRoute permission={P.ROLE_VIEW} />}>
+-            <Route path="roles" element={<RolesPage />} />
+-          </Route>
+-          <Route element={<ProtectedRoute permission={P.PERMISSION_VIEW} />}>
+-            <Route path="permissions" element={<PermissionsPage />} />
++            <Route element={<ProtectedRoute permission={P.MASTER_PRODUCT_VIEW} />}>
++              <Route path="products" element={<ProductsPage />} />
++              <Route path="categories" element={<CategoriesPage />} />
++            </Route>
++            <Route element={<ProtectedRoute permission={P.MASTER_PARTNER_MANAGE} />}>
++              <Route path="partners" element={<PartnersPage />} />
++            </Route>
++            <Route element={<ProtectedRoute permission={P.INBOUND_VIEW_PO} />}>
++              {recordRoutes('purchase-orders', PurchaseOrdersPage)}
++            </Route>
++            <Route element={<ProtectedRoute permission={P.INBOUND_VIEW_GRN} />}>
++              <Route path="goods-receipts" element={<GoodsReceiptsPage />} />
++            </Route>
++            <Route element={<ProtectedRoute permission={P.OUTBOUND_VIEW_SO} />}>
++              {recordRoutes('sales-orders', SalesOrdersPage)}
++            </Route>
++            <Route element={<ProtectedRoute permission={P.OUTBOUND_VIEW} />}>
++              {recordRoutes('picking-lists', PickingListsPage)}
++              {recordRoutes('shipments', ShipmentsPage)}
++            </Route>
++            <Route element={<ProtectedRoute permission={P.OUTBOUND_PICK} />}>
++              <Route path="picking-scan" element={<PickingScanPage />} />
++            </Route>
++            <Route element={<ProtectedRoute permission={P.TRANSFER_VIEW} />}>
++              {recordRoutes('transfer-orders', TransferOrdersPage)}
++            </Route>
++            <Route element={<ProtectedRoute permission={P.STOCKTAKE_VIEW} />}>
++              {recordRoutes('stocktakes', StocktakesPage, { create: false })}
++            </Route>
++            <Route element={<ProtectedRoute permission={P.ADJUSTMENT_VIEW} />}>
++              {recordRoutes('adjustment-vouchers', AdjustmentsPage, { create: false })}
++            </Route>
++            <Route element={<ProtectedRoute permission={P.INVENTORY_VIEW} />}>
++              <Route path="inventory" element={<InventoryPage />} />
++            </Route>
++            <Route element={<ProtectedRoute permission={P.AUDIT_VIEW_MOVEMENTS} />}>
++              <Route path="stock-movements" element={<StockMovementsPage />} />
++            </Route>
++            <Route element={<ProtectedRoute permission={P.WAREHOUSE_VIEW} />}>
++              <Route path="warehouses" element={<WarehousesPage />} />
++            </Route>
++            <Route element={<ProtectedRoute permission={P.USER_VIEW} />}>
++              <Route path="users" element={<UsersPage />} />
++            </Route>
++            <Route element={<ProtectedRoute permission={P.ROLE_VIEW} />}>
++              <Route path="roles" element={<RolesPage />} />
++            </Route>
++            <Route element={<ProtectedRoute permission={P.PERMISSION_VIEW} />}>
++              <Route path="permissions" element={<PermissionsPage />} />
++            </Route>
+           </Route>
+         </Route>
+-      </Route>
+ 
+-      <Route path="*" element={
+-        <Result status="404" title="404" subTitle="Không tìm thấy trang."
+-          extra={<Button type="primary" href="/">Về trang chủ</Button>} />
+-      } />
+-    </Routes>
++        <Route path="*" element={
++          <Result status="404" title="404" subTitle="Không tìm thấy trang."
++            extra={<Button type="primary" href="/">Về trang chủ</Button>} />
++        } />
++      </Routes>
++    </Suspense>
+   )
+ }
+diff --git a/frontend/src/utils/excel.js b/frontend/src/utils/excel.js
+index 31152bb..4a392f2 100644
+--- a/frontend/src/utils/excel.js
++++ b/frontend/src/utils/excel.js
+@@ -1,7 +1,28 @@
+-import * as XLSX from 'xlsx'
++/**
++ * Bọc thư viện `xlsx` bằng dynamic import.
++ *
++ * Lý do: xlsx nặng ~900KB (chưa gzip) nhưng chỉ 2 luồng dùng tới — nút "Xuất
++ * Excel" ở các trang danh sách và trang Nhập/Xuất Excel. Nếu `import * as XLSX`
++ * ở đầu file thì Rollup nhét thẳng nó vào bundle chính, và MỌI người dùng phải
++ * tải 900KB đó ngay khi đăng nhập, kể cả người không bao giờ bấm xuất Excel.
++ *
++ * Vì vậy mọi hàm ở đây đều async. Trình duyệt chỉ tải chunk xlsx ở lần bấm đầu
++ * tiên; các lần sau dùng lại chunk đã cache trong bộ nhớ.
++ */
++
++// Cache promise để nhiều lần gọi song song không tạo nhiều request.
++let xlsxPromise = null
++function loadXLSX() {
++  if (!xlsxPromise) xlsxPromise = import('xlsx')
++  return xlsxPromise
++}
++
++/** Nạp sẵn xlsx (gọi khi rê chuột vào nút xuất) để lúc bấm là có ngay. */
++export function preloadXLSX() { loadXLSX() }
+ 
+ // Tải file .xlsx mẫu: chỉ có 1 hàng tiêu đề = tên các trường (giống form tạo).
+-export function downloadTemplate(headers, filename) {
++export async function downloadTemplate(headers, filename) {
++  const XLSX = await loadXLSX()
+   const ws = XLSX.utils.aoa_to_sheet([headers])
+   const wb = XLSX.utils.book_new()
+   XLSX.utils.book_append_sheet(wb, ws, 'Template')
+@@ -9,7 +30,8 @@ export function downloadTemplate(headers, filename) {
+ }
+ 
+ // Xuất mảng object ra .xlsx (mỗi key = 1 cột). Dùng cho export danh sách.
+-export function exportRows(rows, filename) {
++export async function exportRows(rows, filename) {
++  const XLSX = await loadXLSX()
+   const ws = XLSX.utils.json_to_sheet(rows)
+   const wb = XLSX.utils.book_new()
+   XLSX.utils.book_append_sheet(wb, ws, 'Data')
+@@ -18,6 +40,7 @@ export function exportRows(rows, filename) {
+ 
+ // Đọc file .xlsx/.csv người dùng upload -> mảng object (key theo hàng tiêu đề).
+ export async function parseWorkbook(file) {
++  const XLSX = await loadXLSX()
+   const buf = await file.arrayBuffer()
+   const wb = XLSX.read(buf, { type: 'array' })
+   const ws = wb.Sheets[wb.SheetNames[0]]
+diff --git a/frontend/src/utils/formErrors.js b/frontend/src/utils/formErrors.js
+new file mode 100644
+index 0000000..5ce2007
+--- /dev/null
++++ b/frontend/src/utils/formErrors.js
+@@ -0,0 +1,70 @@
++/**
++ * Đưa lỗi validate của BE về đúng ô nhập trong form.
++ *
++ * BE (GlobalExceptionHandler) gộp mọi field error thành MỘT chuỗi:
++ *     "sku: must not be blank; price: must be greater than 0"
++ *   (xem formatFieldError + Collectors.joining("; "))
++ *
++ * FE trước đây chỉ `message.error(chuỗi đó)` -> toast đỏ 3 giây rồi biến mất,
++ * form không đánh dấu ô nào sai, người dùng phải tự nhớ. Với form 12 ô như
++ * "Thêm sản phẩm" thì đây là cách nhanh nhất để người ta bỏ cuộc.
++ *
++ * Hàm dưới tách ngược chuỗi đó ra và gắn vào đúng Form.Item.
++ */
++
++/** "sku: must not be blank; price: ..." -> [{ field:'sku', msg:'...' }, ...] */
++export function parseFieldErrors(message) {
++  if (!message || typeof message !== 'string') return []
++  return message
++    .split(';')
++    .map((part) => {
++      // Chỉ tách ở dấu ':' ĐẦU TIÊN — bản thân thông báo có thể chứa ':'.
++      const i = part.indexOf(':')
++      if (i <= 0) return null
++      const field = part.slice(0, i).trim()
++      const msg = part.slice(i + 1).trim()
++      // Tên field hợp lệ mới nhận; tránh nuốt nhầm câu văn xuôi có dấu ':'
++      // (vd "Không đủ tồn: cần 10, còn 3" -> KHÔNG phải lỗi field).
++      if (!msg || !/^[a-zA-Z_][a-zA-Z0-9_.]*$/.test(field)) return null
++      return { field, msg }
++    })
++    .filter(Boolean)
++}
++
++/**
++ * Gắn lỗi BE vào form.
++ *
++ * @returns true  nếu đã gắn được ít nhất 1 ô (phía gọi KHÔNG cần toast nữa)
++ *          false nếu không phải lỗi field (lỗi nghiệp vụ/mạng) -> phía gọi tự toast
++ *
++ * Chỉ nhận lỗi 400. Lỗi 403/409/500 là lỗi nghiệp vụ, không thuộc về ô nào.
++ * Field nào không có trong form (BE đặt tên khác) thì bỏ qua, để rơi về toast —
++ * không bao giờ nuốt lỗi im lặng.
++ */
++export function applyServerErrors(form, err) {
++  if (err?.response?.status !== 400) return false
++  const parsed = parseFieldErrors(err?.response?.data?.message)
++  if (!parsed.length) return false
++
++  const known = new Set(
++    (form.getFieldsValue(true) ? Object.keys(form.getFieldsValue(true)) : []),
++  )
++  const hits = parsed.filter(p => known.has(p.field))
++  if (!hits.length) return false
++
++  form.setFields(hits.map(({ field, msg }) => ({ name: field, errors: [msg] })))
++  // Cuộn tới ô sai đầu tiên: form dài thì lỗi có thể nằm ngoài màn hình.
++  try { form.scrollToField(hits[0].field, { behavior: 'smooth', block: 'center' }) } catch { /* noop */ }
++  return true
++}
++
++/**
++ * Dùng trong onError của mutation:
++ *     onError: (e) => handleFormError(form, e, message)
++ * Gắn được vào ô -> im lặng. Không gắn được -> toast như cũ.
++ */
++export function handleFormError(form, err, message, fallback) {
++  if (applyServerErrors(form, err)) return
++  const text = err?.response?.data?.message || err?.message || fallback || 'Đã có lỗi xảy ra'
++  message.error(text)
++}
+diff --git a/frontend/src/ws/notificationClient.js b/frontend/src/ws/notificationClient.js
+index 9627113..864c9a9 100644
+--- a/frontend/src/ws/notificationClient.js
++++ b/frontend/src/ws/notificationClient.js
+@@ -1,28 +1,58 @@
+-import { Client } from '@stomp/stompjs'
+-import SockJS from 'sockjs-client'
+-
+-// Tạo STOMP client qua SockJS (/ws đã được Vite proxy sang :8080).
+-// CONNECT gửi header Authorization: Bearer <jwt> để BE xác thực khung kết nối.
++/**
++ * STOMP client qua SockJS (/ws đã được Vite proxy sang :8080).
++ * CONNECT gửi header Authorization: Bearer <jwt> để BE xác thực khung kết nối.
++ *
++ * @stomp/stompjs + sockjs-client nặng ~150KB và CHỈ cần sau khi đăng nhập
++ * thành công => dynamic import, không nằm trong bundle của màn hình login.
++ *
++ * Hàm trả về một "handle" đồng bộ (có sẵn .deactivate()) dù bên trong nạp thư
++ * viện bất đồng bộ — nhờ vậy phía gọi (useEffect trong NotificationContext)
++ * không phải đổi kiểu cleanup, và nếu component unmount trước khi thư viện nạp
++ * xong thì cờ `disposed` chặn việc kết nối mồ côi.
++ */
+ export function createNotificationClient({ token, onMessage, onStatus }) {
+-  const client = new Client({
+-    webSocketFactory: () => new SockJS('/ws'),
+-    connectHeaders: { Authorization: `Bearer ${token}` },
+-    reconnectDelay: 5000,
+-    heartbeatIncoming: 10000,
+-    heartbeatOutgoing: 10000,
+-    onConnect: () => {
+-      onStatus?.(true)
+-      // Đích cá nhân: server route /user/{userId}/queue/notifications
+-      client.subscribe('/user/queue/notifications', (frame) => {
+-        let payload = frame.body
+-        try { payload = JSON.parse(frame.body) } catch { /* giữ nguyên chuỗi */ }
+-        onMessage?.(payload)
++  let client = null
++  let disposed = false
++
++  ;(async () => {
++    try {
++      const [{ Client }, { default: SockJS }] = await Promise.all([
++        import('@stomp/stompjs'),
++        import('sockjs-client'),
++      ])
++      if (disposed) return
++
++      client = new Client({
++        webSocketFactory: () => new SockJS('/ws'),
++        connectHeaders: { Authorization: `Bearer ${token}` },
++        reconnectDelay: 5000,
++        heartbeatIncoming: 10000,
++        heartbeatOutgoing: 10000,
++        onConnect: () => {
++          onStatus?.(true)
++          // Đích cá nhân: server route /user/{userId}/queue/notifications
++          client.subscribe('/user/queue/notifications', (frame) => {
++            let payload = frame.body
++            try { payload = JSON.parse(frame.body) } catch { /* giữ nguyên chuỗi */ }
++            onMessage?.(payload)
++          })
++        },
++        onDisconnect: () => onStatus?.(false),
++        onWebSocketClose: () => onStatus?.(false),
++        onStompError: () => onStatus?.(false),
+       })
++      client.activate()
++    } catch (e) {
++      console.error('[MWS] Không nạp được thư viện WebSocket:', e)
++      onStatus?.(false)
++    }
++  })()
++
++  return {
++    deactivate() {
++      disposed = true
++      try { client?.deactivate() } catch { /* noop */ }
++      client = null
+     },
+-    onDisconnect: () => onStatus?.(false),
+-    onWebSocketClose: () => onStatus?.(false),
+-    onStompError: () => onStatus?.(false),
+-  })
+-  client.activate()
+-  return client
++  }
+ }
+diff --git a/frontend/vite.config.js b/frontend/vite.config.js
+index d369bcf..ec020af 100644
+--- a/frontend/vite.config.js
++++ b/frontend/vite.config.js
+@@ -11,6 +11,25 @@ export default defineConfig(({ mode }) => {
+     plugins: [react(), mobile && basicSsl()].filter(Boolean),
+     // sockjs-client tham chiếu biến 'global' của Node -> map sang globalThis.
+     define: { global: 'globalThis' },
++    build: {
++      // Mỗi trang đã là 1 chunk riêng (React.lazy trong routes/index.jsx).
++      // Phần còn lại là thư viện: tách theo vòng đời cập nhật để trình duyệt
++      // cache được lâu — sửa code trang không làm hết hạn cache của antd.
++      rollupOptions: {
++        output: {
++          manualChunks(id) {
++            if (!id.includes('node_modules')) return
++            if (id.includes('/xlsx')) return 'vendor-xlsx'        // chỉ tải khi xuất/nhập Excel
++            if (id.includes('/@zxing')) return 'vendor-zxing'      // chỉ tải khi bật camera
++            if (id.includes('/sockjs') || id.includes('/@stomp')) return 'vendor-ws'
++            if (id.includes('/antd/') || id.includes('/@ant-design/') || id.includes('/rc-')) return 'vendor-antd'
++            if (id.includes('/react-dom/') || id.includes('/react/') || id.includes('/react-router')) return 'vendor-react'
++            return 'vendor'
++          },
++        },
++      },
++      chunkSizeWarningLimit: 700,
++    },
+     server: {
+       port: 5173,
+       host: mobile,            // expose ra LAN khi chạy mobile
+diff --git a/frontend/vitest.config.js b/frontend/vitest.config.js
+new file mode 100644
+index 0000000..90f2805
+--- /dev/null
++++ b/frontend/vitest.config.js
+@@ -0,0 +1,8 @@
++import { defineConfig } from 'vite'
++import react from '@vitejs/plugin-react'
++
++export default defineConfig({
++  plugins: [react()],
++  define: { global: 'globalThis' },
++  test: { environment: 'jsdom', globals: false, include: ['src/**/*.test.jsx'] },
++})

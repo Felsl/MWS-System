@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Select, Space } from 'antd'
 import { CameraOutlined, PoweroffOutlined } from '@ant-design/icons'
-import { BrowserMultiFormatReader } from '@zxing/browser'
 
 // Quét mã vạch qua camera. onScan(text) mỗi lần đọc được (đã chống lặp).
 // paused=true: bỏ qua kết quả (vd đang gọi API) nhưng KHÔNG tắt camera.
-export default function BarcodeScanner({ onScan, paused }) {
+// onActiveChange(bool): báo ra ngoài camera đang bật/tắt. Trang cha cần biết để
+//   quyết định có focus ô nhập tay hay không — nếu focus khi camera đang bật thì
+//   bàn phím ảo trên điện thoại sẽ che mất khung hình.
+export default function BarcodeScanner({ onScan, paused, onActiveChange }) {
   const videoRef = useRef(null)
   const controlsRef = useRef(null)
   const pausedRef = useRef(paused)
@@ -19,6 +21,9 @@ export default function BarcodeScanner({ onScan, paused }) {
   const secure = typeof window !== 'undefined' && window.isSecureContext
 
   useEffect(() => { pausedRef.current = paused }, [paused])
+  useEffect(() => { onActiveChange?.(on) }, [on, onActiveChange])
+
+  function stop() { try { controlsRef.current?.stop() } catch { /* noop */ } }
 
   useEffect(() => {
     if (!on) { stop(); return }
@@ -36,6 +41,11 @@ export default function BarcodeScanner({ onScan, paused }) {
         const rear = cams.find(d => /back|rear|sau|environment/i.test(d.label || ''))
         const chosen = deviceId || rear?.deviceId || cams[cams.length - 1]?.deviceId
         if (chosen !== deviceId) setDeviceId(chosen)
+        // @zxing nặng ~600KB và chỉ trang này dùng => nạp lúc bấm "Bật camera",
+        // không nhét vào bundle chính. Người dùng đã chờ xin quyền camera nên
+        // vài trăm ms tải chunk ở đây không cảm nhận được.
+        const { BrowserMultiFormatReader } = await import('@zxing/browser')
+        if (cancelled) return
         const reader = new BrowserMultiFormatReader()
         controlsRef.current = await reader.decodeFromVideoDevice(chosen, videoRef.current, (result) => {
           if (!result || pausedRef.current) return
@@ -53,7 +63,6 @@ export default function BarcodeScanner({ onScan, paused }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [on, deviceId])
 
-  function stop() { try { controlsRef.current?.stop() } catch { /* noop */ } }
 
   if (!secure) {
     return (

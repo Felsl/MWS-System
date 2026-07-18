@@ -1,0 +1,475 @@
+diff --git a/frontend/src/__smoke__/permissions.test.jsx b/frontend/src/__smoke__/permissions.test.jsx
+new file mode 100644
+index 0000000..9b013ac
+--- /dev/null
++++ b/frontend/src/__smoke__/permissions.test.jsx
+@@ -0,0 +1,99 @@
++/**
++ * Test riêng cho các component phụ thuộc quyền (Can, EmptyState) + nhãn quyền.
++ *
++ * TÁCH KHỎI smoke.test.jsx CÓ CHỦ ĐÍCH: file này mock '../auth/AuthContext' theo
++ * TỪNG ca (vi.doMock + import động), còn smoke.test.jsx mock nó TOPLEVEL = full
++ * quyền. Trộn hai kiểu trong một file thì doMock cục bộ rò sang test khác, và
++ * resetModules để dọn lại phá luôn mock toplevel. Mỗi file một chiến lược mock =
++ * hết xung đột.
++ */
++import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
++import { render, screen, fireEvent, cleanup } from '@testing-library/react'
++import { MemoryRouter } from 'react-router-dom'
++import { ConfigProvider, App as AntdApp } from 'antd'
++
++beforeEach(() => {
++  globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} }
++  window.matchMedia = window.matchMedia || ((q) => ({
++    matches: false, media: q, onchange: null,
++    addEventListener: () => {}, removeEventListener: () => {},
++    addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false,
++  }))
++})
++afterEach(() => { cleanup(); vi.resetModules() })
++
++function renderUI(ui) {
++  return render(
++    <ConfigProvider><AntdApp>
++      <MemoryRouter>{ui}</MemoryRouter>
++    </AntdApp></ConfigProvider>,
++  )
++}
++
++// Mock useAuth theo quyền được cấp, rồi import Can SAU khi mock đã đặt.
++async function withPerms(granted) {
++  vi.resetModules()
++  vi.doMock('../auth/AuthContext', () => ({
++    useAuth: () => ({ hasPermission: (p) => granted.includes(p) }),
++  }))
++  return {
++    Can: (await import('../components/Can')).default,
++    EmptyState: (await import('../components/EmptyState')).default,
++  }
++}
++
++describe('Can — khoá nút thay vì ẩn (mục 21)', () => {
++  it('CÓ quyền: nút bình thường', async () => {
++    const { Can } = await withPerms(['USER_CREATE'])
++    const { Button } = await import('antd')
++    renderUI(<Can permission="USER_CREATE"><Button>Tạo</Button></Can>)
++    expect(screen.getByRole('button', { name: /Tạo/ }).disabled).toBe(false)
++  })
++  it('THIẾU quyền: nút bị khoá chứ KHÔNG biến mất', async () => {
++    const { Can } = await withPerms([])
++    const { Button } = await import('antd')
++    renderUI(<Can permission="USER_CREATE"><Button>Tạo</Button></Can>)
++    expect(screen.getByRole('button', { name: /Tạo/ }).disabled).toBe(true)
++  })
++  it('THIẾU quyền + con KHÔNG phải nút: vẫn ẩn', async () => {
++    const { Can } = await withPerms([])
++    const { Tag } = await import('antd')
++    renderUI(<Can permission="USER_CREATE"><Tag>Khối</Tag></Can>)
++    expect(screen.queryByText('Khối')).toBeNull()
++  })
++  it('mode="hide" ép ẩn kể cả khi con là nút', async () => {
++    const { Can } = await withPerms([])
++    const { Button } = await import('antd')
++    renderUI(<Can permission="USER_CREATE" mode="hide"><Button>Tạo</Button></Can>)
++    expect(screen.queryByRole('button', { name: /Tạo/ })).toBeNull()
++  })
++})
++
++describe('EmptyState — CTA theo quyền (mục 22)', () => {
++  it('CÓ quyền: mô tả + nút CTA, bấm được', async () => {
++    const { EmptyState } = await withPerms(['MASTER_PRODUCT_MANAGE'])
++    const clicks = []
++    renderUI(<EmptyState
++      title="Chưa có sản phẩm nào"
++      action={{ label: 'Thêm sản phẩm', onClick: () => clicks.push(1), permission: 'MASTER_PRODUCT_MANAGE' }}
++      secondary={{ label: 'Nhập từ Excel', onClick: () => {} }} />)
++    expect(screen.getByText('Chưa có sản phẩm nào')).toBeTruthy()
++    expect(screen.getByRole('button', { name: /Nhập từ Excel/ })).toBeTruthy()
++    fireEvent.click(screen.getByRole('button', { name: /Thêm sản phẩm/ }))
++    expect(clicks.length).toBe(1)
++  })
++  it('không permission: CTA luôn hiện', async () => {
++    const { EmptyState } = await withPerms([])
++    renderUI(<EmptyState title="Trống" action={{ label: 'Tạo mới', onClick: () => {} }} />)
++    // action không kèm permission => Can cho qua bất kể quyền.
++    expect(screen.getByRole('button', { name: /Tạo mới/ })).toBeTruthy()
++  })
++})
++
++describe('Nhãn quyền', () => {
++  it('MỌI mã trong P đều có nhãn tiếng Việt', async () => {
++    const { P, PERM_LABELS } = await import('../constants/permissions')
++    const thieu = Object.values(P).filter(code => !PERM_LABELS[code])
++    expect(thieu, `Thiếu nhãn cho: ${thieu.join(', ')}`).toEqual([])
++  })
++})
+diff --git a/frontend/src/__smoke__/smoke.test.jsx b/frontend/src/__smoke__/smoke.test.jsx
+index 745121d..ae45358 100644
+--- a/frontend/src/__smoke__/smoke.test.jsx
++++ b/frontend/src/__smoke__/smoke.test.jsx
+@@ -115,58 +115,6 @@ describe('Hook điều khiển URL', () => {
+   })
+ })
+ 
+-describe('Can — khoá nút thay vì ẩn', () => {
+-  // Mock useAuth ở trên trả hasPermission: () => true, nên ở đây phải mock lại
+-  // AuthContext theo từng ca. Dùng doMock + import động để không dính hoisting.
+-  async function CanWith(granted) {
+-    vi.resetModules()
+-    vi.doMock('../auth/AuthContext', () => ({
+-      useAuth: () => ({ hasPermission: (p) => granted.includes(p) }),
+-    }))
+-    return (await import('../components/Can')).default
+-  }
+-
+-  it('CÓ quyền: nút bình thường', async () => {
+-    const Can = await CanWith(['USER_CREATE'])
+-    const { Button } = await import('antd')
+-    renderAt('/', <Can permission="USER_CREATE"><Button>Tạo</Button></Can>)
+-    const btn = screen.getByRole('button', { name: /Tạo/ })
+-    expect(btn.disabled).toBe(false)
+-  })
+-
+-  it('THIẾU quyền: nút bị khoá chứ KHÔNG biến mất', async () => {
+-    const Can = await CanWith([])
+-    const { Button } = await import('antd')
+-    renderAt('/', <Can permission="USER_CREATE"><Button>Tạo</Button></Can>)
+-    // Điểm mấu chốt của mục này: nút vẫn còn đó để người dùng biết chức năng tồn tại.
+-    const btn = screen.getByRole('button', { name: /Tạo/ })
+-    expect(btn.disabled).toBe(true)
+-  })
+-
+-  it('THIẾU quyền + con KHÔNG phải nút: vẫn ẩn như cũ', async () => {
+-    const Can = await CanWith([])
+-    const { Tag } = await import('antd')
+-    renderAt('/', <Can permission="USER_CREATE"><Tag>Khối nội dung</Tag></Can>)
+-    expect(screen.queryByText('Khối nội dung')).toBeNull()
+-  })
+-
+-  it('mode="hide" ép ẩn kể cả khi con là nút', async () => {
+-    const Can = await CanWith([])
+-    const { Button } = await import('antd')
+-    renderAt('/', <Can permission="USER_CREATE" mode="hide"><Button>Tạo</Button></Can>)
+-    expect(screen.queryByRole('button', { name: /Tạo/ })).toBeNull()
+-  })
+-})
+-
+-describe('Nhãn quyền', () => {
+-  it('MỌI mã trong P đều có nhãn tiếng Việt', async () => {
+-    const { P, PERM_LABELS } = await import('../constants/permissions')
+-    // Chặn việc thêm quyền mới ở BE mà quên nhãn => tooltip rơi về mã trần.
+-    const thieu = Object.values(P).filter(code => !PERM_LABELS[code])
+-    expect(thieu, `Thiếu nhãn cho: ${thieu.join(', ')}`).toEqual([])
+-  })
+-})
+-
+ describe('Accessibility / layout (mục 16 + 23)', () => {
+   it('RowLink là <button> thật, không phải <a> trần', async () => {
+     const RowLink = (await import('../components/RowLink')).default
+diff --git a/frontend/src/components/AppLayout.jsx b/frontend/src/components/AppLayout.jsx
+index 4d7b0af..a7fcef5 100644
+--- a/frontend/src/components/AppLayout.jsx
++++ b/frontend/src/components/AppLayout.jsx
+@@ -26,7 +26,7 @@ const NAV = [
+   { key: '/', icon: <DashboardOutlined />, label: 'Tổng quan' },
+   { key: '/data-io', icon: <ImportOutlined />, label: 'Nhập/Xuất Excel', perm: P.MASTER_PRODUCT_MANAGE },
+   {
+-    type: 'group', label: 'Danh mục gốc', children: [
++    type: 'group', label: 'Danh mục gốc', icon: <AppstoreOutlined />, children: [
+       { key: '/products', icon: <AppstoreOutlined />, label: 'Sản phẩm', perm: P.MASTER_PRODUCT_VIEW },
+       { key: '/categories', icon: <TagsOutlined />, label: 'Nhóm sản phẩm', perm: P.MASTER_PRODUCT_VIEW },
+       { key: '/warehouses', icon: <HomeOutlined />, label: 'Kho & ô kệ', perm: P.WAREHOUSE_VIEW },
+@@ -34,19 +34,19 @@ const NAV = [
+     ],
+   },
+   {
+-    type: 'group', label: 'Tồn kho', children: [
++    type: 'group', label: 'Tồn kho', icon: <DatabaseOutlined />, children: [
+       { key: '/inventory', icon: <DatabaseOutlined />, label: 'Tồn kho & lô', perm: P.INVENTORY_VIEW },
+       { key: '/stock-movements', icon: <HistoryOutlined />, label: 'Thẻ kho (Kardex)', perm: P.AUDIT_VIEW_MOVEMENTS },
+     ],
+   },
+   {
+-    type: 'group', label: 'Nhập kho', children: [
++    type: 'group', label: 'Nhập kho', icon: <InboxOutlined />, children: [
+       { key: '/purchase-orders', icon: <FileDoneOutlined />, label: 'Đơn mua hàng', perm: P.INBOUND_VIEW_PO },
+       { key: '/goods-receipts', icon: <InboxOutlined />, label: 'Phiếu nhập kho', perm: P.INBOUND_VIEW_GRN },
+     ],
+   },
+   {
+-    type: 'group', label: 'Xuất kho', children: [
++    type: 'group', label: 'Xuất kho', icon: <ShoppingCartOutlined />, children: [
+       { key: '/sales-orders', icon: <ShoppingCartOutlined />, label: 'Đơn bán hàng', perm: P.OUTBOUND_VIEW_SO },
+       { key: '/picking-lists', icon: <ProfileOutlined />, label: 'Lệnh lấy hàng', perm: P.OUTBOUND_VIEW },
+       { key: '/picking-scan', icon: <ScanOutlined />, label: 'Quét lấy hàng', perm: P.OUTBOUND_PICK },
+@@ -54,18 +54,18 @@ const NAV = [
+     ],
+   },
+   {
+-    type: 'group', label: 'Điều chuyển', children: [
++    type: 'group', label: 'Điều chuyển', icon: <SwapOutlined />, children: [
+       { key: '/transfer-orders', icon: <SwapOutlined />, label: 'Phiếu điều chuyển', perm: P.TRANSFER_VIEW },
+     ],
+   },
+   {
+-    type: 'group', label: 'Kiểm kê', children: [
++    type: 'group', label: 'Kiểm kê', icon: <AuditOutlined />, children: [
+       { key: '/stocktakes', icon: <AuditOutlined />, label: 'Phiên kiểm kê', perm: P.STOCKTAKE_VIEW },
+       { key: '/adjustment-vouchers', icon: <ReconciliationOutlined />, label: 'Phiếu điều chỉnh', perm: P.ADJUSTMENT_VIEW },
+     ],
+   },
+   {
+-    type: 'group', label: 'Quản trị', children: [
++    type: 'group', label: 'Quản trị', icon: <TeamOutlined />, children: [
+       { key: '/users', icon: <UserOutlined />, label: 'Người dùng', perm: P.USER_VIEW },
+       { key: '/roles', icon: <SafetyCertificateOutlined />, label: 'Vai trò', perm: P.ROLE_VIEW },
+       { key: '/permissions', icon: <KeyOutlined />, label: 'Quyền hạn', perm: P.PERMISSION_VIEW },
+@@ -81,12 +81,27 @@ const TITLE_BY_PATH = (() => {
+   return m
+ })()
+ 
++// Nhóm điều hướng -> SubMenu đóng/mở được.
++// Bản cũ dùng type:'group' (nhãn tĩnh, luôn xổ). Hệ quả: 20 mục xổ hết cùng lúc
++// phải cuộn nhiều, và khi THU GỌN sidebar thì nhãn nhóm biến mất => còn 20 icon
++// rời rạc không biết mục nào thuộc nhóm nào. SubMenu vừa gập lại cho gọn, vừa
++// hiện thành popup-có-tiêu-đề khi thu gọn.
++//
++// Nhóm chỉ có đúng 1 mục con (Điều chuyển) thì KHÔNG bọc submenu — thừa một lớp
++// bấm cho một mục, đưa thẳng ra ngoài.
+ function buildMenu(nav, hasPermission) {
+   return nav
+-    .map((item) => {
++    .map((item, i) => {
+       if (item.type === 'group') {
+         const children = buildMenu(item.children, hasPermission)
+-        return children.length ? { ...item, children } : null
++        if (!children.length) return null
++        if (children.length === 1) return children[0]
++        return {
++          key: `grp-${item.label}-${i}`,
++          icon: item.icon,
++          label: item.label,
++          children,
++        }
+       }
+       if (item.perm && !hasPermission(item.perm)) return null
+       // eslint-disable-next-line no-unused-vars -- bóc `perm` ra khỏi item menu
+@@ -96,6 +111,16 @@ function buildMenu(nav, hasPermission) {
+     .filter(Boolean)
+ }
+ 
++// Với mỗi mục đang chọn, tìm key nhóm chứa nó để tự mở đúng submenu.
++function findOpenKeys(items, selectedKey) {
++  for (const it of items) {
++    if (it.children) {
++      if (it.children.some(c => c.key === selectedKey)) return [it.key]
++    }
++  }
++  return []
++}
++
+ export default function AppLayout() {
+   const { user, logout, hasPermission } = useAuth()
+   const navigate = useNavigate()
+@@ -114,6 +139,13 @@ export default function AppLayout() {
+   const items = buildMenu(NAV, hasPermission)
+   const selectedKey = '/' + (location.pathname.split('/')[1] || '')
+ 
++  // Tự mở nhóm chứa trang hiện tại, hợp nhất với các nhóm người dùng đã mở tay.
++  // Dùng state phái sinh (gộp lúc render) thay cho setState-trong-effect —
++  // effect kiểu đó gây render thừa và bị lint chặn (set-state-in-effect).
++  const [userOpen, setUserOpen] = useState([])
++  const autoOpen = findOpenKeys(items, selectedKey)
++  const openKeys = Array.from(new Set([...userOpen, ...autoOpen]))
++
+   // Tiêu đề tab theo trang: phục vụ mở nhiều tab, lịch sử và bookmark.
+   useEffect(() => {
+     const name = TITLE_BY_PATH[selectedKey]
+@@ -125,7 +157,13 @@ export default function AppLayout() {
+   const go = (key) => { setDrawerOpen(false); navigate(key) }
+ 
+   const menu = (
+-    <Menu mode="inline" selectedKeys={[selectedKey]} items={items}
++    <Menu
++      mode="inline"
++      selectedKeys={[selectedKey]}
++      // Khi thu gọn, antd tự đổi submenu thành popup => không truyền openKeys
++      // (nếu không sẽ vênh). Chỉ điều khiển openKeys ở trạng thái mở rộng.
++      {...(collapsed ? {} : { openKeys, onOpenChange: setUserOpen })}
++      items={items}
+       onClick={({ key }) => go(key)} />
+   )
+ 
+diff --git a/frontend/src/components/CrudResource.jsx b/frontend/src/components/CrudResource.jsx
+index 71de8a1..466a316 100644
+--- a/frontend/src/components/CrudResource.jsx
++++ b/frontend/src/components/CrudResource.jsx
+@@ -7,6 +7,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined } from '@ant
+ import Can from './Can'
+ import { useAuth } from '../auth/AuthContext'
+ import FitTable from './FitTable'
++import EmptyState from './EmptyState'
+ import { getErrorMessage } from '../api/client'
+ import { handleFormError } from '../utils/formErrors'
+ 
+@@ -116,6 +117,10 @@ export default function CrudResource({
+         loading={isLoading}
+         dataSource={data}
+         columns={(canUpdate || canRemove) ? [...columns, actionCol] : columns}
++        emptyState={<EmptyState
++          title={`Chưa có ${noun} nào`}
++          action={perms.create ? { label: `Thêm ${noun}`, onClick: openCreate, permission: perms.create } : undefined}
++        />}
+         pagination={{ pageSize: 10, showSizeChanger: true }}
+         size="middle"
+       />
+diff --git a/frontend/src/components/EmptyState.jsx b/frontend/src/components/EmptyState.jsx
+new file mode 100644
+index 0000000..4395dda
+--- /dev/null
++++ b/frontend/src/components/EmptyState.jsx
+@@ -0,0 +1,44 @@
++import { Empty, Button, Space } from 'antd'
++import { PlusOutlined } from '@ant-design/icons'
++import Can from './Can'
++
++/**
++ * Empty state có LỜI MỜI HÀNH ĐỘNG, thay cho <Empty> trống trơn.
++ *
++ * "Chưa có sản phẩm" đứng một mình là ngõ cụt: người dùng mới không biết bước
++ * tiếp theo là gì, phải tự mò lên thanh công cụ tìm nút "Thêm". Empty state tốt
++ * là một lời mời — nêu đúng một hành động chính ngay tại chỗ.
++ *
++ * Nút CTA bọc trong <Can> nên tự ẩn/khoá theo quyền: người chỉ-xem sẽ thấy mô
++ * tả nhưng không thấy nút tạo (đúng, vì họ không tạo được).
++ *
++ * props:
++ *  - title:   dòng mô tả (vd "Chưa có sản phẩm nào")
++ *  - action:  { label, onClick, icon?, permission? } — nút chính
++ *  - secondary: { label, onClick, icon? } — nút phụ tuỳ chọn (vd "Nhập từ Excel")
++ *  - image:   'default' | 'simple' (mặc định simple cho gọn)
++ */
++export default function EmptyState({ title, action, secondary, image = 'simple' }) {
++  const img = image === 'simple' ? Empty.PRESENTED_IMAGE_SIMPLE : Empty.PRESENTED_IMAGE_DEFAULT
++
++  const buttons = (action || secondary) && (
++    <Space wrap style={{ marginTop: 8 }}>
++      {action && (
++        <Can permission={action.permission}>
++          <Button type="primary" icon={action.icon ?? <PlusOutlined />} onClick={action.onClick}>
++            {action.label}
++          </Button>
++        </Can>
++      )}
++      {secondary && (
++        <Button icon={secondary.icon} onClick={secondary.onClick}>{secondary.label}</Button>
++      )}
++    </Space>
++  )
++
++  return (
++    <Empty image={img} description={title} style={{ padding: '24px 0' }}>
++      {buttons}
++    </Empty>
++  )
++}
+diff --git a/frontend/src/components/FitTable.jsx b/frontend/src/components/FitTable.jsx
+index 610de73..50fc269 100644
+--- a/frontend/src/components/FitTable.jsx
++++ b/frontend/src/components/FitTable.jsx
+@@ -1,5 +1,5 @@
+ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+-import { Table, Skeleton } from 'antd'
++import { Table, Skeleton, Empty } from 'antd'
+ 
+ /**
+  * Bảng "vừa 1 màn hình": chỉ thân bảng cuộn dọc, hàng tiêu đề dính, phân trang
+@@ -40,7 +40,8 @@ import { Table, Skeleton } from 'antd'
+ export const FIT_TABLE_ENABLED = true
+ 
+ export default function FitTable({
+-  scroll, bottomGap = 36, minBodyHeight = 140, fit = true, skeletonRows = 6, ...rest
++  scroll, bottomGap = 36, minBodyHeight = 140, fit = true, skeletonRows = 6,
++  emptyState, ...rest
+ }) {
+   const wrapRef = useRef(null)
+   const rafRef = useRef(0)
+@@ -92,7 +93,19 @@ export default function FitTable({
+   // Khung xương chỉ cho lần tải đầu (chưa có dòng nào). Đã có dữ liệu cũ thì
+   // giữ nguyên bảng — thay bằng khung xương lúc đó mới là bước lùi.
+   const firstLoad = rest.loading && !(rest.dataSource || []).length
+-  const props = firstLoad ? { ...rest, ...skeletonProps(rest.columns, skeletonRows) } : rest
++  let props = firstLoad ? { ...rest, ...skeletonProps(rest.columns, skeletonRows) } : rest
++
++  // Bảng rỗng (đã tải xong): thay "No data" tiếng Anh mặc định bằng empty-state
++  // có lời mời hành động, nếu trang truyền vào. Không truyền -> ít nhất tiếng Việt.
++  if (!firstLoad && !rest.loading && !(rest.dataSource || []).length) {
++    props = {
++      ...props,
++      locale: {
++        emptyText: emptyState || <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có dữ liệu" />,
++        ...(rest.locale || {}),
++      },
++    }
++  }
+ 
+   if (!enabled) {
+     // Bảng thường: trang cuộn tự nhiên, không đo đạc, không vùng cuộn lồng nhau.
+diff --git a/frontend/src/features/products/ProductsPage.jsx b/frontend/src/features/products/ProductsPage.jsx
+index cc67f3c..6782a99 100644
+--- a/frontend/src/features/products/ProductsPage.jsx
++++ b/frontend/src/features/products/ProductsPage.jsx
+@@ -1,4 +1,6 @@
+ import ExportButton from '../../components/ExportButton'
++import { useNavigate } from 'react-router-dom'
++import EmptyState from '../../components/EmptyState'
+ import PageHeader from '../../components/PageHeader'
+ import { sorterToParams, columnSortOrder } from '../../utils/sort'
+ import FitTable from '../../components/FitTable'
+@@ -8,7 +10,7 @@ import {
+   Button, Space, Modal, Form, Input, Select, InputNumber, Switch, Tag, Popconfirm, App as AntdApp,
+ } from 'antd'
+ import {
+-  PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, SearchOutlined,
++  PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, SearchOutlined, ImportOutlined,
+ } from '@ant-design/icons'
+ import Can from '../../components/Can'
+ import { productsApi } from '../../api/products.api'
+@@ -55,6 +57,7 @@ export default function ProductsPage() {
+     onError: (e) => message.error(getErrorMessage(e)),
+   })
+ 
++  const navigate = useNavigate()
+   const openCreate = () => {
+     setEditing(null); form.resetFields()
+     form.setFieldsValue({ unit: 'PCS', safetyStock: 10, hazardousFlag: false })
+@@ -126,6 +129,11 @@ export default function ProductsPage() {
+         loading={list.isLoading}
+         dataSource={page?.content || []}
+         columns={columns}
++        emptyState={<EmptyState
++          title={keyword ? `Không tìm thấy sản phẩm khớp "${keyword}"` : 'Chưa có sản phẩm nào'}
++          action={keyword ? undefined : { label: 'Thêm sản phẩm', onClick: openCreate, permission: P.MASTER_PRODUCT_MANAGE }}
++          secondary={keyword ? undefined : { label: 'Nhập từ Excel', icon: <ImportOutlined />, onClick: () => navigate('/data-io') }}
++        />}
+         scroll={{ x: 'max-content' }}
+         onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') { setSorter(s); setPager(p => ({ ...p, page: 0 })) } }}
+         pagination={{
+diff --git a/frontend/src/features/users/UsersPage.jsx b/frontend/src/features/users/UsersPage.jsx
+index 4ea4a98..1be1c80 100644
+--- a/frontend/src/features/users/UsersPage.jsx
++++ b/frontend/src/features/users/UsersPage.jsx
+@@ -1,4 +1,5 @@
+ import FitTable from '../../components/FitTable'
++import EmptyState from '../../components/EmptyState'
+ import PageHeader from '../../components/PageHeader'
+ import { useState } from 'react'
+ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+@@ -110,6 +111,7 @@ export default function UsersPage() {
+       />
+ 
+       <FitTable rowKey="id" loading={users.isLoading} dataSource={users.data || []}
++        emptyState={<EmptyState title="Chưa có người dùng nào" action={{ label: 'Thêm người dùng', onClick: openCreate, permission: P.USER_CREATE }} />}
+         columns={columns} scroll={{ x: 'max-content' }}
+         pagination={{ pageSize: 10, showSizeChanger: true }} />
+ 

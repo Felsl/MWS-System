@@ -1,11 +1,12 @@
 import FitTable from '../../components/FitTable'
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Tabs, Tag, Table, Button, Modal, Form, Input, App as AntdApp } from 'antd'
+import { Tabs, Tag, Button, Modal, Form, Input, App as AntdApp } from 'antd'
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import CrudResource from '../../components/CrudResource'
 import { suppliersApi, customersApi, carriersApi } from '../../api/partners.api'
-import { getErrorMessage } from '../../api/client'
+
+import { handleFormError } from '../../utils/formErrors'
 import { P } from '../../constants/permissions'
 
 const partnerPerms = {
@@ -88,7 +89,7 @@ function Carriers() {
   const createMut = useMutation({
     mutationFn: carriersApi.create,
     onSuccess: () => { message.success('Đã tạo đơn vị vận chuyển'); setOpen(false); qc.invalidateQueries({ queryKey: ['carriers'] }) },
-    onError: (e) => message.error(getErrorMessage(e)),
+    onError: (e) => handleFormError(form, e, message),
   })
 
   const submit = async () => {

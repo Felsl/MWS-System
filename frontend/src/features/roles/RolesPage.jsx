@@ -1,9 +1,9 @@
 import FitTable from '../../components/FitTable'
+import PageHeader from '../../components/PageHeader'
 import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Table, Button, Space, Modal, Form, Input, Popconfirm, Typography,
-  Checkbox, Collapse, Tag, Empty, App as AntdApp,
+  Button, Space, Modal, Form, Input, Popconfirm, Checkbox, Collapse, Tag, Empty, App as AntdApp,
 } from 'antd'
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, SafetyCertificateOutlined,
@@ -12,6 +12,7 @@ import Can from '../../components/Can'
 import { rolesApi } from '../../api/roles.api'
 import { permissionsApi } from '../../api/permissions.api'
 import { getErrorMessage } from '../../api/client'
+import { handleFormError } from '../../utils/formErrors'
 import { P } from '../../constants/permissions'
 
 export default function RolesPage() {
@@ -28,17 +29,17 @@ export default function RolesPage() {
   const createMut = useMutation({
     mutationFn: rolesApi.create,
     onSuccess: () => { message.success('Đã tạo vai trò'); setOpen(false); invalidate() },
-    onError: (e) => message.error(getErrorMessage(e)),
+    onError: (e) => handleFormError(form, e, message),
   })
   const updateMut = useMutation({
     mutationFn: ({ id, body }) => rolesApi.update(id, body),
     onSuccess: () => { message.success('Đã cập nhật'); setOpen(false); invalidate() },
-    onError: (e) => message.error(getErrorMessage(e)),
+    onError: (e) => handleFormError(form, e, message),
   })
   const removeMut = useMutation({
     mutationFn: rolesApi.remove,
     onSuccess: () => { message.success('Đã xoá'); invalidate() },
-    onError: (e) => message.error(getErrorMessage(e)),
+    onError: (e) => handleFormError(form, e, message),
   })
 
   const openCreate = () => { setEditing(null); form.resetFields(); setOpen(true) }
@@ -69,7 +70,9 @@ export default function RolesPage() {
             <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(row)} />
           </Can>
           <Can permission={P.ROLE_DELETE}>
-            <Popconfirm title="Xoá vai trò?" okText="Xoá" cancelText="Huỷ"
+            <Popconfirm title="Xoá vai trò?"
+              description={<span>Xoá vai trò <b>{row.name}</b>. Người dùng đang giữ vai trò này sẽ mất toàn bộ quyền kèm theo.</span>}
+              okText="Xoá" okButtonProps={{ danger: true }} cancelText="Huỷ"
               onConfirm={() => removeMut.mutate(row.id)}>
               <Button size="small" danger icon={<DeleteOutlined />} />
             </Popconfirm>
@@ -81,15 +84,15 @@ export default function RolesPage() {
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>Vai trò</Typography.Title>
-        <Space>
+      <PageHeader
+        title="Vai trò"
+        extra={<>
           <Button icon={<ReloadOutlined />} onClick={() => roles.refetch()} loading={roles.isFetching} />
           <Can permission={P.ROLE_CREATE}>
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>Thêm vai trò</Button>
           </Can>
-        </Space>
-      </div>
+        </>}
+      />
 
       <FitTable rowKey="id" loading={roles.isLoading} dataSource={roles.data || []}
         columns={columns} scroll={{ x: 'max-content' }}

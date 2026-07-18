@@ -1,5 +1,5 @@
-import { List, Button, Typography, Tag, Space, Empty, Badge } from 'antd'
-import { CheckOutlined, ReloadOutlined, WifiOutlined } from '@ant-design/icons'
+import { List, Button, Typography, Tag, Space, Empty, Badge , theme } from 'antd'
+import { CheckOutlined, ReloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useNotifications } from '../../context/NotificationContext'
 import { useFitY } from '../../hooks/useFitY'
@@ -7,6 +7,7 @@ import { useFitY } from '../../hooks/useFitY'
 export default function NotificationsPage() {
   const { notifications, loading, unreadCount, connected, markRead, markAllRead, refetch } = useNotifications()
   const { ref: listRef, y: listH } = useFitY()
+  const { token } = theme.useToken()
 
   return (
     <div>
@@ -34,7 +35,7 @@ export default function NotificationsPage() {
             dataSource={notifications}
             renderItem={(n) => (
               <List.Item
-                style={{ background: n.isRead ? undefined : '#e6f4ff', padding: '12px 16px', borderRadius: 8, marginBottom: 6 }}
+                style={{ background: n.isRead ? undefined : token.controlItemBgActive, padding: '12px 16px', borderRadius: token.borderRadiusLG, marginBottom: 6 }}
                 actions={n.isRead ? [] : [<a key="r" onClick={() => markRead(n.id)}>Đánh dấu đã đọc</a>]}
               >
                 <List.Item.Meta
@@ -47,7 +48,7 @@ export default function NotificationsPage() {
                   }
                   description={
                     <div>
-                      <div style={{ color: 'rgba(0,0,0,.75)' }}>{n.message}</div>
+                      <div style={{ color: token.colorText }}>{n.message}</div>
                       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                         {n.referenceType ? `${n.referenceType}: ${n.referenceId} · ` : ''}
                         {n.createdAt ? dayjs(n.createdAt).format('DD/MM/YYYY HH:mm') : ''}

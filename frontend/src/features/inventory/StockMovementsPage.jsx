@@ -1,6 +1,8 @@
 import FitTable from '../../components/FitTable'
-import { useMemo, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import RowLink from '../../components/RowLink'
+import { useState } from 'react'
+import { useProducts } from '../../hooks/useProducts'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query'
 import {
   Card, Select, Table, Space, Typography, Tag, Empty, Button, Modal,
@@ -9,7 +11,6 @@ import { ReloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { getErrorMessage } from '../../api/client'
 import { stockMovementsApi } from '../../api/stockMovements.api'
-import { productsApi } from '../../api/products.api'
 import { warehousesApi } from '../../api/warehouses.api'
 import { useBinLabels } from '../../hooks/useBinLabels'
 
@@ -17,15 +18,13 @@ import { useBinLabels } from '../../hooks/useBinLabels'
 const changeTag = (v) => <Tag color={v === 0 ? 'default' : v > 0 ? 'green' : 'red'}>{v > 0 ? `+${v}` : v}</Tag>
 
 export default function StockMovementsPage() {
-  const location = useLocation()
-  const products = useQuery({ queryKey: ['products', 'all'], queryFn: () => productsApi.list({ size: 500 }) })
+  const [sp] = useSearchParams()
+  const { query: products, list: productList, map: productMap } = useProducts()
   const warehouses = useQuery({ queryKey: ['warehouses', 'active'], queryFn: () => warehousesApi.list(false) })
   const { labelOf } = useBinLabels()
-  const productList = products.data?.content || []
-  const productMap = useMemo(() => Object.fromEntries(productList.map(p => [p.id, p])), [productList])
 
-  const [productId, setProductId] = useState(location.state?.productId || undefined)
-  const [warehouseId, setWarehouseId] = useState(location.state?.warehouseId || undefined)
+  const [productId, setProductId] = useState(sp.get('productId') || undefined)
+  const [warehouseId, setWarehouseId] = useState(sp.get('warehouseId') || undefined)
   const [refModal, setRefModal] = useState(null) // { referenceType, referenceId }
 
   const q = useInfiniteQuery({
@@ -47,9 +46,9 @@ export default function StockMovementsPage() {
     {
       title: 'Chứng từ', key: 'ref', width: 200,
       render: (_, r) => r.referenceId
-        ? <a onClick={() => setRefModal({ referenceType: r.referenceType, referenceId: r.referenceId })}>
+        ? <RowLink onClick={() => setRefModal({ referenceType: r.referenceType, referenceId: r.referenceId })}>
             {r.referenceType}: {r.referenceId}
-          </a>
+          </RowLink>
         : '—',
     },
     { title: 'Người tạo', dataIndex: 'createdBy', width: 120, render: (v) => v || '—' },

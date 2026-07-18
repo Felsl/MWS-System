@@ -1,7 +1,10 @@
 import FitTable from '../../components/FitTable'
-import { useEffect, useMemo, useState } from 'react'
+import RowLink from '../../components/RowLink'
+import { useState } from 'react'
+import { useProducts } from '../../hooks/useProducts'
 import { useBinLabels } from '../../hooks/useBinLabels'
-import { useLocation } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
+import { useRecordView } from '../../hooks/useRecordView'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Button, Input, Form, Select, InputNumber, Table, Space, Typography, Tag,
@@ -17,7 +20,6 @@ import { useAuth } from '../../auth/AuthContext'
 import { getErrorMessage } from '../../api/client'
 import { P } from '../../constants/permissions'
 import { pickingListsApi } from '../../api/pickingLists.api'
-import { productsApi } from '../../api/products.api'
 import { usersApi } from '../../api/users.api'
 
 const PL_STATUS = {
@@ -28,32 +30,33 @@ const PL_STATUS = {
 const plTag = (s) => <Tag color={PL_STATUS[s]?.color || 'default'}>{PL_STATUS[s]?.label || s}</Tag>
 
 export default function PickingListsPage() {
-  const location = useLocation()
-  const openId = location.state?.openId || null
-  const [view, setView] = useState(openId ? { mode: 'detail', id: openId } : { mode: 'list', id: null })
-  const openDetail = (id) => setView({ mode: 'detail', id })
+  // Chế độ xem nằm ở URL: /picking-lists | /picking-lists/new | /picking-lists/<id>
+  // (thay location.state?.openId — state chết sau F5).
+  const { mode, id, openList, openCreate, openDetail } = useRecordView('/picking-lists')
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
         <Space>
-          {view.mode !== 'list' && (
-            <Button icon={<ArrowLeftOutlined />} onClick={() => setView({ mode: 'list', id: null })}>Danh sách</Button>
+          {mode !== 'list' && (
+            <Button icon={<ArrowLeftOutlined />} onClick={openList}>Danh sách</Button>
           )}
         </Space>
 
       </div>
-      {view.mode === 'list' && <PLList onOpen={openDetail} />}
-      {view.mode === 'create' && <CreatePL onCreated={(pl) => openDetail(pl.id)} />}
-      {view.mode === 'detail' && view.id && <PLDetail id={view.id} />}
+      {/* BUG CŨ: PLList gọi setView() của component cha => ReferenceError khi bấm
+          "Tạo lệnh". Nay truyền hẳn onCreate xuống. */}
+      {mode === 'list' && <PLList onOpen={openDetail} onCreate={openCreate} />}
+      {mode === 'create' && <CreatePL onCreated={(pl) => openDetail(pl.id, { replace: true })} />}
+      {mode === 'detail' && id && <PLDetail id={id} />}
     </div>
   )
 }
 
-function PLList({ onOpen }) {
+function PLList({ onOpen, onCreate }) {
   const list = useQuery({ queryKey: ['pl-list'], queryFn: pickingListsApi.list })
   const columns = [
-    { title: 'Mã lệnh', dataIndex: 'id', render: (v) => <a onClick={() => onOpen(v)}>{v}</a> },
+    { title: 'Mã lệnh', dataIndex: 'id', render: (v) => <RowLink onClick={() => onOpen(v)}>{v}</RowLink> },
     { title: 'Trạng thái', dataIndex: 'status', width: 130, render: plTag },
     { title: 'Đơn bán (SO)', dataIndex: 'soId' },
     { title: 'Người lấy', dataIndex: 'assignedTo', width: 140, render: (v) => v || '—' },
@@ -62,11 +65,11 @@ function PLList({ onOpen }) {
   return (
     <>
       <Space style={{  marginBottom: 12,display: 'flex',justifyContent:'space-between'  }}>
-        <Typography.Title level={4} style={{  marginLeft: 20,marginTop: 0 }}>Lệnh lấy hàng (Picking)</Typography.Title>
+        <Typography.Title level={4} style={{ margin: 0 }}>Lệnh lấy hàng (Picking)</Typography.Title>
         <Space>
           <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching}>Làm mới</Button>
           <Can permission={P.OUTBOUND_PICK}>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setView({ mode: 'create', id: null })}>Tạo lệnh</Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>Tạo lệnh</Button>
           </Can>
         </Space>
         
@@ -79,8 +82,9 @@ function PLList({ onOpen }) {
 
 function CreatePL({ onCreated }) {
   const { message } = AntdApp.useApp()
-  const location = useLocation()
-  const [soId, setSoId] = useState(location.state?.soId || '')
+  // ?soId=... khi được điều hướng từ trang Đơn bán hàng (thay location.state).
+  const [sp] = useSearchParams()
+  const [soId, setSoId] = useState(sp.get('soId') || '')
   const createMut = useMutation({
     mutationFn: () => pickingListsApi.create(soId.trim()),
     onSuccess: (pl) => { message.success('Đã tạo lệnh lấy hàng'); onCreated(pl) },
@@ -107,9 +111,7 @@ function PLDetail({ id }) {
   const { data: pl, isLoading, isError, error } = useQuery({
     queryKey: ['pl', id], queryFn: () => pickingListsApi.get(id),
   })
-  const products = useQuery({ queryKey: ['products', 'all'], queryFn: () => productsApi.list({ size: 500 }) })
-  const productMap = useMemo(
-    () => Object.fromEntries((products.data?.content || []).map(p => [p.id, p])), [products.data])
+  const { map: productMap } = useProducts()
   const { labelOf } = useBinLabels()
 
   const refresh = (u) => { qc.setQueryData(['pl', id], u); qc.invalidateQueries({ queryKey: ['pl-list'] }) }

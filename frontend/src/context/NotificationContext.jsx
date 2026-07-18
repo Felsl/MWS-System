@@ -26,7 +26,10 @@ export function NotificationProvider({ children }) {
 
   // Kết nối WebSocket khi đã đăng nhập; nhận tin -> làm mới inbox + đếm.
   useEffect(() => {
-    if (!canRead) { setConnected(false); return }
+    // Không setConnected(false) ở đây: state chỉ phản ánh TRẠNG THÁI WS.
+    // Việc "chưa đăng nhập thì coi như mất kết nối" được suy ra lúc đọc
+    // (xem `connected:` bên dưới) thay vì set trong thân effect.
+    if (!canRead) return
     const token = tokenStore.access
     if (!token) return
     const client = createNotificationClient({
@@ -40,27 +43,74 @@ export function NotificationProvider({ children }) {
         qc.invalidateQueries({ queryKey: ['notif-unread'] })
       },
     })
-    return () => { client.deactivate() }
+    return () => { client.deactivate(); setConnected(false) }
   }, [canRead, user?.userId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['notifications'] })
     qc.invalidateQueries({ queryKey: ['notif-unread'] })
   }
-  const markReadMut = useMutation({
-    mutationFn: notificationsApi.markRead, onSuccess: invalidate,
-    onError: (e) => notification.error({ message: getErrorMessage(e) }),
+
+  /**
+   * Chụp lại cache hiện tại rồi sửa ngay tại chỗ — nếu API hỏng thì trả về
+   * nguyên trạng. Dùng cho "đánh dấu đã đọc": thao tác này không thể hỏng theo
+   * kiểu nguy hiểm, và bắt người dùng chờ round-trip chỉ để chữ đậm nhạt đi là
+   * vô lý — nhất là qua Wi-Fi kho.
+   *
+   * `cancelQueries` bắt buộc: nếu có refetch đang bay, nó về sau và ghi đè bản
+   * sửa lạc quan => giao diện nhấp về trạng thái cũ.
+   */
+  // Trả về object CÙNG HÌNH DẠNG với cái BE gửi, chỉ đổi con số bên trong.
+  const withCount = (old, n) => (old && typeof old === 'object' ? { ...old, count: n } : { count: n })
+
+  const optimistic = (patch) => ({
+    onMutate: async (arg) => {
+      await qc.cancelQueries({ queryKey: ['notifications'] })
+      await qc.cancelQueries({ queryKey: ['notif-unread'] })
+      const prevInbox = qc.getQueryData(['notifications'])
+      const prevUnread = qc.getQueryData(['notif-unread'])
+      qc.setQueryData(['notifications'], (old) => patch.inbox(old || [], arg))
+      // Giữ nguyên HÌNH DẠNG cache: BE trả Map {count:n}, không phải số trần.
+      // Ghi đè bằng số sẽ làm readUnread() không đọc được và badge rơi về 0.
+      qc.setQueryData(['notif-unread'], (old) => patch.unread(old, arg))
+      return { prevInbox, prevUnread }   // giữ để hoàn tác
+    },
+    onError: (e, _arg, ctx) => {
+      // Trả cache về đúng ảnh chụp trước đó, rồi mới báo lỗi.
+      if (ctx?.prevInbox !== undefined) qc.setQueryData(['notifications'], ctx.prevInbox)
+      if (ctx?.prevUnread !== undefined) qc.setQueryData(['notif-unread'], ctx.prevUnread)
+      notification.error({ message: getErrorMessage(e) })
+    },
+    // Dù thành công hay thất bại đều đồng bộ lại với server.
+    onSettled: invalidate,
   })
+
+  const markReadMut = useMutation({
+    mutationFn: notificationsApi.markRead,
+    ...optimistic({
+      inbox: (list, id) => list.map(n => (n.id === id ? { ...n, isRead: true } : n)),
+      unread: (old, id) => {
+        const list = qc.getQueryData(['notifications']) || []
+        const wasUnread = list.some(x => x.id === id && !x.isRead)
+        return withCount(old, Math.max(0, readUnread(old) - (wasUnread ? 1 : 0)))
+      },
+    }),
+  })
+
   const markAllMut = useMutation({
-    mutationFn: notificationsApi.markAllRead, onSuccess: invalidate,
-    onError: (e) => notification.error({ message: getErrorMessage(e) }),
+    mutationFn: notificationsApi.markAllRead,
+    ...optimistic({
+      inbox: (list) => list.map(n => ({ ...n, isRead: true })),
+      unread: (old) => withCount(old, 0),
+    }),
   })
 
   const value = useMemo(() => ({
     notifications: inbox.data || [],
     loading: inbox.isLoading,
     unreadCount: readUnread(unread.data),
-    connected,
+    // WS nối được NHƯNG không còn quyền đọc => vẫn coi là chưa kết nối.
+    connected: canRead && connected,
     canRead,
     refetch: () => { inbox.refetch(); unread.refetch() },
     markRead: (id) => markReadMut.mutate(id),

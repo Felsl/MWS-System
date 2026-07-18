@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Card, Form, Input, Button, Typography, App as AntdApp } from 'antd'
+import { Card, Form, Input, Button, Typography, App as AntdApp, theme } from 'antd'
 import { UserOutlined, LockOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
@@ -11,6 +11,7 @@ export default function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const [loading, setLoading] = useState(false)
+  const { token } = theme.useToken()
 
   if (isAuthenticated) return <Navigate to="/" replace />
 
@@ -29,7 +30,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ display: 'grid', placeItems: 'center', height: '100vh', background: '#f0f2f5' }}>
+    <div style={{ display: 'grid', placeItems: 'center', height: '100vh', background: token.colorBgLayout }}>
       <Card style={{ width: 380 }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <Typography.Title level={3} style={{ marginBottom: 0 }}>MWS · Quản lý kho</Typography.Title>

@@ -13,6 +13,7 @@ import org.lvtn.mws.domain.service.AdjustmentDomainService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 
@@ -38,6 +39,7 @@ class AdjustmentAuthorityIntegrationTest extends AbstractIntegrationTest {
 
     private static final String WH = "WH-ADJ";
     private static final String PROD = "P-ADJ-1";
+    private static final String BIN = "BIN-ADJ-1";
 
     // tier2=5%, tier3=10%, tier4=20%; tier1 để rỗng (chênh lệch nhỏ không cần quyền đặc biệt)
     private static final AdjustmentApprovalPolicy POLICY = new AdjustmentApprovalPolicy(
@@ -47,16 +49,33 @@ class AdjustmentAuthorityIntegrationTest extends AbstractIntegrationTest {
     @Autowired IAdjustmentVoucherRepository voucherRepository;
     @Autowired IInventoryRepository inventoryRepository;
 
-    /** Tạo phiếu điều chỉnh DRAFT 1 dòng với % chênh lệch = |change|/before*100. */
+    /**
+     * Tạo phiếu điều chỉnh DRAFT gồm 1 dòng, với % chênh lệch = |change| / before * 100.
+     *
+     * <p>Các trường BẮT BUỘC của domain model (Objects.requireNonNull):
+     * phiếu cần {@code id, voucherNumber, warehouseId, reason}; dòng cần {@code id, productId, binLocationId}.
+     * {@code batchId} để null = điều chỉnh trên tồn tổng, không đụng lô vật lý
+     * (applyLine bỏ qua bước cập nhật lô khi batchId null).
+     */
     private AdjustmentVoucher seedVoucher(String id, int beforeQty, int change) {
         AdjustmentVoucherDetail line = AdjustmentVoucherDetail.builder()
-                .id(id + "-D1").voucherId(id).productId(PROD)
-                .beforeQuantity(beforeQty).quantityChange(change)
+                .id(id + "-D1")
+                .voucherId(id)
+                .productId(PROD)
+                .binLocationId(BIN)              // BẮT BUỘC
+                .beforeQuantity(beforeQty)
+                .quantityChange(change)
                 .afterQuantity(beforeQty + change)
                 .build();
+
         AdjustmentVoucher v = AdjustmentVoucher.builder()
-                .id(id).warehouseId(WH).reason("Lệch kiểm kê")
+                .id(id)
+                .voucherNumber("ADJ-" + id)      // BẮT BUỘC + UNIQUE ở tầng CSDL
+                .warehouseId(WH)
+                .reason("Lệch kiểm kê")
                 .status(AdjustmentVoucher.Status.DRAFT)
+                .createdBy("auditor")
+                .createdAt(LocalDateTime.now())
                 .details(List.of(line))
                 .build();
         return voucherRepository.save(v);
@@ -102,7 +121,7 @@ class AdjustmentAuthorityIntegrationTest extends AbstractIntegrationTest {
     @DisplayName("Chênh lệch nhỏ (3%, tầng thấp nhất) -> không cần quyền đặc biệt, duyệt được")
     void approveWithinLowestTier_needsNoSpecialAuthority() {
         seedInventory(100);
-        // before=100, change=-3 -> variance 3% <= 5% (tier2 threshold) -> tier1Authority = "" (không yêu cầu)
+        // before=100, change=-3 -> variance 3% <= 5% (ngưỡng tier2) -> tier1Authority = "" (không yêu cầu)
         AdjustmentVoucher v = seedVoucher("ADJ-LOW-1", 100, -3);
 
         AdjustmentVoucher approved = adjustmentService.approveAdjustmentVoucher(

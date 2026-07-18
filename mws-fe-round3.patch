@@ -1,0 +1,581 @@
+diff --git a/frontend/src/__smoke__/smoke.test.jsx b/frontend/src/__smoke__/smoke.test.jsx
+index 218d409..a2f96e5 100644
+--- a/frontend/src/__smoke__/smoke.test.jsx
++++ b/frontend/src/__smoke__/smoke.test.jsx
+@@ -8,8 +8,8 @@
+  *
+  * Chạy: npx vitest run
+  */
+-import { describe, it, expect, vi, beforeEach } from 'vitest'
+-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
++import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
++import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react'
+ import { MemoryRouter } from 'react-router-dom'
+ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+ import { ConfigProvider, App as AntdApp } from 'antd'
+@@ -54,6 +54,11 @@ vi.mock('../ws/notificationClient', () => ({
+   createNotificationClient: () => ({ deactivate: vi.fn() }),
+ }))
+ 
++// `globals: false` trong vitest.config.js => testing-library KHÔNG tự đăng ký
++// auto-cleanup, DOM sẽ cộng dồn qua các test và getByRole ném "Found multiple
++// elements". Phải dọn tay.
++afterEach(cleanup)
++
+ // jsdom chưa có 2 API này; antd + FitTable cần.
+ beforeEach(() => {
+   globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} }
+@@ -76,31 +81,28 @@ function renderAt(path, ui) {
+ }
+ 
+ describe('Hook điều khiển URL', () => {
+-  it('useRecordView suy ra đúng mode từ đường dẫn', async () => {
+-    const { useRecordView } = await import('../hooks/useRecordView')
+-    const seen = []
+-    function Probe() {
+-      const v = useRecordView('/transfer-orders')
+-      seen.push(v.mode)
+-      return <div data-testid="m">{v.mode}:{v.id || '-'}</div>
+-    }
+-    const { Routes, Route } = await import('react-router-dom')
+-    const tree = (
+-      <Routes>
+-        <Route path="/transfer-orders" element={<Probe />} />
+-        <Route path="/transfer-orders/new" element={<Probe />} />
+-        <Route path="/transfer-orders/:id" element={<Probe />} />
+-      </Routes>
+-    )
+-    renderAt('/transfer-orders', tree)
+-    expect(screen.getByTestId('m').textContent).toBe('list:-')
+-
+-    renderAt('/transfer-orders/new', tree)
+-    expect(screen.getAllByTestId('m').at(-1).textContent).toBe('create:-')
+-
+-    renderAt('/transfer-orders/abc-123', tree)
+-    expect(screen.getAllByTestId('m').at(-1).textContent).toBe('detail:abc-123')
+-  })
++  for (const [path, expected] of [
++    ['/transfer-orders', 'list:-'],
++    ['/transfer-orders/new', 'create:-'],
++    ['/transfer-orders/abc-123', 'detail:abc-123'],
++  ]) {
++    it(`useRecordView: ${path} -> ${expected}`, async () => {
++      const { useRecordView } = await import('../hooks/useRecordView')
++      function Probe() {
++        const v = useRecordView('/transfer-orders')
++        return <div data-testid="m">{v.mode}:{v.id || '-'}</div>
++      }
++      const { Routes, Route } = await import('react-router-dom')
++      renderAt(path, (
++        <Routes>
++          <Route path="/transfer-orders" element={<Probe />} />
++          <Route path="/transfer-orders/new" element={<Probe />} />
++          <Route path="/transfer-orders/:id" element={<Probe />} />
++        </Routes>
++      ))
++      expect(screen.getByTestId('m').textContent).toBe(expected)
++    })
++  }
+ 
+   it('useListParams đọc bộ lọc từ query string', async () => {
+     const { useListParams } = await import('../hooks/useListParams')
+@@ -113,6 +115,58 @@ describe('Hook điều khiển URL', () => {
+   })
+ })
+ 
++describe('Can — khoá nút thay vì ẩn', () => {
++  // Mock useAuth ở trên trả hasPermission: () => true, nên ở đây phải mock lại
++  // AuthContext theo từng ca. Dùng doMock + import động để không dính hoisting.
++  async function CanWith(granted) {
++    vi.resetModules()
++    vi.doMock('../auth/AuthContext', () => ({
++      useAuth: () => ({ hasPermission: (p) => granted.includes(p) }),
++    }))
++    return (await import('../components/Can')).default
++  }
++
++  it('CÓ quyền: nút bình thường', async () => {
++    const Can = await CanWith(['USER_CREATE'])
++    const { Button } = await import('antd')
++    renderAt('/', <Can permission="USER_CREATE"><Button>Tạo</Button></Can>)
++    const btn = screen.getByRole('button', { name: /Tạo/ })
++    expect(btn.disabled).toBe(false)
++  })
++
++  it('THIẾU quyền: nút bị khoá chứ KHÔNG biến mất', async () => {
++    const Can = await CanWith([])
++    const { Button } = await import('antd')
++    renderAt('/', <Can permission="USER_CREATE"><Button>Tạo</Button></Can>)
++    // Điểm mấu chốt của mục này: nút vẫn còn đó để người dùng biết chức năng tồn tại.
++    const btn = screen.getByRole('button', { name: /Tạo/ })
++    expect(btn.disabled).toBe(true)
++  })
++
++  it('THIẾU quyền + con KHÔNG phải nút: vẫn ẩn như cũ', async () => {
++    const Can = await CanWith([])
++    const { Tag } = await import('antd')
++    renderAt('/', <Can permission="USER_CREATE"><Tag>Khối nội dung</Tag></Can>)
++    expect(screen.queryByText('Khối nội dung')).toBeNull()
++  })
++
++  it('mode="hide" ép ẩn kể cả khi con là nút', async () => {
++    const Can = await CanWith([])
++    const { Button } = await import('antd')
++    renderAt('/', <Can permission="USER_CREATE" mode="hide"><Button>Tạo</Button></Can>)
++    expect(screen.queryByRole('button', { name: /Tạo/ })).toBeNull()
++  })
++})
++
++describe('Nhãn quyền', () => {
++  it('MỌI mã trong P đều có nhãn tiếng Việt', async () => {
++    const { P, PERM_LABELS } = await import('../constants/permissions')
++    // Chặn việc thêm quyền mới ở BE mà quên nhãn => tooltip rơi về mã trần.
++    const thieu = Object.values(P).filter(code => !PERM_LABELS[code])
++    expect(thieu, `Thiếu nhãn cho: ${thieu.join(', ')}`).toEqual([])
++  })
++})
++
+ describe('Tách lỗi validate của BE', () => {
+   it('tách đúng định dạng "field: msg; field: msg"', async () => {
+     const { parseFieldErrors } = await import('../utils/formErrors')
+diff --git a/frontend/src/components/Can.jsx b/frontend/src/components/Can.jsx
+index 8d8a232..f2d509a 100644
+--- a/frontend/src/components/Can.jsx
++++ b/frontend/src/components/Can.jsx
+@@ -1,7 +1,68 @@
++import { cloneElement, isValidElement } from 'react'
++import { Button, Popconfirm, Tooltip } from 'antd'
+ import { useAuth } from '../auth/AuthContext'
+-// Ẩn/hiện theo quyền. <Can permission="USER_CREATE">...</Can>
+-export default function Can({ permission, children, fallback = null }) {
++import { permLabel } from '../constants/permissions'
++
++/**
++ * Kiểm soát hiển thị theo quyền.
++ *
++ * TRƯỚC: luôn ẩn tiệt. Người dùng mở trang thấy thiếu nút mà không hiểu vì sao —
++ * không biết là do phân quyền, do lỗi, hay do phiếu sai trạng thái. Nhiều người
++ * sẽ đi hỏi admin hoặc tưởng app hỏng.
++ *
++ * NAY: nếu con là <Button> hoặc <Popconfirm> thì KHOÁ nút lại + tooltip
++ * "Cần quyền: Duyệt đơn mua hàng". Người dùng biết chức năng có tồn tại, biết
++ * đang thiếu đúng quyền nào để đi xin. Đây chính là cách InventoryPage đã làm
++ * sẵn ("* Cần quyền INVENTORY_ADJUST..."), nay áp cho toàn app.
++ *
++ * Con không phải nút (Tag, Space, cả một khối...) thì vẫn ẩn như cũ — khoá một
++ * khối nội dung là vô nghĩa.
++ *
++ * props:
++ *  - permission: mã quyền cần có. Không truyền => luôn hiện.
++ *  - mode: 'auto' (mặc định) | 'disable' | 'hide' — ép hành vi khi cần.
++ *  - fallback: node thay thế khi ẩn.
++ *
++ * LƯU Ý BẢO MẬT: đây chỉ là lớp giao diện. Khoá nút không thay cho @PreAuthorize
++ * ở BE — người dùng vẫn có thể gọi thẳng API.
++ */
++export default function Can({ permission, children, fallback = null, mode = 'auto' }) {
+   const { hasPermission } = useAuth()
++
+   if (!permission) return children
+-  return hasPermission(permission) ? children : fallback
++  if (hasPermission(permission)) return children
++
++  const resolved = mode === 'auto' ? (isLockable(children) ? 'disable' : 'hide') : mode
++  if (resolved === 'hide' || !isLockable(children)) return fallback
++
++  return (
++    <Tooltip title={`Cần quyền: ${permLabel(permission)}`}>
++      {/* Nút bị disabled không phát sự kiện chuột => Tooltip sẽ không bao giờ
++          hiện nếu gắn thẳng vào nó. Bọc span là cách antd khuyến nghị. */}
++      <span style={{ display: 'inline-block', cursor: 'not-allowed' }}>
++        {lock(children)}
++      </span>
++    </Tooltip>
++  )
++}
++
++/** Chỉ Button và Popconfirm mới khoá được. */
++function isLockable(node) {
++  return isValidElement(node) && (node.type === Button || node.type === Popconfirm)
++}
++
++/**
++ * Khoá cây con.
++ * Popconfirm cần disabled ở CẢ hai tầng: `disabled` trên Popconfirm chặn hộp xác
++ * nhận bật lên, nhưng nút bên trong vẫn trông như bấm được nếu không khoá luôn.
++ */
++function lock(node) {
++  if (node.type === Popconfirm) {
++    return cloneElement(node, {
++      disabled: true,
++      children: isLockable(node.props.children) ? lock(node.props.children) : node.props.children,
++    })
++  }
++  // Button: chặn thêm onClick phòng khi có style tuỳ biến làm nút vẫn bấm được.
++  return cloneElement(node, { disabled: true, onClick: undefined })
+ }
+diff --git a/frontend/src/components/CrudResource.jsx b/frontend/src/components/CrudResource.jsx
+index a3afdad..71de8a1 100644
+--- a/frontend/src/components/CrudResource.jsx
++++ b/frontend/src/components/CrudResource.jsx
+@@ -5,6 +5,7 @@ import {
+ } from 'antd'
+ import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons'
+ import Can from './Can'
++import { useAuth } from '../auth/AuthContext'
+ import FitTable from './FitTable'
+ import { getErrorMessage } from '../api/client'
+ import { handleFormError } from '../utils/formErrors'
+@@ -17,11 +18,15 @@ import { handleFormError } from '../utils/formErrors'
+  *  - fields: [{name,label,rules,input?}] để sinh form
+  *  - perms: {create, update, remove}
+  *  - rowKey (mặc định 'id')
++ *  - entityName: danh từ dùng trong câu xác nhận xoá (mặc định lấy từ title)
++ *  - labelOf: (row) => tên hiển thị của bản ghi trong câu xác nhận xoá
+  */
+ export default function CrudResource({
+   title, queryKey, api, columns, fields, perms = {}, rowKey = 'id',
++  entityName, labelOf,
+ }) {
+   const { message } = AntdApp.useApp()
++  const { hasPermission } = useAuth()
+   const qc = useQueryClient()
+   const [form] = Form.useForm()
+   const [open, setOpen] = useState(false)
+@@ -60,17 +65,34 @@ export default function CrudResource({
+     else createMut.mutate(body)
+   }
+ 
++  // Tên bản ghi cho câu xác nhận xoá. Mọi danh mục đang dùng CrudResource đều
++  // có code + name; vẫn cho ghi đè qua prop labelOf.
++  const nameOf = labelOf || ((row) => {
++    if (row?.code && row?.name) return `${row.code} – ${row.name}`
++    return row?.name || row?.code || row?.[rowKey]
++  })
++  const noun = entityName || String(title || 'mục').toLowerCase()
++
++  const canUpdate = !perms.update || hasPermission(perms.update)
++  const canRemove = !perms.remove || hasPermission(perms.remove)
++
+   const actionCol = {
+     title: 'Thao tác', key: '_action', width: 140, fixed: 'right',
+     render: (_, row) => (
+       <Space>
+         <Can permission={perms.update}>
+-          <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(row)} />
++          <Button size="small" aria-label="Sửa" icon={<EditOutlined />} onClick={() => openEdit(row)} />
+         </Can>
+         <Can permission={perms.remove}>
+-          <Popconfirm title="Xoá mục này?" okText="Xoá" cancelText="Huỷ"
++          {/* TRƯỚC: "Xoá mục này?" — không nói xoá cái gì. Trên bảng 20 dòng,
++              bấm nhầm dòng là mất bản ghi khác mà không hề hay biết.
++              NAY: gọi đúng tên bản ghi + cảnh báo không hoàn tác. */}
++          <Popconfirm
++            title={`Xoá ${noun}?`}
++            description={<span>Xoá <b>{nameOf(row)}</b>. Thao tác này không hoàn tác được.</span>}
++            okText="Xoá" okButtonProps={{ danger: true }} cancelText="Huỷ"
+             onConfirm={() => removeMut.mutate(row[rowKey])}>
+-            <Button size="small" danger icon={<DeleteOutlined />} />
++            <Button size="small" danger aria-label="Xoá" icon={<DeleteOutlined />} />
+           </Popconfirm>
+         </Can>
+       </Space>
+@@ -93,7 +115,7 @@ export default function CrudResource({
+         rowKey={rowKey}
+         loading={isLoading}
+         dataSource={data}
+-        columns={[...columns, actionCol]}
++        columns={(canUpdate || canRemove) ? [...columns, actionCol] : columns}
+         pagination={{ pageSize: 10, showSizeChanger: true }}
+         size="middle"
+       />
+diff --git a/frontend/src/constants/permissions.js b/frontend/src/constants/permissions.js
+index 848b098..1abe4b7 100644
+--- a/frontend/src/constants/permissions.js
++++ b/frontend/src/constants/permissions.js
+@@ -27,3 +27,65 @@ export const P = {
+   AUDIT_VIEW_MOVEMENTS: 'AUDIT_VIEW_MOVEMENTS',
+   NOTIF_READ: 'NOTIF_READ',
+ }
++
++/**
++ * Nhãn tiếng Việt cho từng mã quyền.
++ *
++ * Dùng cho tooltip "Cần quyền: ..." trên nút bị khoá (xem components/Can.jsx).
++ * Hiện mã trần kiểu MASTER_PRODUCT_MANAGE cho thủ kho thì cũng như không nói gì.
++ *
++ * Khoá của map này PHẢI trùng giá trị trong P ở trên — có test bảo vệ
++ * (src/__smoke__/smoke.test.jsx) để không ai thêm quyền mới mà quên nhãn.
++ */
++export const PERM_LABELS = {
++  USER_VIEW: 'Xem người dùng',
++  USER_CREATE: 'Tạo người dùng',
++  USER_UPDATE: 'Sửa người dùng',
++  USER_DELETE: 'Xoá người dùng',
++  USER_ASSIGN_WAREHOUSE: 'Gán kho cho người dùng',
++  ROLE_VIEW: 'Xem vai trò',
++  ROLE_CREATE: 'Tạo vai trò',
++  ROLE_UPDATE: 'Sửa vai trò',
++  ROLE_DELETE: 'Xoá vai trò',
++  PERMISSION_VIEW: 'Xem quyền hạn',
++  PERMISSION_CREATE: 'Tạo quyền hạn',
++  PERMISSION_UPDATE: 'Sửa quyền hạn',
++  PERMISSION_DELETE: 'Xoá quyền hạn',
++  WAREHOUSE_VIEW: 'Xem kho',
++  WAREHOUSE_CREATE: 'Tạo kho',
++  WAREHOUSE_UPDATE: 'Sửa kho',
++  WAREHOUSE_DELETE: 'Đóng kho',
++  MASTER_PRODUCT_VIEW: 'Xem sản phẩm',
++  MASTER_PRODUCT_MANAGE: 'Quản lý sản phẩm',
++  MASTER_PARTNER_MANAGE: 'Quản lý đối tác',
++  INBOUND_VIEW_PO: 'Xem đơn mua hàng',
++  INBOUND_CREATE_PO: 'Tạo đơn mua hàng',
++  INBOUND_APPROVE_PO: 'Duyệt đơn mua hàng',
++  INBOUND_VIEW_GRN: 'Xem phiếu nhập kho',
++  INBOUND_CREATE_GRN: 'Tạo phiếu nhập kho',
++  INBOUND_COMPLETE_GRN: 'Hoàn tất phiếu nhập kho',
++  OUTBOUND_VIEW_SO: 'Xem đơn bán hàng',
++  OUTBOUND_CREATE_SO: 'Tạo đơn bán hàng',
++  OUTBOUND_VIEW: 'Xem lệnh lấy hàng / vận đơn',
++  OUTBOUND_PICK: 'Lấy hàng',
++  OUTBOUND_SHIP: 'Xuất & giao hàng',
++  TRANSFER_VIEW: 'Xem phiếu điều chuyển',
++  TRANSFER_CREATE: 'Tạo phiếu điều chuyển',
++  TRANSFER_APPROVE: 'Duyệt phiếu điều chuyển',
++  TRANSFER_DISPATCH: 'Gửi hàng điều chuyển',
++  TRANSFER_RECEIVE: 'Nhận hàng điều chuyển',
++  STOCKTAKE_VIEW: 'Xem phiên kiểm kê',
++  STOCKTAKE_MANAGE: 'Quản lý kiểm kê',
++  STOCKTAKE_APPROVE: 'Duyệt kiểm kê',
++  ADJUSTMENT_VIEW: 'Xem phiếu điều chỉnh',
++  ADJUSTMENT_APPROVE: 'Duyệt phiếu điều chỉnh',
++  INVENTORY_VIEW: 'Xem tồn kho',
++  INVENTORY_ADJUST: 'Điều chỉnh tồn kho',
++  AUDIT_VIEW_MOVEMENTS: 'Xem thẻ kho',
++  NOTIF_READ: 'Đọc thông báo',
++}
++
++/** Nhãn tiếng Việt của một mã quyền; chưa có nhãn thì trả về chính mã đó. */
++export function permLabel(code) {
++  return PERM_LABELS[code] || code
++}
+diff --git a/frontend/src/features/inbound/PurchaseOrdersPage.jsx b/frontend/src/features/inbound/PurchaseOrdersPage.jsx
+index 1a2173c..01ff349 100644
+--- a/frontend/src/features/inbound/PurchaseOrdersPage.jsx
++++ b/frontend/src/features/inbound/PurchaseOrdersPage.jsx
+@@ -301,7 +301,9 @@ function PODetail({ id }) {
+           )}
+           {(s === 'PENDING_REVIEW' || s === 'PENDING_APPROVAL') && (
+             <Can permission={P.INBOUND_APPROVE_PO}>
+-              <Popconfirm title="Từ chối đơn này?" okText="Từ chối" cancelText="Huỷ"
++              <Popconfirm title="Từ chối đơn này?"
++                description={<span>Từ chối đơn <b>{po.poNumber || po.id}</b>.</span>}
++                okText="Từ chối" okButtonProps={{ danger: true }} cancelText="Huỷ"
+                 onConfirm={() => rejectMut.mutate()}>
+                 <Button danger icon={<CloseOutlined />} loading={busy}>Từ chối</Button>
+               </Popconfirm>
+diff --git a/frontend/src/features/inventory/InventoryPage.jsx b/frontend/src/features/inventory/InventoryPage.jsx
+index 4854ebb..4bde08d 100644
+--- a/frontend/src/features/inventory/InventoryPage.jsx
++++ b/frontend/src/features/inventory/InventoryPage.jsx
+@@ -4,9 +4,9 @@ import { useProducts } from '../../hooks/useProducts'
+ import { useNavigate } from 'react-router-dom'
+ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+ import {
+-  Tabs, Select, Space, Typography, Tag, Empty, Button, App as AntdApp,
++  Tabs, Select, Space, Typography, Tag, Empty, Button, Tooltip, theme, App as AntdApp,
+ } from 'antd'
+-import { ReloadOutlined, HistoryOutlined } from '@ant-design/icons'
++import { ReloadOutlined, HistoryOutlined, WarningOutlined } from '@ant-design/icons'
+ import dayjs from 'dayjs'
+ import Can from '../../components/Can'
+ import { useAuth } from '../../auth/AuthContext'
+@@ -62,7 +62,14 @@ function StockByWarehouse() {
+       render: (v, r) => {
+         const safety = productMap[r.productId]?.safetyStock
+         const low = safety != null && v < safety
+-        return <Tag color={low ? 'red' : 'blue'}>{v}{low ? ' ⚠' : ''}</Tag>
++        if (!low) return <Tag color="blue">{v}</Tag>
++        // TRƯỚC: chỉ dán ký tự ' ⚠' vào sau số. Người dùng thấy cảnh báo nhưng
++        // không biết ngưỡng là bao nhiêu, thiếu bao nhiêu, hay phải làm gì.
++        return (
++          <Tooltip title={`Dưới tồn an toàn: còn ${v}, mức an toàn là ${safety} (thiếu ${safety - v})`}>
++            <Tag color="red" icon={<WarningOutlined />}>{v}</Tag>
++          </Tooltip>
++        )
+       },
+     },
+     {
+@@ -95,6 +102,7 @@ function StockByWarehouse() {
+ 
+ function BatchView() {
+   const { message } = AntdApp.useApp()
++  const { token } = theme.useToken()   // màu cảnh báo theo token => đúng ở cả nền tối
+   const navigate = useNavigate()
+   const qc = useQueryClient()
+   const { hasPermission } = useAuth()
+@@ -116,7 +124,11 @@ function BatchView() {
+   })
+ 
+   const canAdjust = hasPermission(P.INVENTORY_ADJUST)
+-  const nearExpiry = (d) => d && dayjs(d).diff(dayjs(), 'day') <= 30
++  // Ngưỡng cảnh báo cận hạn. Đặt tên hằng để con số 30 xuất hiện đúng 1 chỗ và
++  // hiện được ra tooltip cho người dùng, thay vì nằm ẩn trong code.
++  const EXPIRY_WARN_DAYS = 30
++  const daysLeft = (d) => dayjs(d).diff(dayjs(), 'day')
++  const nearExpiry = (d) => d && daysLeft(d) <= EXPIRY_WARN_DAYS
+ 
+   const columns = [
+     { title: 'Số lô', dataIndex: 'batchNumber', width: 150 },
+@@ -125,7 +137,22 @@ function BatchView() {
+     { title: 'NSX', dataIndex: 'manufacturedDate', width: 120, render: (v) => v ? dayjs(v).format('DD/MM/YYYY') : '—' },
+     {
+       title: 'HSD', dataIndex: 'expiryDate', width: 130,
+-      render: (v) => v ? <span style={{ color: nearExpiry(v) ? '#cf1322' : undefined }}>{dayjs(v).format('DD/MM/YYYY')}{nearExpiry(v) ? ' ⚠' : ''}</span> : '—',
++      render: (v) => {
++        if (!v) return '—'
++        const text = dayjs(v).format('DD/MM/YYYY')
++        if (!nearExpiry(v)) return <span>{text}</span>
++        const d = daysLeft(v)
++        const tip = d < 0 ? `Đã quá hạn ${Math.abs(d)} ngày`
++          : d === 0 ? 'Hết hạn hôm nay'
++            : `Còn ${d} ngày là hết hạn (cảnh báo khi dưới ${EXPIRY_WARN_DAYS} ngày)`
++        return (
++          <Tooltip title={tip}>
++            <span style={{ color: token.colorError, whiteSpace: 'nowrap' }}>
++              <WarningOutlined /> {text}
++            </span>
++          </Tooltip>
++        )
++      },
+     },
+     {
+       title: 'Trạng thái', dataIndex: 'status', width: 160,
+diff --git a/frontend/src/features/outbound/SalesOrdersPage.jsx b/frontend/src/features/outbound/SalesOrdersPage.jsx
+index c615eb1..dd22134 100644
+--- a/frontend/src/features/outbound/SalesOrdersPage.jsx
++++ b/frontend/src/features/outbound/SalesOrdersPage.jsx
+@@ -296,7 +296,9 @@ function SODetail({ id }) {
+           )}
+           {(s === 'DRAFT' || s === 'ALLOCATED') && (
+             <Can permission={P.OUTBOUND_CREATE_SO}>
+-              <Popconfirm title="Huỷ đơn bán này?" okText="Huỷ đơn" cancelText="Không"
++              <Popconfirm title="Huỷ đơn bán này?"
++                description={<span>Huỷ đơn <b>{so.soNumber || so.id}</b>. Hàng đã phân bổ sẽ được trả lại tồn khả dụng.</span>}
++                okText="Huỷ đơn" okButtonProps={{ danger: true }} cancelText="Không"
+                 onConfirm={() => cancelMut.mutate()}>
+                 <Button danger icon={<CloseOutlined />} loading={cancelMut.isPending}>Huỷ</Button>
+               </Popconfirm>
+diff --git a/frontend/src/features/products/ProductsPage.jsx b/frontend/src/features/products/ProductsPage.jsx
+index efe920d..429d15a 100644
+--- a/frontend/src/features/products/ProductsPage.jsx
++++ b/frontend/src/features/products/ProductsPage.jsx
+@@ -90,7 +90,9 @@ export default function ProductsPage() {
+             <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(row)} />
+           </Can>
+           <Can permission={P.MASTER_PRODUCT_MANAGE}>
+-            <Popconfirm title="Xoá sản phẩm?" okText="Xoá" cancelText="Huỷ"
++            <Popconfirm title="Xoá sản phẩm?"
++              description={<span>Xoá <b>{row.sku} – {row.name}</b>. Không hoàn tác được.</span>}
++              okText="Xoá" okButtonProps={{ danger: true }} cancelText="Huỷ"
+               onConfirm={() => removeMut.mutate(row.id)}>
+               <Button size="small" danger icon={<DeleteOutlined />} />
+             </Popconfirm>
+diff --git a/frontend/src/features/roles/RolesPage.jsx b/frontend/src/features/roles/RolesPage.jsx
+index 487a40f..e1c20cc 100644
+--- a/frontend/src/features/roles/RolesPage.jsx
++++ b/frontend/src/features/roles/RolesPage.jsx
+@@ -69,7 +69,9 @@ export default function RolesPage() {
+             <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(row)} />
+           </Can>
+           <Can permission={P.ROLE_DELETE}>
+-            <Popconfirm title="Xoá vai trò?" okText="Xoá" cancelText="Huỷ"
++            <Popconfirm title="Xoá vai trò?"
++              description={<span>Xoá vai trò <b>{row.name}</b>. Người dùng đang giữ vai trò này sẽ mất toàn bộ quyền kèm theo.</span>}
++              okText="Xoá" okButtonProps={{ danger: true }} cancelText="Huỷ"
+               onConfirm={() => removeMut.mutate(row.id)}>
+               <Button size="small" danger icon={<DeleteOutlined />} />
+             </Popconfirm>
+diff --git a/frontend/src/features/stocktake/AdjustmentsPage.jsx b/frontend/src/features/stocktake/AdjustmentsPage.jsx
+index 70fa820..bdd00dc 100644
+--- a/frontend/src/features/stocktake/AdjustmentsPage.jsx
++++ b/frontend/src/features/stocktake/AdjustmentsPage.jsx
+@@ -134,7 +134,9 @@ function AVDetail({ id }) {
+       title={<Space>Phiếu điều chỉnh <b>{av.voucherNumber || av.id}</b> {avTag(av.status)}</Space>}
+       extra={av.status === 'DRAFT' && (
+         <Can permission={P.ADJUSTMENT_APPROVE}>
+-          <Popconfirm title="Duyệt phiếu điều chỉnh này?" okText="Duyệt" cancelText="Huỷ"
++          <Popconfirm title="Duyệt phiếu điều chỉnh này?"
++            description={<span>Duyệt <b>{av.voucherNumber || av.id}</b>. Tồn kho sẽ được ghi nhận thay đổi ngay và không hoàn tác được.</span>}
++            okText="Duyệt" cancelText="Huỷ"
+             onConfirm={() => approveMut.mutate()}>
+             <Button type="primary" icon={<CheckOutlined />} loading={approveMut.isPending}>Duyệt</Button>
+           </Popconfirm>
+diff --git a/frontend/src/features/transfer/TransferOrdersPage.jsx b/frontend/src/features/transfer/TransferOrdersPage.jsx
+index 2f5658f..c386db0 100644
+--- a/frontend/src/features/transfer/TransferOrdersPage.jsx
++++ b/frontend/src/features/transfer/TransferOrdersPage.jsx
+@@ -363,7 +363,9 @@ function TODetail({ id }) {
+           )}
+           {s === 'PENDING_APPROVAL' && (
+             <Can permission={P.TRANSFER_APPROVE}>
+-              <Popconfirm title="Từ chối phiếu này?" okText="Từ chối" cancelText="Huỷ" onConfirm={() => rejectMut.mutate()}>
++              <Popconfirm title="Từ chối phiếu này?"
++                description={<span>Từ chối phiếu <b>{to.transferNumber || to.id}</b>.</span>}
++                okText="Từ chối" okButtonProps={{ danger: true }} cancelText="Huỷ" onConfirm={() => rejectMut.mutate()}>
+                 <Button danger icon={<CloseOutlined />} loading={busy}>Từ chối</Button>
+               </Popconfirm>
+             </Can>
+@@ -381,7 +383,9 @@ function TODetail({ id }) {
+           )}
+           {(s === 'DRAFT' || s === 'PENDING_APPROVAL' || s === 'APPROVED') && (
+             <Can permission={P.TRANSFER_CREATE}>
+-              <Popconfirm title="Huỷ phiếu này?" okText="Huỷ phiếu" cancelText="Không" onConfirm={() => cancelMut.mutate()}>
++              <Popconfirm title="Huỷ phiếu này?"
++                description={<span>Huỷ phiếu <b>{to.transferNumber || to.id}</b>. Hàng đang giữ sẽ được trả lại kho nguồn.</span>}
++                okText="Huỷ phiếu" okButtonProps={{ danger: true }} cancelText="Không" onConfirm={() => cancelMut.mutate()}>
+                 <Button danger loading={busy}>Huỷ</Button>
+               </Popconfirm>
+             </Can>
+diff --git a/frontend/src/features/users/UsersPage.jsx b/frontend/src/features/users/UsersPage.jsx
+index 1bdd984..b643e32 100644
+--- a/frontend/src/features/users/UsersPage.jsx
++++ b/frontend/src/features/users/UsersPage.jsx
+@@ -84,7 +84,9 @@ export default function UsersPage() {
+             <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(row)} />
+           </Can>
+           <Can permission={P.USER_DELETE}>
+-            <Popconfirm title="Xoá người dùng?" okText="Xoá" cancelText="Huỷ"
++            <Popconfirm title="Xoá người dùng?"
++              description={<span>Xoá tài khoản <b>{row.username}</b>{row.fullName ? ` (${row.fullName})` : ''}. Không hoàn tác được.</span>}
++              okText="Xoá" okButtonProps={{ danger: true }} cancelText="Huỷ"
+               onConfirm={() => removeMut.mutate(row.id)}>
+               <Button size="small" danger icon={<DeleteOutlined />} />
+             </Popconfirm>
+diff --git a/frontend/src/features/warehouses/WarehousesPage.jsx b/frontend/src/features/warehouses/WarehousesPage.jsx
+index ae29929..b17a797 100644
+--- a/frontend/src/features/warehouses/WarehousesPage.jsx
++++ b/frontend/src/features/warehouses/WarehousesPage.jsx
+@@ -73,7 +73,9 @@ export default function WarehousesPage() {
+             <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(row)} />
+           </Can>
+           <Can permission={P.WAREHOUSE_DELETE}>
+-            <Popconfirm title="Đóng (xoá mềm) kho này?" okText="Xoá" cancelText="Huỷ"
++            <Popconfirm title="Đóng kho này?"
++              description={<span>Đóng kho <b>{row.code} – {row.name}</b> (xoá mềm: dữ liệu tồn/lịch sử vẫn giữ).</span>}
++              okText="Đóng kho" okButtonProps={{ danger: true }} cancelText="Huỷ"
+               onConfirm={() => removeMut.mutate(row.id)}>
+               <Button size="small" danger icon={<DeleteOutlined />} />
+             </Popconfirm>
+@@ -185,7 +187,10 @@ function BinLocationsDrawer({ warehouse, onClose }) {
+       title: '', key: '_a', width: 60,
+       render: (_, row) => (
+         <Can permission={P.WAREHOUSE_DELETE}>
+-          <Popconfirm title="Xoá ô kệ?" onConfirm={() => delMut.mutate(row.id)}
++          <Popconfirm title="Xoá ô kệ?"
++            description={<span>Xoá ô <b>{row.coordinateLabel || row.id}</b>. Không hoàn tác được.</span>}
++            okButtonProps={{ danger: true }}
++            onConfirm={() => delMut.mutate(row.id)}
+             okText="Xoá" cancelText="Huỷ">
+             <Button size="small" danger icon={<DeleteOutlined />} />
+           </Popconfirm>

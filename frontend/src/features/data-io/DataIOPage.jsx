@@ -160,7 +160,7 @@ export default function DataIOPage() {
                 options={Object.entries(TYPES).map(([k, v]) => ({ value: k, label: v.label }))} />
             </div>
             <Button icon={<DownloadOutlined />}
-              onClick={() => downloadTemplate(headers, `mau-${type}.xlsx`)}>
+              onClick={() => { downloadTemplate(headers, `mau-${type}.xlsx`) }}>
               Tải file mẫu
             </Button>
             <Upload beforeUpload={beforeUpload} maxCount={1} showUploadList={false}

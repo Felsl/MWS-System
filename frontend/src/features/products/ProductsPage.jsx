@@ -1,19 +1,22 @@
 import ExportButton from '../../components/ExportButton'
+import { useNavigate } from 'react-router-dom'
+import EmptyState from '../../components/EmptyState'
+import PageHeader from '../../components/PageHeader'
 import { sorterToParams, columnSortOrder } from '../../utils/sort'
 import FitTable from '../../components/FitTable'
 import { useState } from 'react'
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Table, Button, Space, Modal, Form, Input, Select, InputNumber, Switch, Tag,
-  Popconfirm, Typography, App as AntdApp,
+  Button, Space, Modal, Form, Input, Select, InputNumber, Switch, Tag, Popconfirm, App as AntdApp,
 } from 'antd'
 import {
-  PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, SearchOutlined,
+  PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, SearchOutlined, ImportOutlined,
 } from '@ant-design/icons'
 import Can from '../../components/Can'
 import { productsApi } from '../../api/products.api'
 import { categoriesApi } from '../../api/categories.api'
 import { getErrorMessage } from '../../api/client'
+import { handleFormError } from '../../utils/formErrors'
 import { P } from '../../constants/permissions'
 import { UNITS, UNIT_LABEL } from '../../constants/units'
 
@@ -36,15 +39,17 @@ export default function ProductsPage() {
   })
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['products'] })
+  // onError: lỗi validate của BE được gắn thẳng vào ô sai trong form
+  // (kèm cuộn tới ô đó); lỗi nghiệp vụ/mạng thì rơi về toast như cũ.
   const createMut = useMutation({
     mutationFn: productsApi.create,
     onSuccess: () => { message.success('Đã tạo sản phẩm'); setOpen(false); invalidate() },
-    onError: (e) => message.error(getErrorMessage(e)),
+    onError: (e) => handleFormError(form, e, message),
   })
   const updateMut = useMutation({
     mutationFn: ({ id, body }) => productsApi.update(id, body),
     onSuccess: () => { message.success('Đã cập nhật'); setOpen(false); invalidate() },
-    onError: (e) => message.error(getErrorMessage(e)),
+    onError: (e) => handleFormError(form, e, message),
   })
   const removeMut = useMutation({
     mutationFn: productsApi.remove,
@@ -52,6 +57,7 @@ export default function ProductsPage() {
     onError: (e) => message.error(getErrorMessage(e)),
   })
 
+  const navigate = useNavigate()
   const openCreate = () => {
     setEditing(null); form.resetFields()
     form.setFieldsValue({ unit: 'PCS', safetyStock: 10, hazardousFlag: false })
@@ -88,7 +94,9 @@ export default function ProductsPage() {
             <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(row)} />
           </Can>
           <Can permission={P.MASTER_PRODUCT_MANAGE}>
-            <Popconfirm title="Xoá sản phẩm?" okText="Xoá" cancelText="Huỷ"
+            <Popconfirm title="Xoá sản phẩm?"
+              description={<span>Xoá <b>{row.sku} – {row.name}</b>. Không hoàn tác được.</span>}
+              okText="Xoá" okButtonProps={{ danger: true }} cancelText="Huỷ"
               onConfirm={() => removeMut.mutate(row.id)}>
               <Button size="small" danger icon={<DeleteOutlined />} />
             </Popconfirm>
@@ -102,25 +110,30 @@ export default function ProductsPage() {
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>Sản phẩm</Typography.Title>
-        <Space wrap>
+      <PageHeader
+        title="Sản phẩm"
+        extra={<>
           <ExportButton filename="san-pham.xlsx" fetchRows={() => productsApi.list({ keyword: keyword || undefined, sort, dir, size: 10000 }).then(r => r.content)} />
           <Input.Search allowClear placeholder="Tìm theo tên / SKU" prefix={<SearchOutlined />}
             style={{ width: 240 }}
             onSearch={(v) => { setKeyword(v); setPager(p => ({ ...p, page: 0 })) }} />
-          <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching} />
+          <Button icon={<ReloadOutlined />} aria-label="Làm mới" onClick={() => list.refetch()} loading={list.isFetching} />
           <Can permission={P.MASTER_PRODUCT_MANAGE}>
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>Thêm sản phẩm</Button>
           </Can>
-        </Space>
-      </div>
+        </>}
+      />
 
       <FitTable
         rowKey="id"
         loading={list.isLoading}
         dataSource={page?.content || []}
         columns={columns}
+        emptyState={<EmptyState
+          title={keyword ? `Không tìm thấy sản phẩm khớp "${keyword}"` : 'Chưa có sản phẩm nào'}
+          action={keyword ? undefined : { label: 'Thêm sản phẩm', onClick: openCreate, permission: P.MASTER_PRODUCT_MANAGE }}
+          secondary={keyword ? undefined : { label: 'Nhập từ Excel', icon: <ImportOutlined />, onClick: () => navigate('/data-io') }}
+        />}
         scroll={{ x: 'max-content' }}
         onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') { setSorter(s); setPager(p => ({ ...p, page: 0 })) } }}
         pagination={{

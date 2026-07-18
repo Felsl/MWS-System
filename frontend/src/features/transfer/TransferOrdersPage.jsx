@@ -1,7 +1,12 @@
 import ExportButton from '../../components/ExportButton'
-import { sorterToParams, columnSortOrder } from '../../utils/sort'
+import PageHeader from '../../components/PageHeader'
+import { columnSortOrder } from '../../utils/sort'
+import RowLink from '../../components/RowLink'
 import FitTable from '../../components/FitTable'
 import { useEffect, useMemo, useState } from 'react'
+import { useProducts } from '../../hooks/useProducts'
+import { useRecordView } from '../../hooks/useRecordView'
+import { useListParams } from '../../hooks/useListParams'
 import { keepPreviousData, useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Button, Input, Form, Select, InputNumber, Row, Col, Table, Space,
@@ -17,9 +22,9 @@ import Can from '../../components/Can'
 import BarcodeScanner from '../../components/BarcodeScanner'
 import { useAuth } from '../../auth/AuthContext'
 import { getErrorMessage } from '../../api/client'
+import { handleFormError } from '../../utils/formErrors'
 import { P } from '../../constants/permissions'
 import { transferOrdersApi } from '../../api/transferOrders.api'
-import { productsApi } from '../../api/products.api'
 import { warehousesApi } from '../../api/warehouses.api'
 import { carriersApi } from '../../api/partners.api'
 import { inventoryApi } from '../../api/inventory.api'
@@ -43,9 +48,7 @@ function useNameMaps() {
   return { warehouses, warehouseMap }
 }
 function useProductMap() {
-  const products = useQuery({ queryKey: ['products', 'all'], queryFn: () => productsApi.list({ size: 500 }) })
-  const list = products.data?.content || []
-  const map = useMemo(() => Object.fromEntries(list.map(p => [p.id, p])), [list])
+  const { query: products, list, map } = useProducts()
   return { products, list, map }
 }
 const productOptions = (list) => list.map(p => ({ value: p.id, label: `${p.name} · ${p.sku}` }))
@@ -81,40 +84,38 @@ function useBatchNumberMap(warehouseId, productIds) {
 }
 
 export default function TransferOrdersPage() {
-  const [view, setView] = useState({ mode: 'list', id: null })
-  const openDetail = (id) => setView({ mode: 'detail', id })
+  // Chế độ xem nằm ở URL: /transfer-orders | /transfer-orders/new | /transfer-orders/<id>
+  const { mode, id, openList, openCreate, openDetail } = useRecordView('/transfer-orders')
   return (
     <div>
-      {view.mode !== 'list' && (
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
-          <Space>
-            <Button icon={<ArrowLeftOutlined />} onClick={() => setView({ mode: 'list', id: null })}>Danh sách</Button>
-            <Typography.Title level={4} style={{ margin: 0 }}>Điều chuyển nội bộ (Transfer)</Typography.Title>
-          </Space>
-        </div>
+      {mode !== 'list' && (
+        <PageHeader title="Điều chuyển nội bộ (Transfer)"
+          onBack={<Button icon={<ArrowLeftOutlined />} onClick={openList}>Danh sách</Button>} />
       )}
-      {view.mode === 'list' && <TOList onOpen={openDetail} onCreate={() => setView({ mode: 'create', id: null })} />}
-      {view.mode === 'create' && <CreateTO onCreated={(to) => openDetail(to.id)} />}
-      {view.mode === 'detail' && view.id && <TODetail id={view.id} />}
+      {mode === 'list' && <TOList onOpen={openDetail} onCreate={openCreate} />}
+      {mode === 'create' && <CreateTO onCreated={(r) => openDetail(r.id, { replace: true })} />}
+      {mode === 'detail' && id && <TODetail id={id} />}
     </div>
   )
 }
 
 function TOList({ onOpen, onCreate }) {
-  const [keyword, setKeyword] = useState('')
-  const [status, setStatus] = useState()
-  const [pager, setPager] = useState({ page: 0, size: 20 })
-  const [sorter, setSorter] = useState(null)
-  const { sort, dir } = sorterToParams(sorter)
+  // Bộ lọc nằm trong query string (?q=&status=&page=&size=&sort=&dir=).
+  // Thay cho useState + location.state: F5 không mất bộ lọc, gửi link được,
+  // Back lùi đúng bộ lọc trước, và Dashboard chỉ cần trỏ tới ?status=... .
+  const {
+    keyword, status, page, size, sort, dir, sorter,
+    setKeyword, setStatus, setPager, setSorter,
+  } = useListParams()
   const { warehouseMap } = useNameMaps()
   const list = useQuery({
-    queryKey: ['to-list', keyword, status, pager.page, pager.size, sort, dir],
-    queryFn: () => transferOrdersApi.list({ keyword, status, page: pager.page, size: pager.size, sort, dir }),
+    queryKey: ['to-list', keyword, status, page, size, sort, dir],
+    queryFn: () => transferOrdersApi.list({ keyword, status, page: page, size: size, sort, dir }),
     placeholderData: keepPreviousData,
   })
   const pageData = list.data
   const columns = [
-    { title: 'Mã phiếu', dataIndex: 'transferNumber', sorter: true, sortOrder: columnSortOrder(sorter, 'transferNumber'), render: (v, r) => <a onClick={() => onOpen(r.id)}>{v || r.id}</a> },
+    { title: 'Mã phiếu', dataIndex: 'transferNumber', sorter: true, sortOrder: columnSortOrder(sorter, 'transferNumber'), render: (v, r) => <RowLink onClick={() => onOpen(r.id)}>{v || r.id}</RowLink> },
     { title: 'Trạng thái', dataIndex: 'status', sorter: true, sortOrder: columnSortOrder(sorter, 'status'), width: 140, render: toTag },
     { title: 'Kho nguồn', dataIndex: 'fromWarehouseId', render: (v) => warehouseMap[v]?.name || v },
     { title: 'Kho đích', dataIndex: 'toWarehouseId', render: (v) => warehouseMap[v]?.name || v },
@@ -123,26 +124,26 @@ function TOList({ onOpen, onCreate }) {
   ]
   return (
     <>
-      <Space style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between' }} wrap>
-        <Typography.Title level={4} style={{ marginLeft: 20, marginTop: 0 }}>Điều chuyển nội bộ (Transfer)</Typography.Title>
-        <Space wrap>
+      <PageHeader
+        title="Điều chuyển nội bộ (Transfer)"
+        extra={<>
         <ExportButton filename="phieu-dieu-chuyen.xlsx" fetchRows={() => transferOrdersApi.list({ keyword, status, sort, dir, size: 10000 }).then(r => r.content)} />
-        <Input.Search allowClear placeholder="Tìm theo mã phiếu" style={{ width: 220 }} prefix={<SearchOutlined />}
-          onSearch={(v) => { setKeyword(v); setPager(p => ({ ...p, page: 0 })) }} />
+        <Input.Search allowClear key={`q-${keyword}`} defaultValue={keyword} placeholder="Tìm theo mã phiếu" style={{ width: 220 }} prefix={<SearchOutlined />}
+          onSearch={(v) => setKeyword(v)} />
         <Select allowClear placeholder="Lọc trạng thái" style={{ width: 180 }}
           options={TO_STATUS_OPTS} value={status}
-          onChange={(v) => { setStatus(v); setPager(p => ({ ...p, page: 0 })) }} />
+          onChange={(v) => setStatus(v)} />
         <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching} />
           <Can permission={P.TRANSFER_CREATE}><Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>Tạo phiếu chuyển</Button></Can>
-        </Space>
-      </Space>
+        </>}
+      />
       <FitTable rowKey="id" loading={list.isLoading} dataSource={pageData?.content || []} columns={columns}
         scroll={{ x: 'max-content' }}
-        onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') { setSorter(s); setPager(p => ({ ...p, page: 0 })) } }}
+        onChange={(_p, _f, s, extra) => { if (extra.action === 'sort') setSorter(s) }}
         pagination={{
           current: (pageData?.page ?? 0) + 1, pageSize: pageData?.size ?? 20,
           total: pageData?.totalElements ?? 0, showSizeChanger: true, showTotal: (t) => `Tổng ${t}`,
-          onChange: (p, s) => setPager({ page: p - 1, size: s }),
+          onChange: (p, s) => setPager(p - 1, s),
         }} />
     </>
   )
@@ -204,7 +205,7 @@ function CreateTO({ onCreated }) {
   const createMut = useMutation({
     mutationFn: transferOrdersApi.create,
     onSuccess: (to) => { message.success(`Đã tạo phiếu ${to.transferNumber || ''}`.trim()); onCreated(to) },
-    onError: (e) => message.error(getErrorMessage(e)),
+    onError: (e) => handleFormError(form, e, message),
   })
 
   const submit = async () => {
@@ -360,7 +361,9 @@ function TODetail({ id }) {
           )}
           {s === 'PENDING_APPROVAL' && (
             <Can permission={P.TRANSFER_APPROVE}>
-              <Popconfirm title="Từ chối phiếu này?" okText="Từ chối" cancelText="Huỷ" onConfirm={() => rejectMut.mutate()}>
+              <Popconfirm title="Từ chối phiếu này?"
+                description={<span>Từ chối phiếu <b>{to.transferNumber || to.id}</b>.</span>}
+                okText="Từ chối" okButtonProps={{ danger: true }} cancelText="Huỷ" onConfirm={() => rejectMut.mutate()}>
                 <Button danger icon={<CloseOutlined />} loading={busy}>Từ chối</Button>
               </Popconfirm>
             </Can>
@@ -378,7 +381,9 @@ function TODetail({ id }) {
           )}
           {(s === 'DRAFT' || s === 'PENDING_APPROVAL' || s === 'APPROVED') && (
             <Can permission={P.TRANSFER_CREATE}>
-              <Popconfirm title="Huỷ phiếu này?" okText="Huỷ phiếu" cancelText="Không" onConfirm={() => cancelMut.mutate()}>
+              <Popconfirm title="Huỷ phiếu này?"
+                description={<span>Huỷ phiếu <b>{to.transferNumber || to.id}</b>. Hàng đang giữ sẽ được trả lại kho nguồn.</span>}
+                okText="Huỷ phiếu" okButtonProps={{ danger: true }} cancelText="Không" onConfirm={() => cancelMut.mutate()}>
                 <Button danger loading={busy}>Huỷ</Button>
               </Popconfirm>
             </Can>
@@ -481,7 +486,7 @@ function TransferScanModal({ open, onClose, transferId, productMap, binMap = {},
         <>
           <div style={{ marginBottom: 8 }}>
             <div style={{ fontWeight: 600 }}>{productMap[current.productId]?.name || current.productId}</div>
-            <Space size="large" style={{ fontSize: 13, color: 'rgba(0,0,0,.65)' }}>
+            <Space size="large" style={{ fontSize: 13 }}>
               <span>Ô kệ: <b>{binMap[current.binLocationId] || current.binLocationId}</b></span>
               <span>SL: <b>{current.quantityToPick}</b></span>
             </Space>
@@ -543,7 +548,7 @@ function ReceiveModal({ open, onClose, to, productMap, onDone }) {
   const mut = useMutation({
     mutationFn: (lines) => transferOrdersApi.complete(to.id, lines),
     onSuccess: (u) => { message.success('Đã nhận hàng & hoàn thành'); onDone(u); onClose() },
-    onError: (e) => message.error(getErrorMessage(e)),
+    onError: (e) => handleFormError(form, e, message),
   })
 
   const submit = async () => {

@@ -1,4 +1,5 @@
 import FitTable from '../../components/FitTable'
+import PageHeader from '../../components/PageHeader'
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -11,6 +12,7 @@ import {
 import Can from '../../components/Can'
 import { warehousesApi } from '../../api/warehouses.api'
 import { getErrorMessage } from '../../api/client'
+import { handleFormError } from '../../utils/formErrors'
 import { P } from '../../constants/permissions'
 import { useAuth } from '../../auth/AuthContext'
 
@@ -33,17 +35,17 @@ export default function WarehousesPage() {
   const createMut = useMutation({
     mutationFn: warehousesApi.create,
     onSuccess: () => { message.success('Đã tạo kho'); setOpen(false); invalidate() },
-    onError: (e) => message.error(getErrorMessage(e)),
+    onError: (e) => handleFormError(form, e, message),
   })
   const updateMut = useMutation({
     mutationFn: ({ id, body }) => warehousesApi.update(id, body),
     onSuccess: () => { message.success('Đã cập nhật'); setOpen(false); invalidate() },
-    onError: (e) => message.error(getErrorMessage(e)),
+    onError: (e) => handleFormError(form, e, message),
   })
   const removeMut = useMutation({
     mutationFn: warehousesApi.remove,
     onSuccess: () => { message.success('Đã xoá (mềm)'); invalidate() },
-    onError: (e) => message.error(getErrorMessage(e)),
+    onError: (e) => handleFormError(form, e, message),
   })
 
   const openCreate = () => { setEditing(null); form.resetFields(); setOpen(true) }
@@ -72,7 +74,9 @@ export default function WarehousesPage() {
             <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(row)} />
           </Can>
           <Can permission={P.WAREHOUSE_DELETE}>
-            <Popconfirm title="Đóng (xoá mềm) kho này?" okText="Xoá" cancelText="Huỷ"
+            <Popconfirm title="Đóng kho này?"
+              description={<span>Đóng kho <b>{row.code} – {row.name}</b> (xoá mềm: dữ liệu tồn/lịch sử vẫn giữ).</span>}
+              okText="Đóng kho" okButtonProps={{ danger: true }} cancelText="Huỷ"
               onConfirm={() => removeMut.mutate(row.id)}>
               <Button size="small" danger icon={<DeleteOutlined />} />
             </Popconfirm>
@@ -84,9 +88,9 @@ export default function WarehousesPage() {
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>Kho & ô kệ</Typography.Title>
-        <Space>
+      <PageHeader
+        title="Kho & ô kệ"
+        extra={<>
           {hasPermission(P.WAREHOUSE_DELETE) && (
             <Space size={6}>
               <span>Hiện kho đã đóng</span>
@@ -97,8 +101,8 @@ export default function WarehousesPage() {
           <Can permission={P.WAREHOUSE_CREATE}>
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>Thêm kho</Button>
           </Can>
-        </Space>
-      </div>
+        </>}
+      />
 
       <FitTable rowKey="id" loading={list.isLoading} dataSource={list.data || []}
         columns={columns} pagination={{ pageSize: 10 }} />
@@ -184,7 +188,10 @@ function BinLocationsDrawer({ warehouse, onClose }) {
       title: '', key: '_a', width: 60,
       render: (_, row) => (
         <Can permission={P.WAREHOUSE_DELETE}>
-          <Popconfirm title="Xoá ô kệ?" onConfirm={() => delMut.mutate(row.id)}
+          <Popconfirm title="Xoá ô kệ?"
+            description={<span>Xoá ô <b>{row.coordinateLabel || row.id}</b>. Không hoàn tác được.</span>}
+            okButtonProps={{ danger: true }}
+            onConfirm={() => delMut.mutate(row.id)}
             okText="Xoá" cancelText="Huỷ">
             <Button size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>

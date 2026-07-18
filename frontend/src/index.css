@@ -12,25 +12,84 @@ body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
 
 /* Sidebar tự cuộn phần menu nếu dài hơn màn hình (logo giữ nguyên trên đỉnh). */
 .app-sider-menu { height: calc(100vh - 56px); overflow-y: auto; overflow-x: hidden; }
+.app-drawer-menu { height: 100%; overflow-y: auto; overflow-x: hidden; }
 
-/* ── Ẩn thanh cuộn (vẫn cuộn được bằng chuột/trackpad) ─────────────────────── */
-/* Firefox + Edge cũ: áp cho khung app, sidebar, và mọi vùng cuộn trong nội dung
-   (bao gồm thân bảng .ant-table-body và hộp danh sách thông báo). */
-.app-content,
-.app-content *,
-.app-sider-menu,
-.ant-table-body,
-.ant-table-content {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+/* ── Thanh cuộn: MỜ TỐI ĐA ───────────────────────────────────────────────────
+   Trước đây thanh cuộn bị ẩn hoàn toàn => người dùng không biết bảng còn cột
+   bên phải hay danh sách còn nội dung bên dưới. Nay vẫn còn thanh cuộn (giữ
+   affordance + trợ năng) nhưng gần như vô hình khi không dùng tới:
+     - track:  luôn trong suốt, không chiếm chỗ thị giác
+     - thumb:  mặc định mờ 8% -> rê chuột vào vùng cuộn: 22% -> rê đúng thumb: 40%
+     - dày 8px nhưng vẽ qua background-clip nên nhìn chỉ như sợi chỉ 4px */
+
+/* Firefox */
+* { scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, 0.08) transparent; }
+*:hover { scrollbar-color: rgba(0, 0, 0, 0.22) transparent; }
+
+/* Chrome / Safari / Edge */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.08);
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: 99px;
+  transition: background-color 0.2s;
 }
-/* Chrome / Safari / Edge mới */
-.app-content::-webkit-scrollbar,
-.app-content *::-webkit-scrollbar,
-.app-sider-menu::-webkit-scrollbar,
-.ant-table-body::-webkit-scrollbar,
-.ant-table-content::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-  display: none;
+/* Rê chuột vào bất kỳ vùng cuộn nào => thanh cuộn của nó rõ dần lên */
+.app-content:hover::-webkit-scrollbar-thumb,
+.app-sider-menu:hover::-webkit-scrollbar-thumb,
+.app-drawer-menu:hover::-webkit-scrollbar-thumb,
+.ant-table-body:hover::-webkit-scrollbar-thumb,
+.ant-table-content:hover::-webkit-scrollbar-thumb,
+.ant-list:hover::-webkit-scrollbar-thumb,
+.ant-modal-body:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.22);
+}
+::-webkit-scrollbar-thumb:hover { background-color: rgba(0, 0, 0, 0.4) !important; }
+::-webkit-scrollbar-thumb:active { background-color: rgba(0, 0, 0, 0.55) !important; }
+
+/* ── Phản hồi khi quét mã (PickingScanPage / Transfer picking) ───────────────
+   Kho ồn + đeo găng => cần tín hiệu thị giác lớn ngoài toast. */
+@keyframes mws-flash-ok  { from { background-color: #b7eb8f; } to { background-color: transparent; } }
+@keyframes mws-flash-err { from { background-color: #ffccc7; } to { background-color: transparent; } }
+.mws-flash-ok  { animation: mws-flash-ok 0.6s ease-out; }
+.mws-flash-err { animation: mws-flash-err 0.6s ease-out; }
+
+/* Dòng đang chờ quét trong danh sách */
+.mws-line-active { background-color: #e6f4ff; }
+.mws-line-clickable { cursor: pointer; }
+.mws-line-clickable:hover { background-color: #fafafa; }
+
+/* Nền tối: thumb đen trên nền đen = vô hình thật sự (không phải "mờ" mà là mất).
+   ThemeContext đặt data-theme lên <html>, ở đây lật sang thumb sáng cùng độ mờ. */
+[data-theme='dark'] * { scrollbar-color: rgba(255, 255, 255, 0.10) transparent; }
+[data-theme='dark'] *:hover { scrollbar-color: rgba(255, 255, 255, 0.26) transparent; }
+[data-theme='dark'] ::-webkit-scrollbar-thumb { background-color: rgba(255, 255, 255, 0.10); }
+[data-theme='dark'] .app-content:hover::-webkit-scrollbar-thumb,
+[data-theme='dark'] .app-sider-menu:hover::-webkit-scrollbar-thumb,
+[data-theme='dark'] .app-drawer-menu:hover::-webkit-scrollbar-thumb,
+[data-theme='dark'] .ant-table-body:hover::-webkit-scrollbar-thumb,
+[data-theme='dark'] .ant-table-content:hover::-webkit-scrollbar-thumb,
+[data-theme='dark'] .ant-list:hover::-webkit-scrollbar-thumb,
+[data-theme='dark'] .ant-modal-body:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.26);
+}
+[data-theme='dark'] ::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, 0.45) !important; }
+[data-theme='dark'] ::-webkit-scrollbar-thumb:active { background-color: rgba(255, 255, 255, 0.6) !important; }
+
+/* Nháy khi quét: bản sáng quá chói trên nền tối */
+[data-theme='dark'] .mws-flash-ok  { animation-name: mws-flash-ok-dark; }
+[data-theme='dark'] .mws-flash-err { animation-name: mws-flash-err-dark; }
+@keyframes mws-flash-ok-dark  { from { background-color: #237804; } to { background-color: transparent; } }
+@keyframes mws-flash-err-dark { from { background-color: #a8071a; } to { background-color: transparent; } }
+
+/* Dòng đang quét / hover: cũng phải theo nền tối */
+[data-theme='dark'] .mws-line-active { background-color: #111d2c; }
+[data-theme='dark'] .mws-line-clickable:hover { background-color: #1f1f1f; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mws-flash-ok, .mws-flash-err { animation: none; }
+  ::-webkit-scrollbar-thumb { transition: none; }
 }
