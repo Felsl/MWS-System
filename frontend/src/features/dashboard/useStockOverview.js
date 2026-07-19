@@ -1,7 +1,9 @@
 import { useMemo } from 'react'
 import { useQueries, useQuery } from '@tanstack/react-query'
+import dayjs from 'dayjs'
 import { warehousesApi } from '../../api/warehouses.api'
 import { inventoryApi } from '../../api/inventory.api'
+import { reportsApi } from '../../api/reports.api'
 import { useProducts } from '../../hooks/useProducts'
 
 // Chặn fan-out: BE chỉ có GET /inventory/warehouse/{id} nên phải gọi 1 lần/kho.
@@ -14,15 +16,9 @@ const MAX_WAREHOUSES = 12
  * MỘT lần lấy dữ liệu phục vụ CẢ hai thứ: biểu đồ tồn theo kho và danh sách
  * cảnh báo dưới tồn an toàn — không gọi API thêm lần nào cho biểu đồ.
  *
- * GIỚI HẠN CỦA BE (đọc trước khi định mở rộng):
- *   - Không có endpoint tổng hợp nào. Phải gọi /inventory/warehouse/{id} cho
- *     từng kho rồi tự cộng ở FE.
- *   - InventoryResponse chỉ có {productId, warehouseId, quantity,
- *     reservedQuantity, availableQuantity} — KHÔNG có hạn dùng. Lô chỉ query
- *     được qua /inventory/batches?productId&warehouseId, tức mỗi cặp
- *     (sản phẩm, kho) một request. 210 sản phẩm x N kho => hàng trăm request.
- *     Vì vậy CHƯA có cảnh báo cận hạn ở Dashboard: cần BE thêm endpoint
- *     GET /inventory/batches/expiring?days=30.
+ * Tồn theo kho vẫn phải fan-out /inventory/warehouse/{id} cho từng kho (BE
+ * chưa có endpoint gộp tồn). Riêng cận hạn và Xuất-Nhập-Tồn nay đã có endpoint
+ * gộp riêng (mỗi thứ 1 request), lấy kèm ở dưới.
  */
 export function useStockOverview({ enabled = true } = {}) {
   const warehouses = useQuery({
@@ -89,5 +85,31 @@ export function useStockOverview({ enabled = true } = {}) {
     return out.sort((a, b) => b.deficit - a.deficit)
   })()
 
-  return { isLoading, isError, byWarehouse, lowStock, truncated, warehouseCount: whList.length }
+  // ── [MỤC 6] Hai thẻ mới: cận hạn + Xuất-Nhập-Tồn — mỗi thứ 1 request gộp,
+  // độc lập với fan-out ở trên nên KHÔNG chặn nhau khi tải.
+  const EXPIRY_DAYS = 30
+  const expiring = useQuery({
+    queryKey: ['dashboard', 'expiring', EXPIRY_DAYS],
+    queryFn: () => inventoryApi.getExpiringBatches({ days: EXPIRY_DAYS }),
+    enabled,
+    staleTime: 60_000,
+  })
+
+  const SUMMARY_DAYS = 30
+  const range = useMemo(() => {
+    const to = dayjs()
+    return { from: to.subtract(SUMMARY_DAYS - 1, 'day').format('YYYY-MM-DD'), to: to.format('YYYY-MM-DD') }
+  }, [])
+  const summary = useQuery({
+    queryKey: ['dashboard', 'stock-summary', range.from, range.to],
+    queryFn: () => reportsApi.stockSummary(range),
+    enabled,
+    staleTime: 60_000,
+  })
+
+  return {
+    isLoading, isError, byWarehouse, lowStock, truncated, warehouseCount: whList.length,
+    expiring: { data: expiring.data || [], isLoading: expiring.isLoading, isError: expiring.isError, days: EXPIRY_DAYS },
+    summary: { data: summary.data || [], isLoading: summary.isLoading, isError: summary.isError, days: SUMMARY_DAYS },
+  }
 }

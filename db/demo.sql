@@ -313,6 +313,7 @@ CREATE TABLE sales_order_details (
 
 CREATE TABLE picking_lists (
     id VARCHAR(20) PRIMARY KEY,
+    pick_number VARCHAR(50) UNIQUE, -- [MỤC 6] Mã nghiệp vụ hiển thị (VD: PK-XXXXXXXX), sinh khi tạo lệnh
     so_id VARCHAR(20) NOT NULL,
     assigned_to VARCHAR(20) NULL, -- Tài khoản công nhân nhận lệnh gom hàng
     status VARCHAR(30) NOT NULL, -- PENDING, PICKING, COMPLETED

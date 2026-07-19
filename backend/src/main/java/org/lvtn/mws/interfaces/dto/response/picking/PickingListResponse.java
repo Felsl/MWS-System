@@ -5,6 +5,7 @@ import java.util.List;
 
 public record PickingListResponse(
         String id,
+        String pickNumber,
         String soId,
         String assignedTo,
         String status,

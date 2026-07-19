@@ -19,6 +19,9 @@ public interface IInventoryBatchRepository {
     /** [GIAI ĐOẠN 7] Lô ACTIVE còn hàng & SẮP hết hạn trong khoảng [today, threshold]. */
     List<InventoryBatch> findNearExpiryActiveBatches(LocalDate today, LocalDate threshold);
 
+    /** [MỤC 6] Lô ACTIVE còn hàng có hạn dùng ≤ threshold; warehouseId null = mọi kho. */
+    List<InventoryBatch> findExpiring(LocalDate threshold, String warehouseId);
+
     List<InventoryBatch> findByProductIdAndWarehouseId(String productId, String warehouseId);
 
     /** [GIAI ĐOẠN 6] Toàn bộ lô của một kho — phục vụ chụp ảnh tồn (snapshot) khi bắt đầu kiểm kê. */

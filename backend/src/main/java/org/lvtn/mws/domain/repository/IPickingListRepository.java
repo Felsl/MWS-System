@@ -13,4 +13,6 @@ public interface IPickingListRepository {
     List<PickingList> findAll();
     /** Tìm 1 dòng chi tiết để đối soát quét mã (trả về aggregate chứa dòng đó). */
     Optional<PickingList> findByDetailId(String pickingListDetailId);
+    /** Bảo đảm mã nghiệp vụ pick_number là duy nhất khi sinh mã. */
+    boolean existsByPickNumber(String pickNumber);
 }

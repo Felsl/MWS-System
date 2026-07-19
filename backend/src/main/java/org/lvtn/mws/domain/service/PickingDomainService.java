@@ -63,6 +63,7 @@ public class PickingDomainService {
 
         PickingList pickingList = new PickingList.Builder()
                 .id(idGenerator.generate())
+                .pickNumber(generatePickNumber())
                 .soId(soId)
                 .status(PickingList.Status.PENDING)
                 .build();
@@ -229,6 +230,15 @@ public class PickingDomainService {
     public PickingList getById(String id) {
         return pickingRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy lệnh gom hàng: " + id));
+    }
+
+    /** Mã nghiệp vụ lệnh gom hàng — cùng cách sinh với transferNumber (prefix + id, đảm bảo duy nhất). */
+    private String generatePickNumber() {
+        String number;
+        do {
+            number = "PK-" + idGenerator.generate().toUpperCase();
+        } while (pickingRepository.existsByPickNumber(number));
+        return number;
     }
 
     /**

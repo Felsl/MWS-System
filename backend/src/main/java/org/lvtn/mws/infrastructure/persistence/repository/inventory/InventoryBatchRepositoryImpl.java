@@ -51,6 +51,12 @@ public class InventoryBatchRepositoryImpl implements IInventoryBatchRepository {
     }
 
     @Override
+    public List<InventoryBatch> findExpiring(LocalDate threshold, String warehouseId) {
+        return jpa.findExpiring(threshold, warehouseId).stream()
+                .map(mapper::toDomain).collect(Collectors.toList());
+    }
+
+    @Override
     public List<InventoryBatch> findByProductIdAndWarehouseId(String productId, String warehouseId) {
         return jpa.findByProductIdAndWarehouseId(productId, warehouseId).stream()
                 .map(mapper::toDomain).collect(Collectors.toList());

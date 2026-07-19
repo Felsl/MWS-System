@@ -27,6 +27,7 @@ public class InventoryController {
     private final CommitStockDeductionUseCase commitUseCase;
     private final CreateInventoryBatchUseCase createBatchUseCase;
     private final GetBatchesUseCase getBatchesUseCase;
+    private final GetExpiringBatchesUseCase getExpiringBatchesUseCase;
     private final org.lvtn.mws.application.usecases.warehouse.GetBinLocationCodesUseCase getBinLocationCodesUseCase;
     private final UpdateBatchStatusUseCase updateBatchStatusUseCase;
     private final InventoryWebMapper mapper;
@@ -106,6 +107,14 @@ public class InventoryController {
         return getBatchesUseCase.execute(productId, warehouseId).stream()
                 .map(b -> mapper.toBatchResponse(b, binCodes.get(b.getBinLocationId())))
                 .toList();
+    }
+
+    /** [MỤC 6] Lô còn hàng có hạn dùng ≤ hôm nay + days (kho tuỳ chọn). */
+    @GetMapping("/batches/expiring")
+    public List<InventoryBatchResponse> getExpiringBatches(
+            @RequestParam(defaultValue = "30") int days,
+            @RequestParam(required = false) String warehouseId) {
+        return mapper.toBatchResponseList(getExpiringBatchesUseCase.execute(days, warehouseId));
     }
 
     @PreAuthorize("hasAuthority('INVENTORY_ADJUST')")

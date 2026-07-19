@@ -25,6 +25,30 @@ public class StockMovementRepositoryImpl implements IStockMovementRepository {
     }
 
     @Override
+    public long sumQuantityChangeBefore(java.time.LocalDateTime instant, String warehouseId) {
+        String wh = (warehouseId == null || warehouseId.isBlank()) ? null : warehouseId;
+        return jpa.sumQuantityChangeBefore(instant, wh);
+    }
+
+    @Override
+    public List<org.lvtn.mws.domain.model.DailyStockFlow> aggregateDailyFlow(
+            java.time.LocalDateTime fromInclusive, java.time.LocalDateTime toExclusive, String warehouseId) {
+        String wh = (warehouseId == null || warehouseId.isBlank()) ? null : warehouseId;
+        return jpa.aggregateDailyFlow(fromInclusive, toExclusive, wh).stream()
+                .map(row -> new org.lvtn.mws.domain.model.DailyStockFlow(
+                        toLocalDate(row[0]),
+                        ((Number) row[1]).longValue(),
+                        ((Number) row[2]).longValue()))
+                .toList();
+    }
+
+    private static java.time.LocalDate toLocalDate(Object v) {
+        if (v instanceof java.time.LocalDate d) return d;
+        if (v instanceof java.sql.Date d) return d.toLocalDate();
+        return java.time.LocalDate.parse(v.toString());
+    }
+
+    @Override
     public void appendAll(List<StockMovement> movements) {
         if (movements == null || movements.isEmpty()) return;
         jpa.saveAll(movements.stream().map(mapper::toEntity).toList());

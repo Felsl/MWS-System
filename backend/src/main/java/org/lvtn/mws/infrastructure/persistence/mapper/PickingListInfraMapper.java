@@ -16,6 +16,7 @@ public interface PickingListInfraMapper {
         if (domain == null) return null;
         PickingListEntity e = new PickingListEntity();
         e.setId(domain.getId());
+        e.setPickNumber(domain.getPickNumber());
         e.setSoId(domain.getSoId());
         e.setTransferOrderId(domain.getTransferOrderId());
         e.setAssignedTo(domain.getAssignedTo());
@@ -72,6 +73,7 @@ public interface PickingListInfraMapper {
         }
         return new PickingList.Builder()
                 .id(e.getId())
+                .pickNumber(e.getPickNumber())
                 .soId(e.getSoId())
                 .transferOrderId(e.getTransferOrderId())
                 .assignedTo(e.getAssignedTo())

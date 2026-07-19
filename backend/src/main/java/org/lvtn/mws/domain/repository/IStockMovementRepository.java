@@ -21,4 +21,11 @@ public interface IStockMovementRepository {
             String productId, String warehouseId, String cursor, int size);
     /** [GIAI ĐOẠN 7] Truy vết theo sản phẩm TẠI một kho cụ thể (created_at giảm dần). */
     List<StockMovement> findByProductIdAndWarehouseId(String productId, String warehouseId);
+
+    /** [MỤC 6] Tổng quantity_change trước mốc 'instant' (tồn đầu kỳ). warehouseId null = mọi kho. */
+    long sumQuantityChangeBefore(java.time.LocalDateTime instant, String warehouseId);
+
+    /** [MỤC 6] Gộp nhập/xuất theo ngày trong [fromInclusive, toExclusive). warehouseId null = mọi kho. */
+    List<org.lvtn.mws.domain.model.DailyStockFlow> aggregateDailyFlow(
+            java.time.LocalDateTime fromInclusive, java.time.LocalDateTime toExclusive, String warehouseId);
 }

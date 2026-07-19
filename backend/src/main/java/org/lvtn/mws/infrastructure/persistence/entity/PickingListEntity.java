@@ -16,6 +16,10 @@ public class PickingListEntity {
     @Column(length = 20)
     private String id;
 
+    // Mã nghiệp vụ hiển thị (VD: PK-XXXXXXXX). Nullable để tương thích lệnh cũ.
+    @Column(name = "pick_number", length = 50, unique = true)
+    private String pickNumber;
+
     @Column(name = "so_id", length = 20)
     private String soId;
 

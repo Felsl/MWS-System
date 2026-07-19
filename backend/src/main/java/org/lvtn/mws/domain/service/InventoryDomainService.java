@@ -4,6 +4,7 @@ import org.lvtn.mws.domain.model.*;
 import org.lvtn.mws.domain.repository.IInventoryBatchRepository;
 import org.lvtn.mws.domain.repository.IInventoryRepository;
 import org.lvtn.mws.domain.repository.IProductRepository;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -147,6 +148,13 @@ public class InventoryDomainService {
 
     public List<InventoryBatch> findBatchesByProductAndWarehouse(String productId, String warehouseId) {
         return batchRepository.findByProductIdAndWarehouseId(productId, warehouseId);
+    }
+
+    /** [MỤC 6] Lô còn hàng sắp/đã hết hạn trong 'days' ngày tới (kho tuỳ chọn). */
+    public List<InventoryBatch> findExpiringBatches(int days, String warehouseId) {
+        LocalDate threshold = LocalDate.now().plusDays(Math.max(0, days));
+        String wh = (warehouseId == null || warehouseId.isBlank()) ? null : warehouseId;
+        return batchRepository.findExpiring(threshold, wh);
     }
 
     private void validateProductExists(String productId) {

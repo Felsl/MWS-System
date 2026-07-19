@@ -15,6 +15,7 @@ public interface PickingWebMapper {
         if (pl == null) return null;
         return new PickingListResponse(
                 pl.getId(),
+                pl.getPickNumber(),
                 pl.getSoId(),
                 pl.getAssignedTo(),
                 pl.getStatus() == null ? null : pl.getStatus().name(),

@@ -4,6 +4,7 @@ import { Typography, Card, Col, Row, Statistic, List, Tag, Empty, Grid, Skeleton
 import {
   AppstoreOutlined, HomeOutlined, FileDoneOutlined, ShoppingCartOutlined,
   SwapOutlined, ReconciliationOutlined, RightOutlined, WarningOutlined, BarChartOutlined,
+  LineChartOutlined, ClockCircleOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useAuth } from '../../auth/AuthContext'
@@ -16,7 +17,9 @@ import { salesOrdersApi } from '../../api/salesOrders.api'
 import { transferOrdersApi } from '../../api/transferOrders.api'
 import { adjustmentsApi } from '../../api/adjustments.api'
 import { useStockOverview } from './useStockOverview'
+import { useProducts } from '../../hooks/useProducts'
 import StockBarChart from '../../components/StockBarChart'
+import StockLineChart from '../../components/StockLineChart'
 
 /**
  * Thẻ KPI CLICK ĐƯỢC.
@@ -149,68 +152,119 @@ export default function DashboardPage() {
 
 
 /**
- * Tồn kho: biểu đồ theo kho + cảnh báo dưới mức an toàn.
- *
- * KHÔNG phải báo cáo Xuất-Nhập-Tồn. BE hiện chưa có endpoint tổng hợp biến động
- * (StockMovementController chỉ nhận productId hoặc referenceType+referenceId),
- * nên không dựng được chuỗi nhập/xuất theo ngày ở FE. Xem chú thích trong
- * useStockOverview.js để biết cần BE bổ sung gì.
+ * Khu tồn kho trên Dashboard, 2 hàng dùng CHUNG một hook (useStockOverview):
+ *   Hàng 1: tồn theo kho (cột) + cảnh báo dưới tồn an toàn.
+ *   Hàng 2 [MỤC 6]: biểu đồ đường Xuất-Nhập-Tồn 30 ngày + lô sắp hết hạn.
  */
 function StockSection() {
   const navigate = useNavigate()
-  const { isLoading, isError, byWarehouse, lowStock, truncated } = useStockOverview()
+  const { isLoading, isError, byWarehouse, lowStock, truncated, expiring, summary } = useStockOverview()
+  const { map: productMap } = useProducts()
+  const whName = (id) => byWarehouse.find(w => w.id === id)?.name || id
 
   return (
-    <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-      <Col xs={24} lg={12}>
-        <Card
-          title={<span><BarChartOutlined /> Tồn kho theo kho</span>}
-          extra={<Button type="link" size="small" style={{ padding: 0 }} onClick={() => navigate('/inventory')}>Chi tiết</Button>}>
-          {isLoading
-            ? <Skeleton active paragraph={{ rows: 4 }} title={false} />
-            : isError
-              ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không tải được tồn kho" />
-              : <>
-                  <StockBarChart data={byWarehouse} />
-                  {truncated && (
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      Chỉ hiển thị 12 kho đầu tiên.
-                    </Typography.Text>
-                  )}
-                </>}
-        </Card>
-      </Col>
+    <>
+      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+        <Col xs={24} lg={12}>
+          <Card
+            title={<span><BarChartOutlined /> Tồn kho theo kho</span>}
+            extra={<Button type="link" size="small" style={{ padding: 0 }} onClick={() => navigate('/inventory')}>Chi tiết</Button>}>
+            {isLoading
+              ? <Skeleton active paragraph={{ rows: 4 }} title={false} />
+              : isError
+                ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không tải được tồn kho" />
+                : <>
+                    <StockBarChart data={byWarehouse} />
+                    {truncated && (
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        Chỉ hiển thị 12 kho đầu tiên.
+                      </Typography.Text>
+                    )}
+                  </>}
+          </Card>
+        </Col>
 
-      <Col xs={24} lg={12}>
-        <Card
-          title={<span><WarningOutlined /> Dưới mức tồn an toàn</span>}
-          extra={!isLoading && lowStock.length > 0 && <Tag color="red">{lowStock.length}</Tag>}>
-          {isLoading
-            ? <Skeleton active paragraph={{ rows: 4 }} title={false} />
-            : lowStock.length === 0
-              ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không có sản phẩm nào dưới mức an toàn" />
-              : (
-                <>
-                  <List size="small" dataSource={lowStock.slice(0, 5)}
-                    renderItem={(r) => (
-                      <List.Item
-                        className="mws-line-clickable"
-                        onClick={() => navigate('/inventory')}
-                        actions={[<Tag key="d" color="red">thiếu {r.deficit}</Tag>]}>
-                        <List.Item.Meta
-                          title={<span>{r.productName}{r.sku ? ` · ${r.sku}` : ''}</span>}
-                          description={`${r.warehouseName} — còn ${r.available}, mức an toàn ${r.safety}`} />
-                      </List.Item>
-                    )} />
-                  {lowStock.length > 5 && (
-                    <Button type="link" style={{ paddingLeft: 0 }} onClick={() => navigate('/inventory')}>
-                      Xem tất cả {lowStock.length} dòng <RightOutlined />
-                    </Button>
+        <Col xs={24} lg={12}>
+          <Card
+            title={<span><WarningOutlined /> Dưới mức tồn an toàn</span>}
+            extra={!isLoading && lowStock.length > 0 && <Tag color="red">{lowStock.length}</Tag>}>
+            {isLoading
+              ? <Skeleton active paragraph={{ rows: 4 }} title={false} />
+              : lowStock.length === 0
+                ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không có sản phẩm nào dưới mức an toàn" />
+                : (
+                  <>
+                    <List size="small" dataSource={lowStock.slice(0, 5)}
+                      renderItem={(r) => (
+                        <List.Item
+                          className="mws-line-clickable"
+                          onClick={() => navigate('/inventory')}
+                          actions={[<Tag key="d" color="red">thiếu {r.deficit}</Tag>]}>
+                          <List.Item.Meta
+                            title={<span>{r.productName}{r.sku ? ` · ${r.sku}` : ''}</span>}
+                            description={`${r.warehouseName} — còn ${r.available}, mức an toàn ${r.safety}`} />
+                        </List.Item>
+                      )} />
+                    {lowStock.length > 5 && (
+                      <Button type="link" style={{ paddingLeft: 0 }} onClick={() => navigate('/inventory')}>
+                        Xem tất cả {lowStock.length} dòng <RightOutlined />
+                      </Button>
+                    )}
+                  </>
+                )}
+          </Card>
+        </Col>
+      </Row>
+
+      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+        <Col xs={24} lg={12}>
+          <Card title={<span><LineChartOutlined /> Xuất-Nhập-Tồn ({summary.days} ngày)</span>}>
+            {summary.isLoading
+              ? <Skeleton active paragraph={{ rows: 4 }} title={false} />
+              : summary.isError
+                ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không tải được báo cáo" />
+                : <StockLineChart data={summary.data} />}
+          </Card>
+        </Col>
+
+        <Col xs={24} lg={12}>
+          <Card
+            title={<span><ClockCircleOutlined /> Lô sắp hết hạn (≤ {expiring.days} ngày)</span>}
+            extra={!expiring.isLoading && expiring.data.length > 0 && <Tag color="volcano">{expiring.data.length}</Tag>}>
+            {expiring.isLoading
+              ? <Skeleton active paragraph={{ rows: 4 }} title={false} />
+              : expiring.isError
+                ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không tải được danh sách lô" />
+                : expiring.data.length === 0
+                  ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không có lô nào sắp hết hạn" />
+                  : (
+                    <>
+                      <List size="small" dataSource={expiring.data.slice(0, 5)}
+                        renderItem={(b) => {
+                          const dleft = dayjs(b.expiryDate).startOf('day').diff(dayjs().startOf('day'), 'day')
+                          const color = dleft < 0 ? 'red' : dleft <= 7 ? 'volcano' : 'gold'
+                          const text = dleft < 0 ? `Quá hạn ${-dleft}n` : `Còn ${dleft}n`
+                          return (
+                            <List.Item
+                              className="mws-line-clickable"
+                              onClick={() => navigate('/inventory')}
+                              actions={[<Tag key="d" color={color}>{text}</Tag>]}>
+                              <List.Item.Meta
+                                title={<span>{productMap[b.productId]?.name || b.productId}{b.batchNumber ? ` · ${b.batchNumber}` : ''}</span>}
+                                description={`${whName(b.warehouseId)} — còn ${b.quantity}, HSD ${dayjs(b.expiryDate).format('DD/MM/YYYY')}`} />
+                            </List.Item>
+                          )
+                        }} />
+                      {expiring.data.length > 5 && (
+                        <Button type="link" style={{ paddingLeft: 0 }} onClick={() => navigate('/inventory')}>
+                          Xem tất cả {expiring.data.length} lô <RightOutlined />
+                        </Button>
+                      )}
+                    </>
                   )}
-                </>
-              )}
-        </Card>
-      </Col>
-    </Row>
+          </Card>
+        </Col>
+      </Row>
+    </>
   )
 }

@@ -15,6 +15,7 @@ public class PickingList {
     public enum Status { PENDING, PICKING, COMPLETED }
 
     private final String id;
+    private final String pickNumber;
     private final String soId;
     private final String transferOrderId;
     private String assignedTo;
@@ -26,6 +27,7 @@ public class PickingList {
 
     private PickingList(Builder b) {
         this.id          = Objects.requireNonNull(b.id, "id is required");
+        this.pickNumber  = b.pickNumber;   // nullable: các lệnh cũ trước khi có mã nghiệp vụ
         this.soId        = b.soId;
         this.transferOrderId = b.transferOrderId;
         // Một picking list phải thuộc ĐÚNG MỘT nguồn: đơn xuất (soId) HOẶC điều chuyển (transferOrderId).
@@ -42,6 +44,7 @@ public class PickingList {
 
     public static class Builder {
         private String id;
+        private String pickNumber;
         private String soId;
         private String transferOrderId;
         private String assignedTo;
@@ -51,6 +54,7 @@ public class PickingList {
         private List<PickingListDetail> details;
 
         public Builder id(String v)              { this.id = v; return this; }
+        public Builder pickNumber(String v)      { this.pickNumber = v; return this; }
         public Builder soId(String v)            { this.soId = v; return this; }
         public Builder transferOrderId(String v) { this.transferOrderId = v; return this; }
         public Builder assignedTo(String v)      { this.assignedTo = v; return this; }
@@ -91,6 +95,7 @@ public class PickingList {
     public boolean isCompleted() { return this.status == Status.COMPLETED; }
 
     public String getId()              { return id; }
+    public String getPickNumber()      { return pickNumber; }
     public String getSoId()            { return soId; }
     public String getTransferOrderId() { return transferOrderId; }
     public String getAssignedTo()      { return assignedTo; }

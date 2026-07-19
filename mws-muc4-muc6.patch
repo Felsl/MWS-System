@@ -1,0 +1,1161 @@
+diff --git a/backend/src/main/java/org/lvtn/mws/application/usecases/inventory/GetExpiringBatchesUseCase.java b/backend/src/main/java/org/lvtn/mws/application/usecases/inventory/GetExpiringBatchesUseCase.java
+new file mode 100644
+index 0000000..3c66bf6
+--- /dev/null
++++ b/backend/src/main/java/org/lvtn/mws/application/usecases/inventory/GetExpiringBatchesUseCase.java
+@@ -0,0 +1,22 @@
++package org.lvtn.mws.application.usecases.inventory;
++
++import lombok.RequiredArgsConstructor;
++import org.lvtn.mws.domain.model.InventoryBatch;
++import org.lvtn.mws.domain.service.InventoryDomainService;
++import org.springframework.stereotype.Service;
++import org.springframework.transaction.annotation.Transactional;
++import java.util.List;
++
++/**
++ * [MỤC 6] Danh sách lô hàng còn tồn sắp hết hạn — phục vụ thẻ cảnh báo trên Dashboard.
++ */
++@Service
++@RequiredArgsConstructor
++public class GetExpiringBatchesUseCase {
++    private final InventoryDomainService domainService;
++
++    @Transactional(readOnly = true)
++    public List<InventoryBatch> execute(int days, String warehouseId) {
++        return domainService.findExpiringBatches(days, warehouseId);
++    }
++}
+diff --git a/backend/src/main/java/org/lvtn/mws/application/usecases/report/GetStockSummaryUseCase.java b/backend/src/main/java/org/lvtn/mws/application/usecases/report/GetStockSummaryUseCase.java
+new file mode 100644
+index 0000000..44da833
+--- /dev/null
++++ b/backend/src/main/java/org/lvtn/mws/application/usecases/report/GetStockSummaryUseCase.java
+@@ -0,0 +1,24 @@
++package org.lvtn.mws.application.usecases.report;
++
++import lombok.RequiredArgsConstructor;
++import org.lvtn.mws.domain.model.StockSummaryPoint;
++import org.lvtn.mws.domain.service.ReportDomainService;
++import org.springframework.stereotype.Service;
++import org.springframework.transaction.annotation.Transactional;
++
++import java.time.LocalDate;
++import java.util.List;
++
++/**
++ * [MỤC 6] Báo cáo Xuất-Nhập-Tồn theo ngày cho Dashboard.
++ */
++@Service
++@RequiredArgsConstructor
++public class GetStockSummaryUseCase {
++    private final ReportDomainService reportDomainService;
++
++    @Transactional(readOnly = true)
++    public List<StockSummaryPoint> execute(LocalDate from, LocalDate to, String warehouseId) {
++        return reportDomainService.stockSummary(from, to, warehouseId);
++    }
++}
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/model/DailyStockFlow.java b/backend/src/main/java/org/lvtn/mws/domain/model/DailyStockFlow.java
+new file mode 100644
+index 0000000..2d2ad3b
+--- /dev/null
++++ b/backend/src/main/java/org/lvtn/mws/domain/model/DailyStockFlow.java
+@@ -0,0 +1,10 @@
++package org.lvtn.mws.domain.model;
++
++import java.time.LocalDate;
++
++/**
++ * [MỤC 6] Một dòng gộp biến động kho theo ngày: tổng nhập và tổng xuất (số dương).
++ * Là kết quả thô từ GROUP BY DATE(created_at) trên stock_movements.
++ */
++public record DailyStockFlow(LocalDate date, long inQty, long outQty) {
++}
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/model/PickingList.java b/backend/src/main/java/org/lvtn/mws/domain/model/PickingList.java
+index fadbf3a..b2d8c94 100644
+--- a/backend/src/main/java/org/lvtn/mws/domain/model/PickingList.java
++++ b/backend/src/main/java/org/lvtn/mws/domain/model/PickingList.java
+@@ -15,6 +15,7 @@ public class PickingList {
+     public enum Status { PENDING, PICKING, COMPLETED }
+ 
+     private final String id;
++    private final String pickNumber;
+     private final String soId;
+     private final String transferOrderId;
+     private String assignedTo;
+@@ -26,6 +27,7 @@ public class PickingList {
+ 
+     private PickingList(Builder b) {
+         this.id          = Objects.requireNonNull(b.id, "id is required");
++        this.pickNumber  = b.pickNumber;   // nullable: các lệnh cũ trước khi có mã nghiệp vụ
+         this.soId        = b.soId;
+         this.transferOrderId = b.transferOrderId;
+         // Một picking list phải thuộc ĐÚNG MỘT nguồn: đơn xuất (soId) HOẶC điều chuyển (transferOrderId).
+@@ -42,6 +44,7 @@ public class PickingList {
+ 
+     public static class Builder {
+         private String id;
++        private String pickNumber;
+         private String soId;
+         private String transferOrderId;
+         private String assignedTo;
+@@ -51,6 +54,7 @@ public class PickingList {
+         private List<PickingListDetail> details;
+ 
+         public Builder id(String v)              { this.id = v; return this; }
++        public Builder pickNumber(String v)      { this.pickNumber = v; return this; }
+         public Builder soId(String v)            { this.soId = v; return this; }
+         public Builder transferOrderId(String v) { this.transferOrderId = v; return this; }
+         public Builder assignedTo(String v)      { this.assignedTo = v; return this; }
+@@ -91,6 +95,7 @@ public class PickingList {
+     public boolean isCompleted() { return this.status == Status.COMPLETED; }
+ 
+     public String getId()              { return id; }
++    public String getPickNumber()      { return pickNumber; }
+     public String getSoId()            { return soId; }
+     public String getTransferOrderId() { return transferOrderId; }
+     public String getAssignedTo()      { return assignedTo; }
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/model/StockSummaryPoint.java b/backend/src/main/java/org/lvtn/mws/domain/model/StockSummaryPoint.java
+new file mode 100644
+index 0000000..5422703
+--- /dev/null
++++ b/backend/src/main/java/org/lvtn/mws/domain/model/StockSummaryPoint.java
+@@ -0,0 +1,11 @@
++package org.lvtn.mws.domain.model;
++
++import java.time.LocalDate;
++
++/**
++ * [MỤC 6] Một điểm của báo cáo Xuất-Nhập-Tồn theo ngày.
++ *  - inQty/outQty: nhập/xuất phát sinh trong ngày.
++ *  - closingQty: tồn cuối ngày = tồn đầu kỳ (trước 'from') + cộng dồn (nhập - xuất) tới hết ngày này.
++ */
++public record StockSummaryPoint(LocalDate date, long inQty, long outQty, long closingQty) {
++}
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/repository/IInventoryBatchRepository.java b/backend/src/main/java/org/lvtn/mws/domain/repository/IInventoryBatchRepository.java
+index ded5865..5b41a55 100644
+--- a/backend/src/main/java/org/lvtn/mws/domain/repository/IInventoryBatchRepository.java
++++ b/backend/src/main/java/org/lvtn/mws/domain/repository/IInventoryBatchRepository.java
+@@ -19,6 +19,9 @@ public interface IInventoryBatchRepository {
+     /** [GIAI ĐOẠN 7] Lô ACTIVE còn hàng & SẮP hết hạn trong khoảng [today, threshold]. */
+     List<InventoryBatch> findNearExpiryActiveBatches(LocalDate today, LocalDate threshold);
+ 
++    /** [MỤC 6] Lô ACTIVE còn hàng có hạn dùng ≤ threshold; warehouseId null = mọi kho. */
++    List<InventoryBatch> findExpiring(LocalDate threshold, String warehouseId);
++
+     List<InventoryBatch> findByProductIdAndWarehouseId(String productId, String warehouseId);
+ 
+     /** [GIAI ĐOẠN 6] Toàn bộ lô của một kho — phục vụ chụp ảnh tồn (snapshot) khi bắt đầu kiểm kê. */
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/repository/IPickingListRepository.java b/backend/src/main/java/org/lvtn/mws/domain/repository/IPickingListRepository.java
+index 727cea2..485daf4 100644
+--- a/backend/src/main/java/org/lvtn/mws/domain/repository/IPickingListRepository.java
++++ b/backend/src/main/java/org/lvtn/mws/domain/repository/IPickingListRepository.java
+@@ -13,4 +13,6 @@ public interface IPickingListRepository {
+     List<PickingList> findAll();
+     /** Tìm 1 dòng chi tiết để đối soát quét mã (trả về aggregate chứa dòng đó). */
+     Optional<PickingList> findByDetailId(String pickingListDetailId);
++    /** Bảo đảm mã nghiệp vụ pick_number là duy nhất khi sinh mã. */
++    boolean existsByPickNumber(String pickNumber);
+ }
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/repository/IStockMovementRepository.java b/backend/src/main/java/org/lvtn/mws/domain/repository/IStockMovementRepository.java
+index 7680e3b..4608c57 100644
+--- a/backend/src/main/java/org/lvtn/mws/domain/repository/IStockMovementRepository.java
++++ b/backend/src/main/java/org/lvtn/mws/domain/repository/IStockMovementRepository.java
+@@ -21,4 +21,11 @@ public interface IStockMovementRepository {
+             String productId, String warehouseId, String cursor, int size);
+     /** [GIAI ĐOẠN 7] Truy vết theo sản phẩm TẠI một kho cụ thể (created_at giảm dần). */
+     List<StockMovement> findByProductIdAndWarehouseId(String productId, String warehouseId);
++
++    /** [MỤC 6] Tổng quantity_change trước mốc 'instant' (tồn đầu kỳ). warehouseId null = mọi kho. */
++    long sumQuantityChangeBefore(java.time.LocalDateTime instant, String warehouseId);
++
++    /** [MỤC 6] Gộp nhập/xuất theo ngày trong [fromInclusive, toExclusive). warehouseId null = mọi kho. */
++    List<org.lvtn.mws.domain.model.DailyStockFlow> aggregateDailyFlow(
++            java.time.LocalDateTime fromInclusive, java.time.LocalDateTime toExclusive, String warehouseId);
+ }
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/service/InventoryDomainService.java b/backend/src/main/java/org/lvtn/mws/domain/service/InventoryDomainService.java
+index 4aabb97..fe9cdc0 100644
+--- a/backend/src/main/java/org/lvtn/mws/domain/service/InventoryDomainService.java
++++ b/backend/src/main/java/org/lvtn/mws/domain/service/InventoryDomainService.java
+@@ -4,6 +4,7 @@ import org.lvtn.mws.domain.model.*;
+ import org.lvtn.mws.domain.repository.IInventoryBatchRepository;
+ import org.lvtn.mws.domain.repository.IInventoryRepository;
+ import org.lvtn.mws.domain.repository.IProductRepository;
++import java.time.LocalDate;
+ import java.util.ArrayList;
+ import java.util.List;
+ 
+@@ -149,6 +150,13 @@ public class InventoryDomainService {
+         return batchRepository.findByProductIdAndWarehouseId(productId, warehouseId);
+     }
+ 
++    /** [MỤC 6] Lô còn hàng sắp/đã hết hạn trong 'days' ngày tới (kho tuỳ chọn). */
++    public List<InventoryBatch> findExpiringBatches(int days, String warehouseId) {
++        LocalDate threshold = LocalDate.now().plusDays(Math.max(0, days));
++        String wh = (warehouseId == null || warehouseId.isBlank()) ? null : warehouseId;
++        return batchRepository.findExpiring(threshold, wh);
++    }
++
+     private void validateProductExists(String productId) {
+         productRepository.findById(productId)
+                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy sản phẩm: " + productId));
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/service/PickingDomainService.java b/backend/src/main/java/org/lvtn/mws/domain/service/PickingDomainService.java
+index 0fb1595..0f30d3c 100644
+--- a/backend/src/main/java/org/lvtn/mws/domain/service/PickingDomainService.java
++++ b/backend/src/main/java/org/lvtn/mws/domain/service/PickingDomainService.java
+@@ -63,6 +63,7 @@ public class PickingDomainService {
+ 
+         PickingList pickingList = new PickingList.Builder()
+                 .id(idGenerator.generate())
++                .pickNumber(generatePickNumber())
+                 .soId(soId)
+                 .status(PickingList.Status.PENDING)
+                 .build();
+@@ -231,6 +232,15 @@ public class PickingDomainService {
+                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy lệnh gom hàng: " + id));
+     }
+ 
++    /** Mã nghiệp vụ lệnh gom hàng — cùng cách sinh với transferNumber (prefix + id, đảm bảo duy nhất). */
++    private String generatePickNumber() {
++        String number;
++        do {
++            number = "PK-" + idGenerator.generate().toUpperCase();
++        } while (pickingRepository.existsByPickNumber(number));
++        return number;
++    }
++
+     /**
+      * Xác định lô CẦN xuất cho một dòng nhặt và kiểm tra công nhân đã quét đúng lô.
+      *
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/service/ReportDomainService.java b/backend/src/main/java/org/lvtn/mws/domain/service/ReportDomainService.java
+new file mode 100644
+index 0000000..c3727c1
+--- /dev/null
++++ b/backend/src/main/java/org/lvtn/mws/domain/service/ReportDomainService.java
+@@ -0,0 +1,55 @@
++package org.lvtn.mws.domain.service;
++
++import org.lvtn.mws.domain.model.DailyStockFlow;
++import org.lvtn.mws.domain.model.StockSummaryPoint;
++import org.lvtn.mws.domain.repository.IStockMovementRepository;
++
++import java.time.LocalDate;
++import java.util.ArrayList;
++import java.util.HashMap;
++import java.util.List;
++import java.util.Map;
++
++/**
++ * [MỤC 6] Báo cáo Xuất-Nhập-Tồn theo ngày.
++ *
++ * Tồn cuối mỗi ngày (closingQty) = tồn đầu kỳ (tổng biến động TRƯỚC 'from')
++ * cộng dồn (nhập - xuất) tới hết ngày đó. Nhờ vậy đường "Tồn" phản ánh mức tồn
++ * thật, không phải chỉ số cộng dồn trong khoảng. Những ngày không có biến động
++ * vẫn được điền (nhập=xuất=0) để đường liền mạch và tồn được mang sang.
++ */
++public class ReportDomainService {
++
++    private final IStockMovementRepository stockMovementRepository;
++
++    public ReportDomainService(IStockMovementRepository stockMovementRepository) {
++        this.stockMovementRepository = stockMovementRepository;
++    }
++
++    public List<StockSummaryPoint> stockSummary(LocalDate from, LocalDate to, String warehouseId) {
++        if (from == null || to == null) {
++            throw new IllegalArgumentException("Khoảng ngày (from, to) là bắt buộc");
++        }
++        if (to.isBefore(from)) {
++            throw new IllegalArgumentException("'to' phải >= 'from'");
++        }
++
++        long opening = stockMovementRepository.sumQuantityChangeBefore(from.atStartOfDay(), warehouseId);
++
++        List<DailyStockFlow> flows = stockMovementRepository.aggregateDailyFlow(
++                from.atStartOfDay(), to.plusDays(1).atStartOfDay(), warehouseId);
++        Map<LocalDate, DailyStockFlow> byDate = new HashMap<>();
++        for (DailyStockFlow f : flows) byDate.put(f.date(), f);
++
++        List<StockSummaryPoint> points = new ArrayList<>();
++        long running = opening;
++        for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
++            DailyStockFlow f = byDate.get(d);
++            long in = f == null ? 0 : f.inQty();
++            long out = f == null ? 0 : f.outQty();
++            running += in - out;
++            points.add(new StockSummaryPoint(d, in, out, running));
++        }
++        return points;
++    }
++}
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/service/TransferPickingDomainService.java b/backend/src/main/java/org/lvtn/mws/domain/service/TransferPickingDomainService.java
+index 0002cb3..2380872 100644
+--- a/backend/src/main/java/org/lvtn/mws/domain/service/TransferPickingDomainService.java
++++ b/backend/src/main/java/org/lvtn/mws/domain/service/TransferPickingDomainService.java
+@@ -53,6 +53,7 @@ public class TransferPickingDomainService {
+ 
+         PickingList pickingList = new PickingList.Builder()
+                 .id(idGenerator.generate())
++                .pickNumber(generatePickNumber())
+                 .transferOrderId(transferOrderId)
+                 .status(PickingList.Status.PENDING)
+                 .build();
+@@ -71,6 +72,15 @@ public class TransferPickingDomainService {
+         return saved;
+     }
+ 
++    /** Mã nghiệp vụ lệnh gom hàng — cùng cách sinh với transferNumber (prefix + id, đảm bảo duy nhất). */
++    private String generatePickNumber() {
++        String number;
++        do {
++            number = "PK-" + idGenerator.generate().toUpperCase();
++        } while (pickingRepository.existsByPickNumber(number));
++        return number;
++    }
++
+     /** Dòng chỉ định: khoá đúng lô người lập/duyệt đã chọn. */
+     private void addDesignatedLine(PickingList pickingList, TransferOrderDetail line, String fromWh) {
+         InventoryBatch b = batchRepository.findById(line.getDesignatedBatchId())
+diff --git a/backend/src/main/java/org/lvtn/mws/infrastructure/config/DomainServiceConfig.java b/backend/src/main/java/org/lvtn/mws/infrastructure/config/DomainServiceConfig.java
+index b74acf4..29ecbd9 100644
+--- a/backend/src/main/java/org/lvtn/mws/infrastructure/config/DomainServiceConfig.java
++++ b/backend/src/main/java/org/lvtn/mws/infrastructure/config/DomainServiceConfig.java
+@@ -53,6 +53,11 @@ public class DomainServiceConfig {
+         return new InventoryDomainService(inventoryRepository, batchRepository, productRepository);
+     }
+ 
++    @Bean
++    public ReportDomainService reportDomainService(IStockMovementRepository stockMovementRepository) {
++        return new ReportDomainService(stockMovementRepository);
++    }
++
+     // ── Module Sales Order / Picking / Shipment ──────────────────────────────
+ 
+     @Bean
+diff --git a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/entity/PickingListEntity.java b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/entity/PickingListEntity.java
+index 9a3c58a..3a17dc8 100644
+--- a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/entity/PickingListEntity.java
++++ b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/entity/PickingListEntity.java
+@@ -16,6 +16,10 @@ public class PickingListEntity {
+     @Column(length = 20)
+     private String id;
+ 
++    // Mã nghiệp vụ hiển thị (VD: PK-XXXXXXXX). Nullable để tương thích lệnh cũ.
++    @Column(name = "pick_number", length = 50, unique = true)
++    private String pickNumber;
++
+     @Column(name = "so_id", length = 20)
+     private String soId;
+ 
+diff --git a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/mapper/PickingListInfraMapper.java b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/mapper/PickingListInfraMapper.java
+index e3327d9..0e46de1 100644
+--- a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/mapper/PickingListInfraMapper.java
++++ b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/mapper/PickingListInfraMapper.java
+@@ -16,6 +16,7 @@ public interface PickingListInfraMapper {
+         if (domain == null) return null;
+         PickingListEntity e = new PickingListEntity();
+         e.setId(domain.getId());
++        e.setPickNumber(domain.getPickNumber());
+         e.setSoId(domain.getSoId());
+         e.setTransferOrderId(domain.getTransferOrderId());
+         e.setAssignedTo(domain.getAssignedTo());
+@@ -72,6 +73,7 @@ public interface PickingListInfraMapper {
+         }
+         return new PickingList.Builder()
+                 .id(e.getId())
++                .pickNumber(e.getPickNumber())
+                 .soId(e.getSoId())
+                 .transferOrderId(e.getTransferOrderId())
+                 .assignedTo(e.getAssignedTo())
+diff --git a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/inventory/InventoryBatchRepositoryImpl.java b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/inventory/InventoryBatchRepositoryImpl.java
+index 882ba5e..82a0f65 100644
+--- a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/inventory/InventoryBatchRepositoryImpl.java
++++ b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/inventory/InventoryBatchRepositoryImpl.java
+@@ -50,6 +50,12 @@ public class InventoryBatchRepositoryImpl implements IInventoryBatchRepository {
+                 .map(mapper::toDomain).toList();
+     }
+ 
++    @Override
++    public List<InventoryBatch> findExpiring(LocalDate threshold, String warehouseId) {
++        return jpa.findExpiring(threshold, warehouseId).stream()
++                .map(mapper::toDomain).collect(Collectors.toList());
++    }
++
+     @Override
+     public List<InventoryBatch> findByProductIdAndWarehouseId(String productId, String warehouseId) {
+         return jpa.findByProductIdAndWarehouseId(productId, warehouseId).stream()
+diff --git a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/inventory/JpaInventoryBatchRepository.java b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/inventory/JpaInventoryBatchRepository.java
+index 38c18b5..8bb83cb 100644
+--- a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/inventory/JpaInventoryBatchRepository.java
++++ b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/inventory/JpaInventoryBatchRepository.java
+@@ -37,6 +37,18 @@ public interface JpaInventoryBatchRepository extends JpaRepository<InventoryBatc
+ 
+     List<InventoryBatchEntity> findByProductIdAndWarehouseId(String productId, String warehouseId);
+ 
++    /**
++     * [MỤC 6] Lô ACTIVE còn hàng có hạn dùng ≤ threshold (= today + days), kho tuỳ chọn.
++     * Không đặt cận dưới: gồm cả lô đã quá hạn còn tồn để bộ phận kho xử lý.
++     */
++    @Query("SELECT b FROM InventoryBatchEntity b " +
++           "WHERE b.status = 'ACTIVE' AND b.quantity > 0 " +
++           "  AND b.expiryDate IS NOT NULL AND b.expiryDate <= :threshold " +
++           "  AND (:warehouseId IS NULL OR b.warehouseId = :warehouseId) " +
++           "ORDER BY b.expiryDate ASC")
++    List<InventoryBatchEntity> findExpiring(@Param("threshold") LocalDate threshold,
++                                            @Param("warehouseId") String warehouseId);
++
+     /** [GIAI ĐOẠN 6] Toàn bộ lô của một kho — chụp ảnh tồn khi bắt đầu kiểm kê. */
+     List<InventoryBatchEntity> findByWarehouseId(String warehouseId);
+ }
+diff --git a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/picking/JpaPickingListRepository.java b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/picking/JpaPickingListRepository.java
+index 38620de..2e8c349 100644
+--- a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/picking/JpaPickingListRepository.java
++++ b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/picking/JpaPickingListRepository.java
+@@ -10,6 +10,7 @@ import java.util.Optional;
+ public interface JpaPickingListRepository extends JpaRepository<PickingListEntity, String> {
+     Optional<PickingListEntity> findBySoId(String soId);
+     Optional<PickingListEntity> findByTransferOrderId(String transferOrderId);
++    boolean existsByPickNumber(String pickNumber);
+ 
+     @Query("SELECT DISTINCT pl FROM PickingListEntity pl JOIN pl.details d WHERE d.id = :detailId")
+     Optional<PickingListEntity> findByDetailId(@Param("detailId") String detailId);
+diff --git a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/picking/PickingListRepositoryImpl.java b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/picking/PickingListRepositoryImpl.java
+index a461805..9712013 100644
+--- a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/picking/PickingListRepositoryImpl.java
++++ b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/picking/PickingListRepositoryImpl.java
+@@ -45,4 +45,9 @@ public class PickingListRepositoryImpl implements IPickingListRepository {
+     public Optional<PickingList> findByDetailId(String pickingListDetailId) {
+         return jpa.findByDetailId(pickingListDetailId).map(mapper::toDomain);
+     }
++
++    @Override
++    public boolean existsByPickNumber(String pickNumber) {
++        return jpa.existsByPickNumber(pickNumber);
++    }
+ }
+diff --git a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/stockmovement/JpaStockMovementRepository.java b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/stockmovement/JpaStockMovementRepository.java
+index afbd163..fea0f58 100644
+--- a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/stockmovement/JpaStockMovementRepository.java
++++ b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/stockmovement/JpaStockMovementRepository.java
+@@ -16,4 +16,25 @@ public interface JpaStockMovementRepository
+     List<StockMovementEntity> findByReferenceTypeAndReferenceId(String referenceType, String referenceId);
+     List<StockMovementEntity> findByProductIdOrderByCreatedAtDesc(String productId);
+     List<StockMovementEntity> findByProductIdAndWarehouseIdOrderByCreatedAtDesc(String productId, String warehouseId);
++
++    /** [MỤC 6] Tồn đầu kỳ: tổng biến động (có dấu) trước mốc 'instant'. */
++    @org.springframework.data.jpa.repository.Query(value =
++            "SELECT COALESCE(SUM(quantity_change), 0) FROM stock_movements " +
++            "WHERE created_at < :instant " +
++            "  AND (:warehouseId IS NULL OR warehouse_id = :warehouseId)", nativeQuery = true)
++    long sumQuantityChangeBefore(@org.springframework.data.repository.query.Param("instant") java.time.LocalDateTime instant,
++                                 @org.springframework.data.repository.query.Param("warehouseId") String warehouseId);
++
++    /** [MỤC 6] GROUP BY DATE(created_at): (ngày, tổng nhập, tổng xuất-dương). */
++    @org.springframework.data.jpa.repository.Query(value =
++            "SELECT DATE(created_at) AS d, " +
++            "       SUM(CASE WHEN quantity_change > 0 THEN quantity_change ELSE 0 END) AS in_qty, " +
++            "       SUM(CASE WHEN quantity_change < 0 THEN -quantity_change ELSE 0 END) AS out_qty " +
++            "FROM stock_movements " +
++            "WHERE created_at >= :fromInclusive AND created_at < :toExclusive " +
++            "  AND (:warehouseId IS NULL OR warehouse_id = :warehouseId) " +
++            "GROUP BY DATE(created_at) ORDER BY d", nativeQuery = true)
++    List<Object[]> aggregateDailyFlow(@org.springframework.data.repository.query.Param("fromInclusive") java.time.LocalDateTime fromInclusive,
++                                      @org.springframework.data.repository.query.Param("toExclusive") java.time.LocalDateTime toExclusive,
++                                      @org.springframework.data.repository.query.Param("warehouseId") String warehouseId);
+ }
+diff --git a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/stockmovement/StockMovementRepositoryImpl.java b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/stockmovement/StockMovementRepositoryImpl.java
+index 5fa1b33..427e414 100644
+--- a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/stockmovement/StockMovementRepositoryImpl.java
++++ b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/stockmovement/StockMovementRepositoryImpl.java
+@@ -24,6 +24,30 @@ public class StockMovementRepositoryImpl implements IStockMovementRepository {
+         return mapper.toDomain(jpa.save(mapper.toEntity(movement)));
+     }
+ 
++    @Override
++    public long sumQuantityChangeBefore(java.time.LocalDateTime instant, String warehouseId) {
++        String wh = (warehouseId == null || warehouseId.isBlank()) ? null : warehouseId;
++        return jpa.sumQuantityChangeBefore(instant, wh);
++    }
++
++    @Override
++    public List<org.lvtn.mws.domain.model.DailyStockFlow> aggregateDailyFlow(
++            java.time.LocalDateTime fromInclusive, java.time.LocalDateTime toExclusive, String warehouseId) {
++        String wh = (warehouseId == null || warehouseId.isBlank()) ? null : warehouseId;
++        return jpa.aggregateDailyFlow(fromInclusive, toExclusive, wh).stream()
++                .map(row -> new org.lvtn.mws.domain.model.DailyStockFlow(
++                        toLocalDate(row[0]),
++                        ((Number) row[1]).longValue(),
++                        ((Number) row[2]).longValue()))
++                .toList();
++    }
++
++    private static java.time.LocalDate toLocalDate(Object v) {
++        if (v instanceof java.time.LocalDate d) return d;
++        if (v instanceof java.sql.Date d) return d.toLocalDate();
++        return java.time.LocalDate.parse(v.toString());
++    }
++
+     @Override
+     public void appendAll(List<StockMovement> movements) {
+         if (movements == null || movements.isEmpty()) return;
+diff --git a/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/picking/PickingListResponse.java b/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/picking/PickingListResponse.java
+index 06c13e5..99718cd 100644
+--- a/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/picking/PickingListResponse.java
++++ b/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/picking/PickingListResponse.java
+@@ -5,6 +5,7 @@ import java.util.List;
+ 
+ public record PickingListResponse(
+         String id,
++        String pickNumber,
+         String soId,
+         String assignedTo,
+         String status,
+diff --git a/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/report/StockSummaryResponse.java b/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/report/StockSummaryResponse.java
+new file mode 100644
+index 0000000..954a6d9
+--- /dev/null
++++ b/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/report/StockSummaryResponse.java
+@@ -0,0 +1,11 @@
++package org.lvtn.mws.interfaces.dto.response.report;
++
++import java.time.LocalDate;
++
++/** [MỤC 6] Một điểm báo cáo Xuất-Nhập-Tồn: { date, inQty, outQty, closingQty }. */
++public record StockSummaryResponse(
++        LocalDate date,
++        long inQty,
++        long outQty,
++        long closingQty) {
++}
+diff --git a/backend/src/main/java/org/lvtn/mws/interfaces/mapper/PickingWebMapper.java b/backend/src/main/java/org/lvtn/mws/interfaces/mapper/PickingWebMapper.java
+index 795e4d0..4d2acff 100644
+--- a/backend/src/main/java/org/lvtn/mws/interfaces/mapper/PickingWebMapper.java
++++ b/backend/src/main/java/org/lvtn/mws/interfaces/mapper/PickingWebMapper.java
+@@ -15,6 +15,7 @@ public interface PickingWebMapper {
+         if (pl == null) return null;
+         return new PickingListResponse(
+                 pl.getId(),
++                pl.getPickNumber(),
+                 pl.getSoId(),
+                 pl.getAssignedTo(),
+                 pl.getStatus() == null ? null : pl.getStatus().name(),
+diff --git a/backend/src/main/java/org/lvtn/mws/interfaces/rest/InventoryController.java b/backend/src/main/java/org/lvtn/mws/interfaces/rest/InventoryController.java
+index c5d193b..f3fd9fd 100644
+--- a/backend/src/main/java/org/lvtn/mws/interfaces/rest/InventoryController.java
++++ b/backend/src/main/java/org/lvtn/mws/interfaces/rest/InventoryController.java
+@@ -27,6 +27,7 @@ public class InventoryController {
+     private final CommitStockDeductionUseCase commitUseCase;
+     private final CreateInventoryBatchUseCase createBatchUseCase;
+     private final GetBatchesUseCase getBatchesUseCase;
++    private final GetExpiringBatchesUseCase getExpiringBatchesUseCase;
+     private final org.lvtn.mws.application.usecases.warehouse.GetBinLocationCodesUseCase getBinLocationCodesUseCase;
+     private final UpdateBatchStatusUseCase updateBatchStatusUseCase;
+     private final InventoryWebMapper mapper;
+@@ -108,6 +109,14 @@ public class InventoryController {
+                 .toList();
+     }
+ 
++    /** [MỤC 6] Lô còn hàng có hạn dùng ≤ hôm nay + days (kho tuỳ chọn). */
++    @GetMapping("/batches/expiring")
++    public List<InventoryBatchResponse> getExpiringBatches(
++            @RequestParam(defaultValue = "30") int days,
++            @RequestParam(required = false) String warehouseId) {
++        return mapper.toBatchResponseList(getExpiringBatchesUseCase.execute(days, warehouseId));
++    }
++
+     @PreAuthorize("hasAuthority('INVENTORY_ADJUST')")
+     @PatchMapping("/batches/{batchId}/status")
+     public InventoryBatchResponse updateBatchStatus(@PathVariable String batchId,
+diff --git a/backend/src/main/java/org/lvtn/mws/interfaces/rest/ReportController.java b/backend/src/main/java/org/lvtn/mws/interfaces/rest/ReportController.java
+new file mode 100644
+index 0000000..6e868bc
+--- /dev/null
++++ b/backend/src/main/java/org/lvtn/mws/interfaces/rest/ReportController.java
+@@ -0,0 +1,37 @@
++package org.lvtn.mws.interfaces.rest;
++
++import lombok.RequiredArgsConstructor;
++import org.lvtn.mws.application.usecases.report.GetStockSummaryUseCase;
++import org.lvtn.mws.interfaces.dto.response.report.StockSummaryResponse;
++import org.springframework.format.annotation.DateTimeFormat;
++import org.springframework.security.access.prepost.PreAuthorize;
++import org.springframework.web.bind.annotation.GetMapping;
++import org.springframework.web.bind.annotation.RequestMapping;
++import org.springframework.web.bind.annotation.RequestParam;
++import org.springframework.web.bind.annotation.RestController;
++
++import java.time.LocalDate;
++import java.util.List;
++
++/**
++ * [MỤC 6] Báo cáo tổng hợp. Dùng quyền INVENTORY_VIEW (báo cáo tồn là một dạng xem tồn kho);
++ * đổi sang quyền REPORT_VIEW riêng nếu về sau tách quyền báo cáo.
++ */
++@RestController
++@RequestMapping("/api/v1/reports")
++@RequiredArgsConstructor
++@PreAuthorize("hasAuthority('INVENTORY_VIEW')")
++public class ReportController {
++
++    private final GetStockSummaryUseCase getStockSummaryUseCase;
++
++    @GetMapping("/stock-summary")
++    public List<StockSummaryResponse> stockSummary(
++            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
++            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
++            @RequestParam(required = false) String warehouseId) {
++        return getStockSummaryUseCase.execute(from, to, warehouseId).stream()
++                .map(p -> new StockSummaryResponse(p.date(), p.inQty(), p.outQty(), p.closingQty()))
++                .toList();
++    }
++}
+diff --git a/db/demo.sql b/db/demo.sql
+index cbdd643..97aabfa 100644
+--- a/db/demo.sql
++++ b/db/demo.sql
+@@ -313,6 +313,7 @@ CREATE TABLE sales_order_details (
+ 
+ CREATE TABLE picking_lists (
+     id VARCHAR(20) PRIMARY KEY,
++    pick_number VARCHAR(50) UNIQUE, -- [MỤC 6] Mã nghiệp vụ hiển thị (VD: PK-XXXXXXXX), sinh khi tạo lệnh
+     so_id VARCHAR(20) NOT NULL,
+     assigned_to VARCHAR(20) NULL, -- Tài khoản công nhân nhận lệnh gom hàng
+     status VARCHAR(30) NOT NULL, -- PENDING, PICKING, COMPLETED
+diff --git a/db/migration_muc4_pick_number.sql b/db/migration_muc4_pick_number.sql
+new file mode 100644
+index 0000000..2b12abf
+--- /dev/null
++++ b/db/migration_muc4_pick_number.sql
+@@ -0,0 +1,17 @@
++-- =====================================================================
++-- [MỤC 4] Thêm mã nghiệp vụ pick_number cho bảng picking_lists.
++-- Chạy MỘT LẦN trên CSDL đang có dữ liệu (demo.sql đã có sẵn cột này cho
++-- CSDL tạo mới). Cột để NULLABLE + UNIQUE:
++--   - NULLABLE: các lệnh gom hàng cũ chưa có mã sẽ không vi phạm ràng buộc.
++--   - Lệnh tạo MỚI luôn được backend sinh mã (PK-XXXXXXXX).
++-- (grn_number đã tồn tại từ trước, KHÔNG cần thêm.)
++-- =====================================================================
++
++ALTER TABLE picking_lists
++    ADD COLUMN pick_number VARCHAR(50) NULL UNIQUE AFTER id;
++
++-- (Tuỳ chọn) Cấp mã cho các lệnh cũ để không còn ô trống trên giao diện.
++-- MySQL 8+; bỏ qua nếu không cần.
++-- UPDATE picking_lists
++--     SET pick_number = CONCAT('PK-', UPPER(SUBSTRING(REPLACE(UUID(),'-',''), 1, 8)))
++--     WHERE pick_number IS NULL;
+diff --git a/frontend/src/__smoke__/stockLineChart.test.jsx b/frontend/src/__smoke__/stockLineChart.test.jsx
+new file mode 100644
+index 0000000..585cb30
+--- /dev/null
++++ b/frontend/src/__smoke__/stockLineChart.test.jsx
+@@ -0,0 +1,34 @@
++/**
++ * [MỤC 6] StockLineChart — biểu đồ Xuất-Nhập-Tồn tự vẽ bằng SVG.
++ * Chốt 2 điều: có dữ liệu thì vẽ ra <svg>; rỗng thì hiện Empty (không nổ).
++ */
++import { describe, it, expect, afterEach } from 'vitest'
++import { render, screen, cleanup } from '@testing-library/react'
++import { ConfigProvider } from 'antd'
++import StockLineChart from '../components/StockLineChart'
++
++afterEach(cleanup)
++
++const sample = [
++  { date: '2026-07-01', inQty: 10, outQty: 4, closingQty: 106 },
++  { date: '2026-07-02', inQty: 0, outQty: 8, closingQty: 98 },
++  { date: '2026-07-03', inQty: 20, outQty: 5, closingQty: 113 },
++]
++
++const wrap = (ui) => render(<ConfigProvider>{ui}</ConfigProvider>)
++
++describe('StockLineChart', () => {
++  it('vẽ SVG khi có dữ liệu, kèm chú giải 3 đường', () => {
++    wrap(<StockLineChart data={sample} />)
++    expect(screen.getByRole('img')).toBeTruthy()
++    expect(screen.getByText('Nhập')).toBeTruthy()
++    expect(screen.getByText('Xuất')).toBeTruthy()
++    expect(screen.getByText('Tồn')).toBeTruthy()
++  })
++
++  it('hiện Empty khi không có dữ liệu', () => {
++    wrap(<StockLineChart data={[]} />)
++    expect(screen.queryByRole('img')).toBeNull()
++    expect(screen.getByText('Chưa có dữ liệu biến động')).toBeTruthy()
++  })
++})
+diff --git a/frontend/src/api/inventory.api.js b/frontend/src/api/inventory.api.js
+index 4b2851e..7dd07e1 100644
+--- a/frontend/src/api/inventory.api.js
++++ b/frontend/src/api/inventory.api.js
+@@ -4,6 +4,9 @@ export const inventoryApi = {
+   getByWarehouse: (warehouseId) => api.get(`${base}/warehouse/${warehouseId}`).then(r => r.data),
+   getOne: (productId, warehouseId) => api.get(base, { params: { productId, warehouseId } }).then(r => r.data),
+   getBatches: (productId, warehouseId) => api.get(`${base}/batches`, { params: { productId, warehouseId } }).then(r => r.data),
++  // [MỤC 6] Lô còn hàng sắp hết hạn (expiry_date <= hôm nay + days). warehouseId tuỳ chọn.
++  getExpiringBatches: ({ days = 30, warehouseId } = {}) =>
++    api.get(`${base}/batches/expiring`, { params: { days, warehouseId: warehouseId || undefined } }).then(r => r.data),
+   // Gợi ý lô theo FEFO cho 1 sản phẩm tại 1 kho với số lượng cần
+   allocateBatches: (productId, warehouseId, quantity) =>
+     api.get(`${base}/batches/allocate`, { params: { productId, warehouseId, quantity } }).then(r => r.data),
+diff --git a/frontend/src/api/reports.api.js b/frontend/src/api/reports.api.js
+new file mode 100644
+index 0000000..8a0fce2
+--- /dev/null
++++ b/frontend/src/api/reports.api.js
+@@ -0,0 +1,7 @@
++import api from './client'
++const base = '/api/v1/reports'
++export const reportsApi = {
++  // [MỤC 6] Xuất-Nhập-Tồn theo ngày: [{ date, inQty, outQty, closingQty }]
++  stockSummary: ({ from, to, warehouseId } = {}) =>
++    api.get(`${base}/stock-summary`, { params: { from, to, warehouseId: warehouseId || undefined } }).then(r => r.data),
++}
+diff --git a/frontend/src/components/StockLineChart.jsx b/frontend/src/components/StockLineChart.jsx
+new file mode 100644
+index 0000000..c562bd1
+--- /dev/null
++++ b/frontend/src/components/StockLineChart.jsx
+@@ -0,0 +1,79 @@
++import { theme, Empty } from 'antd'
++import dayjs from 'dayjs'
++
++/**
++ * Biểu đồ ĐƯỜNG Xuất-Nhập-Tồn theo ngày — TỰ VẼ BẰNG SVG, KHÔNG THÊM THƯ VIỆN.
++ *
++ * Cùng triết lý với StockBarChart: Dashboard là trang đích sau đăng nhập, mọi
++ * người dùng đều tải, nên tránh nhét recharts (~400KB) vào đường tải quan trọng.
++ * Ba đường (Nhập, Xuất, Tồn) dùng chung một trục Y (max của cả ba) để trung thực;
++ * màu lấy từ design token nên tự đúng theo nền sáng/tối.
++ *
++ * props: data = [{ date, inQty, outQty, closingQty }]
++ */
++export default function StockLineChart({ data = [], height = 220 }) {
++  const { token } = theme.useToken()
++
++  if (!data.length) {
++    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có dữ liệu biến động" />
++  }
++
++  const W = 720, H = height
++  const padL = 8, padR = 8, padT = 12, padB = 22
++  const innerW = W - padL - padR
++  const innerH = H - padT - padB
++  const n = data.length
++
++  const max = Math.max(1, ...data.map(d => Math.max(d.inQty || 0, d.outQty || 0, d.closingQty || 0)))
++  const x = (i) => padL + (n === 1 ? innerW / 2 : (i * innerW) / (n - 1))
++  const y = (v) => padT + innerH - ((v || 0) / max) * innerH
++  const fmt = (v) => new Intl.NumberFormat('vi-VN').format(v || 0)
++
++  const line = (key) => data.map((d, i) => `${x(i)},${y(d[key])}`).join(' ')
++
++  const series = [
++    { key: 'closingQty', label: 'Tồn', color: token.colorPrimary },
++    { key: 'inQty', label: 'Nhập', color: token.colorSuccess },
++    { key: 'outQty', label: 'Xuất', color: token.colorError },
++  ]
++
++  // Chỉ gắn nhãn ngày ở đầu / giữa / cuối để tránh chữ chồng nhau.
++  const tickIdx = n <= 1 ? [0] : [0, Math.floor((n - 1) / 2), n - 1]
++
++  return (
++    <div>
++      <div style={{ display: 'flex', gap: 16, marginBottom: 8, fontSize: 12 }}>
++        {series.map(s => (
++          <span key={s.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
++            <i style={{ width: 14, height: 3, borderRadius: 2, background: s.color, display: 'inline-block' }} />
++            {s.label}
++          </span>
++        ))}
++      </div>
++
++      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" preserveAspectRatio="none"
++        aria-label={`Xuất-Nhập-Tồn ${data.length} ngày, tồn cuối gần nhất ${fmt(data[n - 1].closingQty)}`}>
++        {/* trục đáy */}
++        <line x1={padL} y1={padT + innerH} x2={W - padR} y2={padT + innerH}
++          stroke={token.colorBorderSecondary} strokeWidth="1" />
++        {series.map(s => (
++          <polyline key={s.key} fill="none" stroke={s.color} strokeWidth="2"
++            strokeLinejoin="round" strokeLinecap="round" points={line(s.key)} />
++        ))}
++        {/* điểm + tooltip trình duyệt */}
++        {series.map(s => data.map((d, i) => (
++          <circle key={`${s.key}-${i}`} cx={x(i)} cy={y(d[s.key])} r="2.5" fill={s.color}>
++            <title>{`${dayjs(d.date).format('DD/MM')} · ${s.label}: ${fmt(d[s.key])}`}</title>
++          </circle>
++        )))}
++        {/* nhãn ngày */}
++        {tickIdx.map(i => (
++          <text key={`t-${i}`} x={x(i)} y={H - 6} fontSize="11" fill={token.colorTextSecondary}
++            textAnchor={i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}>
++            {dayjs(data[i].date).format('DD/MM')}
++          </text>
++        ))}
++      </svg>
++    </div>
++  )
++}
+diff --git a/frontend/src/features/dashboard/DashboardPage.jsx b/frontend/src/features/dashboard/DashboardPage.jsx
+index 6f2e7ac..5977e01 100644
+--- a/frontend/src/features/dashboard/DashboardPage.jsx
++++ b/frontend/src/features/dashboard/DashboardPage.jsx
+@@ -4,6 +4,7 @@ import { Typography, Card, Col, Row, Statistic, List, Tag, Empty, Grid, Skeleton
+ import {
+   AppstoreOutlined, HomeOutlined, FileDoneOutlined, ShoppingCartOutlined,
+   SwapOutlined, ReconciliationOutlined, RightOutlined, WarningOutlined, BarChartOutlined,
++  LineChartOutlined, ClockCircleOutlined,
+ } from '@ant-design/icons'
+ import dayjs from 'dayjs'
+ import { useAuth } from '../../auth/AuthContext'
+@@ -16,7 +17,9 @@ import { salesOrdersApi } from '../../api/salesOrders.api'
+ import { transferOrdersApi } from '../../api/transferOrders.api'
+ import { adjustmentsApi } from '../../api/adjustments.api'
+ import { useStockOverview } from './useStockOverview'
++import { useProducts } from '../../hooks/useProducts'
+ import StockBarChart from '../../components/StockBarChart'
++import StockLineChart from '../../components/StockLineChart'
+ 
+ /**
+  * Thẻ KPI CLICK ĐƯỢC.
+@@ -149,68 +152,119 @@ export default function DashboardPage() {
+ 
+ 
+ /**
+- * Tồn kho: biểu đồ theo kho + cảnh báo dưới mức an toàn.
+- *
+- * KHÔNG phải báo cáo Xuất-Nhập-Tồn. BE hiện chưa có endpoint tổng hợp biến động
+- * (StockMovementController chỉ nhận productId hoặc referenceType+referenceId),
+- * nên không dựng được chuỗi nhập/xuất theo ngày ở FE. Xem chú thích trong
+- * useStockOverview.js để biết cần BE bổ sung gì.
++ * Khu tồn kho trên Dashboard, 2 hàng dùng CHUNG một hook (useStockOverview):
++ *   Hàng 1: tồn theo kho (cột) + cảnh báo dưới tồn an toàn.
++ *   Hàng 2 [MỤC 6]: biểu đồ đường Xuất-Nhập-Tồn 30 ngày + lô sắp hết hạn.
+  */
+ function StockSection() {
+   const navigate = useNavigate()
+-  const { isLoading, isError, byWarehouse, lowStock, truncated } = useStockOverview()
++  const { isLoading, isError, byWarehouse, lowStock, truncated, expiring, summary } = useStockOverview()
++  const { map: productMap } = useProducts()
++  const whName = (id) => byWarehouse.find(w => w.id === id)?.name || id
+ 
+   return (
+-    <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+-      <Col xs={24} lg={12}>
+-        <Card
+-          title={<span><BarChartOutlined /> Tồn kho theo kho</span>}
+-          extra={<Button type="link" size="small" style={{ padding: 0 }} onClick={() => navigate('/inventory')}>Chi tiết</Button>}>
+-          {isLoading
+-            ? <Skeleton active paragraph={{ rows: 4 }} title={false} />
+-            : isError
+-              ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không tải được tồn kho" />
+-              : <>
+-                  <StockBarChart data={byWarehouse} />
+-                  {truncated && (
+-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+-                      Chỉ hiển thị 12 kho đầu tiên.
+-                    </Typography.Text>
+-                  )}
+-                </>}
+-        </Card>
+-      </Col>
+-
+-      <Col xs={24} lg={12}>
+-        <Card
+-          title={<span><WarningOutlined /> Dưới mức tồn an toàn</span>}
+-          extra={!isLoading && lowStock.length > 0 && <Tag color="red">{lowStock.length}</Tag>}>
+-          {isLoading
+-            ? <Skeleton active paragraph={{ rows: 4 }} title={false} />
+-            : lowStock.length === 0
+-              ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không có sản phẩm nào dưới mức an toàn" />
+-              : (
+-                <>
+-                  <List size="small" dataSource={lowStock.slice(0, 5)}
+-                    renderItem={(r) => (
+-                      <List.Item
+-                        className="mws-line-clickable"
+-                        onClick={() => navigate('/inventory')}
+-                        actions={[<Tag key="d" color="red">thiếu {r.deficit}</Tag>]}>
+-                        <List.Item.Meta
+-                          title={<span>{r.productName}{r.sku ? ` · ${r.sku}` : ''}</span>}
+-                          description={`${r.warehouseName} — còn ${r.available}, mức an toàn ${r.safety}`} />
+-                      </List.Item>
+-                    )} />
+-                  {lowStock.length > 5 && (
+-                    <Button type="link" style={{ paddingLeft: 0 }} onClick={() => navigate('/inventory')}>
+-                      Xem tất cả {lowStock.length} dòng <RightOutlined />
+-                    </Button>
++    <>
++      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
++        <Col xs={24} lg={12}>
++          <Card
++            title={<span><BarChartOutlined /> Tồn kho theo kho</span>}
++            extra={<Button type="link" size="small" style={{ padding: 0 }} onClick={() => navigate('/inventory')}>Chi tiết</Button>}>
++            {isLoading
++              ? <Skeleton active paragraph={{ rows: 4 }} title={false} />
++              : isError
++                ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không tải được tồn kho" />
++                : <>
++                    <StockBarChart data={byWarehouse} />
++                    {truncated && (
++                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
++                        Chỉ hiển thị 12 kho đầu tiên.
++                      </Typography.Text>
++                    )}
++                  </>}
++          </Card>
++        </Col>
++
++        <Col xs={24} lg={12}>
++          <Card
++            title={<span><WarningOutlined /> Dưới mức tồn an toàn</span>}
++            extra={!isLoading && lowStock.length > 0 && <Tag color="red">{lowStock.length}</Tag>}>
++            {isLoading
++              ? <Skeleton active paragraph={{ rows: 4 }} title={false} />
++              : lowStock.length === 0
++                ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không có sản phẩm nào dưới mức an toàn" />
++                : (
++                  <>
++                    <List size="small" dataSource={lowStock.slice(0, 5)}
++                      renderItem={(r) => (
++                        <List.Item
++                          className="mws-line-clickable"
++                          onClick={() => navigate('/inventory')}
++                          actions={[<Tag key="d" color="red">thiếu {r.deficit}</Tag>]}>
++                          <List.Item.Meta
++                            title={<span>{r.productName}{r.sku ? ` · ${r.sku}` : ''}</span>}
++                            description={`${r.warehouseName} — còn ${r.available}, mức an toàn ${r.safety}`} />
++                        </List.Item>
++                      )} />
++                    {lowStock.length > 5 && (
++                      <Button type="link" style={{ paddingLeft: 0 }} onClick={() => navigate('/inventory')}>
++                        Xem tất cả {lowStock.length} dòng <RightOutlined />
++                      </Button>
++                    )}
++                  </>
++                )}
++          </Card>
++        </Col>
++      </Row>
++
++      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
++        <Col xs={24} lg={12}>
++          <Card title={<span><LineChartOutlined /> Xuất-Nhập-Tồn ({summary.days} ngày)</span>}>
++            {summary.isLoading
++              ? <Skeleton active paragraph={{ rows: 4 }} title={false} />
++              : summary.isError
++                ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không tải được báo cáo" />
++                : <StockLineChart data={summary.data} />}
++          </Card>
++        </Col>
++
++        <Col xs={24} lg={12}>
++          <Card
++            title={<span><ClockCircleOutlined /> Lô sắp hết hạn (≤ {expiring.days} ngày)</span>}
++            extra={!expiring.isLoading && expiring.data.length > 0 && <Tag color="volcano">{expiring.data.length}</Tag>}>
++            {expiring.isLoading
++              ? <Skeleton active paragraph={{ rows: 4 }} title={false} />
++              : expiring.isError
++                ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không tải được danh sách lô" />
++                : expiring.data.length === 0
++                  ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không có lô nào sắp hết hạn" />
++                  : (
++                    <>
++                      <List size="small" dataSource={expiring.data.slice(0, 5)}
++                        renderItem={(b) => {
++                          const dleft = dayjs(b.expiryDate).startOf('day').diff(dayjs().startOf('day'), 'day')
++                          const color = dleft < 0 ? 'red' : dleft <= 7 ? 'volcano' : 'gold'
++                          const text = dleft < 0 ? `Quá hạn ${-dleft}n` : `Còn ${dleft}n`
++                          return (
++                            <List.Item
++                              className="mws-line-clickable"
++                              onClick={() => navigate('/inventory')}
++                              actions={[<Tag key="d" color={color}>{text}</Tag>]}>
++                              <List.Item.Meta
++                                title={<span>{productMap[b.productId]?.name || b.productId}{b.batchNumber ? ` · ${b.batchNumber}` : ''}</span>}
++                                description={`${whName(b.warehouseId)} — còn ${b.quantity}, HSD ${dayjs(b.expiryDate).format('DD/MM/YYYY')}`} />
++                            </List.Item>
++                          )
++                        }} />
++                      {expiring.data.length > 5 && (
++                        <Button type="link" style={{ paddingLeft: 0 }} onClick={() => navigate('/inventory')}>
++                          Xem tất cả {expiring.data.length} lô <RightOutlined />
++                        </Button>
++                      )}
++                    </>
+                   )}
+-                </>
+-              )}
+-        </Card>
+-      </Col>
+-    </Row>
++          </Card>
++        </Col>
++      </Row>
++    </>
+   )
+ }
+diff --git a/frontend/src/features/dashboard/useStockOverview.js b/frontend/src/features/dashboard/useStockOverview.js
+index ac6ab64..ff18e0d 100644
+--- a/frontend/src/features/dashboard/useStockOverview.js
++++ b/frontend/src/features/dashboard/useStockOverview.js
+@@ -1,7 +1,9 @@
+ import { useMemo } from 'react'
+ import { useQueries, useQuery } from '@tanstack/react-query'
++import dayjs from 'dayjs'
+ import { warehousesApi } from '../../api/warehouses.api'
+ import { inventoryApi } from '../../api/inventory.api'
++import { reportsApi } from '../../api/reports.api'
+ import { useProducts } from '../../hooks/useProducts'
+ 
+ // Chặn fan-out: BE chỉ có GET /inventory/warehouse/{id} nên phải gọi 1 lần/kho.
+@@ -14,15 +16,9 @@ const MAX_WAREHOUSES = 12
+  * MỘT lần lấy dữ liệu phục vụ CẢ hai thứ: biểu đồ tồn theo kho và danh sách
+  * cảnh báo dưới tồn an toàn — không gọi API thêm lần nào cho biểu đồ.
+  *
+- * GIỚI HẠN CỦA BE (đọc trước khi định mở rộng):
+- *   - Không có endpoint tổng hợp nào. Phải gọi /inventory/warehouse/{id} cho
+- *     từng kho rồi tự cộng ở FE.
+- *   - InventoryResponse chỉ có {productId, warehouseId, quantity,
+- *     reservedQuantity, availableQuantity} — KHÔNG có hạn dùng. Lô chỉ query
+- *     được qua /inventory/batches?productId&warehouseId, tức mỗi cặp
+- *     (sản phẩm, kho) một request. 210 sản phẩm x N kho => hàng trăm request.
+- *     Vì vậy CHƯA có cảnh báo cận hạn ở Dashboard: cần BE thêm endpoint
+- *     GET /inventory/batches/expiring?days=30.
++ * Tồn theo kho vẫn phải fan-out /inventory/warehouse/{id} cho từng kho (BE
++ * chưa có endpoint gộp tồn). Riêng cận hạn và Xuất-Nhập-Tồn nay đã có endpoint
++ * gộp riêng (mỗi thứ 1 request), lấy kèm ở dưới.
+  */
+ export function useStockOverview({ enabled = true } = {}) {
+   const warehouses = useQuery({
+@@ -89,5 +85,31 @@ export function useStockOverview({ enabled = true } = {}) {
+     return out.sort((a, b) => b.deficit - a.deficit)
+   })()
+ 
+-  return { isLoading, isError, byWarehouse, lowStock, truncated, warehouseCount: whList.length }
++  // ── [MỤC 6] Hai thẻ mới: cận hạn + Xuất-Nhập-Tồn — mỗi thứ 1 request gộp,
++  // độc lập với fan-out ở trên nên KHÔNG chặn nhau khi tải.
++  const EXPIRY_DAYS = 30
++  const expiring = useQuery({
++    queryKey: ['dashboard', 'expiring', EXPIRY_DAYS],
++    queryFn: () => inventoryApi.getExpiringBatches({ days: EXPIRY_DAYS }),
++    enabled,
++    staleTime: 60_000,
++  })
++
++  const SUMMARY_DAYS = 30
++  const range = useMemo(() => {
++    const to = dayjs()
++    return { from: to.subtract(SUMMARY_DAYS - 1, 'day').format('YYYY-MM-DD'), to: to.format('YYYY-MM-DD') }
++  }, [])
++  const summary = useQuery({
++    queryKey: ['dashboard', 'stock-summary', range.from, range.to],
++    queryFn: () => reportsApi.stockSummary(range),
++    enabled,
++    staleTime: 60_000,
++  })
++
++  return {
++    isLoading, isError, byWarehouse, lowStock, truncated, warehouseCount: whList.length,
++    expiring: { data: expiring.data || [], isLoading: expiring.isLoading, isError: expiring.isError, days: EXPIRY_DAYS },
++    summary: { data: summary.data || [], isLoading: summary.isLoading, isError: summary.isError, days: SUMMARY_DAYS },
++  }
+ }
+diff --git a/frontend/src/features/outbound/PickingListsPage.jsx b/frontend/src/features/outbound/PickingListsPage.jsx
+index 843f79e..3d2bd96 100644
+--- a/frontend/src/features/outbound/PickingListsPage.jsx
++++ b/frontend/src/features/outbound/PickingListsPage.jsx
+@@ -56,7 +56,7 @@ export default function PickingListsPage() {
+ function PLList({ onOpen, onCreate }) {
+   const list = useQuery({ queryKey: ['pl-list'], queryFn: pickingListsApi.list })
+   const columns = [
+-    { title: 'Mã lệnh', dataIndex: 'id', render: (v) => <RowLink onClick={() => onOpen(v)}>{v}</RowLink> },
++    { title: 'Mã lệnh', dataIndex: 'pickNumber', render: (_, r) => <RowLink onClick={() => onOpen(r.id)}>{r.pickNumber || r.id}</RowLink> },
+     { title: 'Trạng thái', dataIndex: 'status', width: 130, render: plTag },
+     { title: 'Đơn bán (SO)', dataIndex: 'soId' },
+     { title: 'Người lấy', dataIndex: 'assignedTo', width: 140, render: (v) => v || '—' },
+@@ -156,7 +156,7 @@ function PLDetail({ id }) {
+ 
+   return (
+     <Card
+-      title={<Space>Lệnh lấy hàng <b>{pl.id}</b> {plTag(pl.status)}</Space>}
++      title={<Space>Lệnh lấy hàng <b>{pl.pickNumber || pl.id}</b> {plTag(pl.status)}</Space>}
+       extra={
+         <Space wrap>
+           <Can permission={P.OUTBOUND_PICK}>
+diff --git a/frontend/src/features/outbound/PickingScanPage.jsx b/frontend/src/features/outbound/PickingScanPage.jsx
+index 2a9494a..e419897 100644
+--- a/frontend/src/features/outbound/PickingScanPage.jsx
++++ b/frontend/src/features/outbound/PickingScanPage.jsx
+@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+ import { useBinLabels } from '../../hooks/useBinLabels'
+ import {
+   Card, Button, Input, List, Typography, Tag, Empty, Space, Progress, Modal,
+-  InputNumber, Form, Tooltip, Alert, App as AntdApp,
++  InputNumber, Form, Alert, App as AntdApp,
+ } from 'antd'
+ import {
+   ArrowLeftOutlined, ReloadOutlined, CheckCircleOutlined, WarningOutlined, ScanOutlined,
+@@ -23,13 +23,6 @@ const PL_STATUS = {
+   COMPLETED: { color: 'green', label: 'Hoàn thành' },
+ }
+ 
+-// BE chưa có mã nghiệp vụ cho lệnh lấy hàng => tối thiểu đừng bắt người dùng
+-// đọc cả UUID 36 ký tự. Hiện 8 ký tự cuối, full nằm trong tooltip.
+-const shortId = (id) => (id && id.length > 12 ? `…${id.slice(-8)}` : id || '—')
+-const IdText = ({ id }) => (
+-  <Tooltip title={id}><span style={{ fontFamily: 'monospace' }}>{shortId(id)}</span></Tooltip>
+-)
+-
+ export default function PickingScanPage() {
+   const [pickId, setPickId] = useState(null)
+   return (
+@@ -66,9 +59,9 @@ function PickPicker({ onPick }) {
+               renderItem={(p) => (
+                 <List.Item className="mws-line-clickable" onClick={() => onPick(p.id)}>
+                   <List.Item.Meta
+-                    title={<IdText id={p.id} />}
++                    title={<b>{p.pickNumber || p.id}</b>}
+                     description={<Tag color={PL_STATUS[p.status]?.color}>{PL_STATUS[p.status]?.label || p.status}</Tag>} />
+-                  <span style={{ fontSize: 12 }}>SO: <IdText id={p.soId} /></span>
++                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>SO: {p.soId}</Typography.Text>
+                 </List.Item>
+               )} />}
+       </Card>
+@@ -166,7 +159,7 @@ function ScanRunner({ pickId, onBack }) {
+     <div>
+       <Space style={{ justifyContent: 'space-between', width: '100%', marginBottom: 8 }}>
+         <Button icon={<ArrowLeftOutlined />} onClick={onBack}>Đổi lệnh</Button>
+-        <Tag><IdText id={pl.id} /></Tag>
++        <Tag>{pl.pickNumber || pl.id}</Tag>
+       </Space>
+       <Progress percent={details.length ? Math.round((done / details.length) * 100) : 0}
+         format={() => `${done}/${details.length}`} />
+@@ -188,7 +181,7 @@ function ScanRunner({ pickId, onBack }) {
+           style={{ marginTop: 12 }} styles={{ body: { padding: 12 } }}>
+           <div style={{ marginBottom: 8 }}>
+             <div style={{ fontWeight: 600, fontSize: 17, lineHeight: 1.3 }}>
+-              {productMap[current.productId]?.name || <IdText id={current.productId} />}
++              {productMap[current.productId]?.name || current.productId}
+             </div>
+             {productMap[current.productId]?.sku && (
+               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+@@ -199,7 +192,7 @@ function ScanRunner({ pickId, onBack }) {
+             <Space size="large" style={{ marginTop: 6, fontSize: 14 }} wrap>
+               <span>Ô kệ: <b style={{ fontSize: 18 }}>{labelOf(current.binLocationId)}</b></span>
+               <span>SL: <b style={{ fontSize: 18 }}>{current.quantityToPick}</b></span>
+-              {current.batchId && <span style={{ fontSize: 12 }}>Lô: <IdText id={current.batchId} /></span>}
++              {current.batchId && <span style={{ fontSize: 12 }}>Lô: {current.batchId}</span>}
+             </Space>
+           </div>
+ 
+@@ -235,7 +228,7 @@ function ScanRunner({ pickId, onBack }) {
+               ].filter(Boolean).join(' ')}
+               onClick={() => { if (!d.confirmed) { setActiveId(d.id); refocus() } }}>
+               <List.Item.Meta
+-                title={productMap[d.productId]?.name || <IdText id={d.productId} />}
++                title={productMap[d.productId]?.name || d.productId}
+                 description={`Ô ${labelOf(d.binLocationId)} · SL ${d.quantityToPick}`} />
+               {d.confirmed
+                 ? <Tag color="green">Đã lấy</Tag>

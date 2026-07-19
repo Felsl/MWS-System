@@ -53,6 +53,7 @@ public class TransferPickingDomainService {
 
         PickingList pickingList = new PickingList.Builder()
                 .id(idGenerator.generate())
+                .pickNumber(generatePickNumber())
                 .transferOrderId(transferOrderId)
                 .status(PickingList.Status.PENDING)
                 .build();
@@ -69,6 +70,15 @@ public class TransferPickingDomainService {
         transfer.markPicking();               // APPROVED -> PICKING
         transferRepository.save(transfer);
         return saved;
+    }
+
+    /** Mã nghiệp vụ lệnh gom hàng — cùng cách sinh với transferNumber (prefix + id, đảm bảo duy nhất). */
+    private String generatePickNumber() {
+        String number;
+        do {
+            number = "PK-" + idGenerator.generate().toUpperCase();
+        } while (pickingRepository.existsByPickNumber(number));
+        return number;
     }
 
     /** Dòng chỉ định: khoá đúng lô người lập/duyệt đã chọn. */

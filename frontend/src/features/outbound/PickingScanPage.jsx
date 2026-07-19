@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useBinLabels } from '../../hooks/useBinLabels'
 import {
   Card, Button, Input, List, Typography, Tag, Empty, Space, Progress, Modal,
-  InputNumber, Form, Tooltip, Alert, App as AntdApp,
+  InputNumber, Form, Alert, App as AntdApp,
 } from 'antd'
 import {
   ArrowLeftOutlined, ReloadOutlined, CheckCircleOutlined, WarningOutlined, ScanOutlined,
@@ -22,13 +22,6 @@ const PL_STATUS = {
   PICKING: { color: 'gold', label: 'Đang lấy' },
   COMPLETED: { color: 'green', label: 'Hoàn thành' },
 }
-
-// BE chưa có mã nghiệp vụ cho lệnh lấy hàng => tối thiểu đừng bắt người dùng
-// đọc cả UUID 36 ký tự. Hiện 8 ký tự cuối, full nằm trong tooltip.
-const shortId = (id) => (id && id.length > 12 ? `…${id.slice(-8)}` : id || '—')
-const IdText = ({ id }) => (
-  <Tooltip title={id}><span style={{ fontFamily: 'monospace' }}>{shortId(id)}</span></Tooltip>
-)
 
 export default function PickingScanPage() {
   const [pickId, setPickId] = useState(null)
@@ -66,9 +59,9 @@ function PickPicker({ onPick }) {
               renderItem={(p) => (
                 <List.Item className="mws-line-clickable" onClick={() => onPick(p.id)}>
                   <List.Item.Meta
-                    title={<IdText id={p.id} />}
+                    title={<b>{p.pickNumber || p.id}</b>}
                     description={<Tag color={PL_STATUS[p.status]?.color}>{PL_STATUS[p.status]?.label || p.status}</Tag>} />
-                  <span style={{ fontSize: 12 }}>SO: <IdText id={p.soId} /></span>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>SO: {p.soId}</Typography.Text>
                 </List.Item>
               )} />}
       </Card>
@@ -166,7 +159,7 @@ function ScanRunner({ pickId, onBack }) {
     <div>
       <Space style={{ justifyContent: 'space-between', width: '100%', marginBottom: 8 }}>
         <Button icon={<ArrowLeftOutlined />} onClick={onBack}>Đổi lệnh</Button>
-        <Tag><IdText id={pl.id} /></Tag>
+        <Tag>{pl.pickNumber || pl.id}</Tag>
       </Space>
       <Progress percent={details.length ? Math.round((done / details.length) * 100) : 0}
         format={() => `${done}/${details.length}`} />
@@ -188,7 +181,7 @@ function ScanRunner({ pickId, onBack }) {
           style={{ marginTop: 12 }} styles={{ body: { padding: 12 } }}>
           <div style={{ marginBottom: 8 }}>
             <div style={{ fontWeight: 600, fontSize: 17, lineHeight: 1.3 }}>
-              {productMap[current.productId]?.name || <IdText id={current.productId} />}
+              {productMap[current.productId]?.name || current.productId}
             </div>
             {productMap[current.productId]?.sku && (
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -199,7 +192,7 @@ function ScanRunner({ pickId, onBack }) {
             <Space size="large" style={{ marginTop: 6, fontSize: 14 }} wrap>
               <span>Ô kệ: <b style={{ fontSize: 18 }}>{labelOf(current.binLocationId)}</b></span>
               <span>SL: <b style={{ fontSize: 18 }}>{current.quantityToPick}</b></span>
-              {current.batchId && <span style={{ fontSize: 12 }}>Lô: <IdText id={current.batchId} /></span>}
+              {current.batchId && <span style={{ fontSize: 12 }}>Lô: {current.batchId}</span>}
             </Space>
           </div>
 
@@ -235,7 +228,7 @@ function ScanRunner({ pickId, onBack }) {
               ].filter(Boolean).join(' ')}
               onClick={() => { if (!d.confirmed) { setActiveId(d.id); refocus() } }}>
               <List.Item.Meta
-                title={productMap[d.productId]?.name || <IdText id={d.productId} />}
+                title={productMap[d.productId]?.name || d.productId}
                 description={`Ô ${labelOf(d.binLocationId)} · SL ${d.quantityToPick}`} />
               {d.confirmed
                 ? <Tag color="green">Đã lấy</Tag>

@@ -45,4 +45,9 @@ public class PickingListRepositoryImpl implements IPickingListRepository {
     public Optional<PickingList> findByDetailId(String pickingListDetailId) {
         return jpa.findByDetailId(pickingListDetailId).map(mapper::toDomain);
     }
+
+    @Override
+    public boolean existsByPickNumber(String pickNumber) {
+        return jpa.existsByPickNumber(pickNumber);
+    }
 }

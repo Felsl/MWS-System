@@ -53,6 +53,11 @@ public class DomainServiceConfig {
         return new InventoryDomainService(inventoryRepository, batchRepository, productRepository);
     }
 
+    @Bean
+    public ReportDomainService reportDomainService(IStockMovementRepository stockMovementRepository) {
+        return new ReportDomainService(stockMovementRepository);
+    }
+
     // ── Module Sales Order / Picking / Shipment ──────────────────────────────
 
     @Bean

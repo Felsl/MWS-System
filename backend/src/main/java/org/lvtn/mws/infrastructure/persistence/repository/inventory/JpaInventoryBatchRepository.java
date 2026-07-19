@@ -37,6 +37,18 @@ public interface JpaInventoryBatchRepository extends JpaRepository<InventoryBatc
 
     List<InventoryBatchEntity> findByProductIdAndWarehouseId(String productId, String warehouseId);
 
+    /**
+     * [MỤC 6] Lô ACTIVE còn hàng có hạn dùng ≤ threshold (= today + days), kho tuỳ chọn.
+     * Không đặt cận dưới: gồm cả lô đã quá hạn còn tồn để bộ phận kho xử lý.
+     */
+    @Query("SELECT b FROM InventoryBatchEntity b " +
+           "WHERE b.status = 'ACTIVE' AND b.quantity > 0 " +
+           "  AND b.expiryDate IS NOT NULL AND b.expiryDate <= :threshold " +
+           "  AND (:warehouseId IS NULL OR b.warehouseId = :warehouseId) " +
+           "ORDER BY b.expiryDate ASC")
+    List<InventoryBatchEntity> findExpiring(@Param("threshold") LocalDate threshold,
+                                            @Param("warehouseId") String warehouseId);
+
     /** [GIAI ĐOẠN 6] Toàn bộ lô của một kho — chụp ảnh tồn khi bắt đầu kiểm kê. */
     List<InventoryBatchEntity> findByWarehouseId(String warehouseId);
 }

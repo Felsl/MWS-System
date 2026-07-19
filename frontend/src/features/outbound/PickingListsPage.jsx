@@ -56,7 +56,7 @@ export default function PickingListsPage() {
 function PLList({ onOpen, onCreate }) {
   const list = useQuery({ queryKey: ['pl-list'], queryFn: pickingListsApi.list })
   const columns = [
-    { title: 'Mã lệnh', dataIndex: 'id', render: (v) => <RowLink onClick={() => onOpen(v)}>{v}</RowLink> },
+    { title: 'Mã lệnh', dataIndex: 'pickNumber', render: (_, r) => <RowLink onClick={() => onOpen(r.id)}>{r.pickNumber || r.id}</RowLink> },
     { title: 'Trạng thái', dataIndex: 'status', width: 130, render: plTag },
     { title: 'Đơn bán (SO)', dataIndex: 'soId' },
     { title: 'Người lấy', dataIndex: 'assignedTo', width: 140, render: (v) => v || '—' },
@@ -156,7 +156,7 @@ function PLDetail({ id }) {
 
   return (
     <Card
-      title={<Space>Lệnh lấy hàng <b>{pl.id}</b> {plTag(pl.status)}</Space>}
+      title={<Space>Lệnh lấy hàng <b>{pl.pickNumber || pl.id}</b> {plTag(pl.status)}</Space>}
       extra={
         <Space wrap>
           <Can permission={P.OUTBOUND_PICK}>
