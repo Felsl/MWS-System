@@ -46,15 +46,19 @@ const PRINT_CSS = `
 }
 .bl-label {
   border: 1px solid #d9d9d9; border-radius: 4px; padding: 2.5mm 3mm;
-  height: 32mm; display: flex; flex-direction: column; justify-content: space-between;
+  height: 34mm; display: flex; flex-direction: column; justify-content: space-between;
   overflow: hidden; break-inside: avoid; page-break-inside: avoid;
 }
 .bl-label .bl-code { font-weight: 700; font-size: 11pt; line-height: 1.15;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bl-label .bl-name { font-size: 8pt; color: #333; line-height: 1.1;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.bl-label .bl-bar { flex: 1; display: flex; align-items: center; min-height: 12mm; }
-.bl-label .bl-bar svg { width: 100%; height: auto; max-height: 14mm; }
+/* Khung mã vạch có kích thước CỐ ĐỊNH bằng mm (không %/flex) để screen và print
+   giống nhau. <svg> fit theo tỷ lệ (preserveAspectRatio mặc định = meet) nên
+   KHÔNG bị bóp — trước đây width:100% + max-height:14mm khiến khi in (đơn vị mm
+   thật) mã vạch bị ép sai tỷ lệ dù preview (px) vẫn bình thường. */
+.bl-label .bl-bar { width: 100%; height: 13mm; }
+.bl-label .bl-bar svg { display: block; width: 100%; height: 100%; }
 .bl-label .bl-foot { font-size: 7pt; color: #555; display: flex; justify-content: space-between; gap: 4px; }
 `
 
@@ -116,12 +120,14 @@ export default function BarcodeLabelsPage() {
       if (!el) return
       try {
         barcodeLib(el, b.id, {
-          format: 'CODE128', displayValue: false, height: 48, width: 1.5, margin: 4,
+          format: 'CODE128', displayValue: false, height: 60, width: 2, margin: 0,
         })
-        // JsBarcode đặt width/height cố định (px). Chuyển sang viewBox để CSS co giãn vừa tem.
+        // JsBarcode đặt width/height cố định (px). Chuyển sang viewBox + fit theo
+        // tỷ lệ (meet) để <svg> co giãn vừa khung mm mà KHÔNG méo vạch.
         const w = el.getAttribute('width'), h = el.getAttribute('height')
         if (w && h) {
           el.setAttribute('viewBox', `0 0 ${w} ${h}`)
+          el.setAttribute('preserveAspectRatio', 'xMidYMid meet')
           el.removeAttribute('width'); el.removeAttribute('height')
         }
       } catch {
