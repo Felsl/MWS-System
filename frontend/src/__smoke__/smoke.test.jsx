@@ -246,6 +246,7 @@ describe('Trang render được (không ReferenceError)', () => {
     ['PurchaseOrdersPage', () => import('../features/inbound/PurchaseOrdersPage'), '/purchase-orders'],
     ['SalesOrdersPage', () => import('../features/outbound/SalesOrdersPage'), '/sales-orders'],
     ['GoodsReceiptsPage', () => import('../features/inbound/GoodsReceiptsPage'), '/goods-receipts'],
+    ['BarcodeLabelsPage', () => import('../features/inventory/BarcodeLabelsPage'), '/barcode-labels'],
   ]
   for (const [name, load, path] of PAGES) {
     it(`${name} render không nổ`, async () => {

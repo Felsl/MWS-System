@@ -10,7 +10,7 @@ import {
   InboxOutlined, FileDoneOutlined,
   ShoppingCartOutlined, ProfileOutlined, CarOutlined, SwapOutlined,
   AuditOutlined, ReconciliationOutlined,
-  DatabaseOutlined, HistoryOutlined, ScanOutlined, ImportOutlined,
+  DatabaseOutlined, HistoryOutlined, ScanOutlined, ImportOutlined, BarcodeOutlined,
 } from '@ant-design/icons'
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
@@ -36,6 +36,7 @@ const NAV = [
   {
     type: 'group', label: 'Tồn kho', icon: <DatabaseOutlined />, children: [
       { key: '/inventory', icon: <DatabaseOutlined />, label: 'Tồn kho & lô', perm: P.INVENTORY_VIEW },
+      { key: '/barcode-labels', icon: <BarcodeOutlined />, label: 'In tem mã vạch', perm: P.INVENTORY_VIEW },
       { key: '/stock-movements', icon: <HistoryOutlined />, label: 'Thẻ kho (Kardex)', perm: P.AUDIT_VIEW_MOVEMENTS },
     ],
   },

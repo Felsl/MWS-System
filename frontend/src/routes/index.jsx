@@ -33,6 +33,7 @@ const TransferOrdersPage = lazy(() => import('../features/transfer/TransferOrder
 const StocktakesPage = lazy(() => import('../features/stocktake/StocktakesPage'))
 const AdjustmentsPage = lazy(() => import('../features/stocktake/AdjustmentsPage'))
 const InventoryPage = lazy(() => import('../features/inventory/InventoryPage'))
+const BarcodeLabelsPage = lazy(() => import('../features/inventory/BarcodeLabelsPage'))
 const StockMovementsPage = lazy(() => import('../features/inventory/StockMovementsPage'))
 const NotificationsPage = lazy(() => import('../features/notifications/NotificationsPage'))
 const DataIOPage = lazy(() => import('../features/data-io/DataIOPage'))
@@ -105,6 +106,7 @@ export default function AppRoutes() {
             </Route>
             <Route element={<ProtectedRoute permission={P.INVENTORY_VIEW} />}>
               <Route path="inventory" element={<InventoryPage />} />
+              <Route path="barcode-labels" element={<BarcodeLabelsPage />} />
             </Route>
             <Route element={<ProtectedRoute permission={P.AUDIT_VIEW_MOVEMENTS} />}>
               <Route path="stock-movements" element={<StockMovementsPage />} />
