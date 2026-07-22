@@ -3,6 +3,7 @@ package org.lvtn.mws.application.usecases.inventory;
 import lombok.RequiredArgsConstructor;
 import org.lvtn.mws.domain.model.InventoryBatch;
 import org.lvtn.mws.domain.service.InventoryDomainService;
+import org.lvtn.mws.infrastructure.security.scope.WarehouseAccessGuard;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
@@ -14,9 +15,13 @@ import java.util.List;
 @RequiredArgsConstructor
 public class GetExpiringBatchesUseCase {
     private final InventoryDomainService domainService;
+    private final WarehouseAccessGuard warehouseAccessGuard;
 
     @Transactional(readOnly = true)
     public List<InventoryBatch> execute(int days, String warehouseId) {
+        // A2: nếu chỉ định 1 kho, chặn kho ngoài phạm vi (403).
+        // Lưu ý: warehouseId=null => xem toàn bộ kho (guard no-op) — xem HUONG_DAN mục caveat.
+        warehouseAccessGuard.check(warehouseId);
         return domainService.findExpiringBatches(days, warehouseId);
     }
 }

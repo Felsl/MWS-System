@@ -37,7 +37,6 @@ public class GetAllWarehousesUseCase {
             // Admin hoặc role không bị giới hạn scope → trả tất cả
             return warehouseRepository.findAllActive();
         }
-
         // User bị giới hạn scope → chỉ trả kho trong danh sách được phép
         return warehouseRepository.findByIds(allowedIds);
     }

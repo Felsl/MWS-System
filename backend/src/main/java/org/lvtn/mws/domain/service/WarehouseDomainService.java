@@ -29,6 +29,7 @@ public class WarehouseDomainService {
     }
 
     public Warehouse findById(String id) {
+
         return warehouseRepository.findById(id)
                 .filter(w -> !w.isDeleted())
                 .orElseThrow(() -> new RuntimeException("Warehouse not found: " + id));
