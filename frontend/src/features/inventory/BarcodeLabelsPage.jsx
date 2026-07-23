@@ -10,12 +10,15 @@ import PageHeader from '../../components/PageHeader'
 import { warehousesApi } from '../../api/warehouses.api'
 import { inventoryApi } from '../../api/inventory.api'
 import { useProducts } from '../../hooks/useProducts'
+import { fitBarcodeSvg } from './barcodeSvg'
+import { SHEET_CSS, printSheetHtml } from './printSheet'
 
 /**
  * IN TEM MÃ VẠCH (LÔ) — trang ĐỘC LẬP, không đụng trang nào khác.
  *
  * Luồng: chọn kho + sản phẩm → hiện danh sách lô → tick chọn → xem trước →
- * window.print() → hộp thoại in của trình duyệt tự lo máy in (USB/WiFi/PDF).
+ * bấm In → dựng iframe sạch rồi gọi print() (xem printSheet.js) → hộp thoại in
+ * của trình duyệt tự lo máy in (USB/WiFi/PDF).
  * KHÔNG có dòng nào giao tiếp trực tiếp với máy in.
  *
  * QUYẾT ĐỊNH mã hoá (đã chốt): barcode chứa `batch.id` (khoá chính, DUY NHẤT
@@ -27,40 +30,6 @@ import { useProducts } from '../../hooks/useProducts'
  * jsbarcode nạp ĐỘNG (lazy) để không thêm KB vào các trang khác.
  */
 
-// CSS in tem: dùng kỹ thuật visibility để ẩn toàn bộ giao diện, chỉ chừa khối
-// #barcode-print-sheet — bền vững bất kể cấu trúc layout của antd.
-const PRINT_CSS = `
-@media print {
-  body * { visibility: hidden !important; }
-  #barcode-print-sheet, #barcode-print-sheet * { visibility: visible !important; }
-  #barcode-print-sheet {
-    position: absolute; left: 0; top: 0; width: 100%;
-    background: #fff; padding: 0; margin: 0;
-  }
-  .bl-label { border-color: #999 !important; }
-  @page { size: A4; margin: 8mm; }
-}
-.bl-preview { background: #fff; width: 194mm; max-width: 100%; margin: 0 auto; }
-.bl-sheet {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm;
-}
-.bl-label {
-  border: 1px solid #d9d9d9; border-radius: 4px; padding: 2.5mm 3mm;
-  height: 34mm; display: flex; flex-direction: column; justify-content: space-between;
-  overflow: hidden; break-inside: avoid; page-break-inside: avoid;
-}
-.bl-label .bl-code { font-weight: 700; font-size: 11pt; line-height: 1.15;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.bl-label .bl-name { font-size: 8pt; color: #333; line-height: 1.1;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-/* Khung mã vạch có kích thước CỐ ĐỊNH bằng mm (không %/flex) để screen và print
-   giống nhau. <svg> fit theo tỷ lệ (preserveAspectRatio mặc định = meet) nên
-   KHÔNG bị bóp — trước đây width:100% + max-height:14mm khiến khi in (đơn vị mm
-   thật) mã vạch bị ép sai tỷ lệ dù preview (px) vẫn bình thường. */
-.bl-label .bl-bar { width: 100%; height: 13mm; }
-.bl-label .bl-bar svg { display: block; width: 100%; height: 100%; }
-.bl-label .bl-foot { font-size: 7pt; color: #555; display: flex; justify-content: space-between; gap: 4px; }
-`
 
 export default function BarcodeLabelsPage() {
   const { message } = AntdApp.useApp()
@@ -111,6 +80,7 @@ export default function BarcodeLabelsPage() {
   }, [selectedBatches, copies])
 
   const svgRefs = useRef({})
+  const sheetRef = useRef(null)
 
   // Vẽ mã vạch vào từng <svg> sau khi có thư viện + danh sách in.
   useEffect(() => {
@@ -120,16 +90,14 @@ export default function BarcodeLabelsPage() {
       if (!el) return
       try {
         barcodeLib(el, b.id, {
-          format: 'CODE128', displayValue: false, height: 60, width: 2, margin: 0,
+          format: 'CODE128', displayValue: false, height: 60, width: 2,
+          // QUIET ZONE bắt buộc của Code128: >= 10 module trắng mỗi đầu, nếu
+          // không máy quét không bắt được start/stop pattern. width:2 => 20 đơn vị.
+          // Giữ margin:0 cho trên/dưới; KHÔNG đặt marginTop:0 vì JsBarcode dùng
+          // `marginTop || margin` nên số 0 bị hiểu thành mặc định 10.
+          margin: 0, marginLeft: 20, marginRight: 20,
         })
-        // JsBarcode đặt width/height cố định (px). Chuyển sang viewBox + fit theo
-        // tỷ lệ (meet) để <svg> co giãn vừa khung mm mà KHÔNG méo vạch.
-        const w = el.getAttribute('width'), h = el.getAttribute('height')
-        if (w && h) {
-          el.setAttribute('viewBox', `0 0 ${w} ${h}`)
-          el.setAttribute('preserveAspectRatio', 'xMidYMid meet')
-          el.removeAttribute('width'); el.removeAttribute('height')
-        }
+        fitBarcodeSvg(el)
       } catch {
         /* giá trị không hợp lệ cho Code128 — bỏ qua ô đó */
       }
@@ -139,7 +107,11 @@ export default function BarcodeLabelsPage() {
   const onPrint = () => {
     if (!printItems.length) { message.warning('Chưa chọn lô nào để in'); return }
     if (!barcodeLib) { message.info('Đang tải thư viện mã vạch, thử lại sau giây lát'); return }
-    window.print()
+    // In qua iframe sạch: CSS của app (antd Card position:relative + sidebar vẫn
+    // chiếm chỗ) từng làm tem co còn ~50% khi in. Xem printSheet.js.
+    if (!printSheetHtml(sheetRef.current?.innerHTML)) {
+      message.error('Không mở được hộp thoại in')
+    }
   }
 
   const columns = [
@@ -158,7 +130,7 @@ export default function BarcodeLabelsPage() {
 
   return (
     <>
-      <style>{PRINT_CSS}</style>
+      <style>{SHEET_CSS}</style>
 
       <PageHeader
         title={<span><BarcodeOutlined /> In tem mã vạch (lô)</span>}
@@ -219,10 +191,10 @@ export default function BarcodeLabelsPage() {
           : (
             <>
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {printItems.length} tem · khổ A4, 3 tem mỗi hàng. Mã vạch chứa mã định danh lô;
+                {printItems.length} tem · khổ A4, 2 tem mỗi hàng. Mã vạch chứa mã định danh lô;
                 dòng chữ là mã lô để đối chiếu bằng mắt.
               </Typography.Text>
-              <div id="barcode-print-sheet" style={{ marginTop: 12 }}>
+              <div id="barcode-print-sheet" ref={sheetRef} style={{ marginTop: 12 }}>
                 <div className="bl-preview">
                   <div className="bl-sheet">
                     {printItems.map(({ key, b }) => (
