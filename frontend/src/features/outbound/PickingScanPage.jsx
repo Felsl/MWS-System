@@ -15,6 +15,8 @@ import { useAuth } from '../../auth/AuthContext'
 import { getErrorMessage } from '../../api/client'
 import { P } from '../../constants/permissions'
 import { pickingListsApi } from '../../api/pickingLists.api'
+import { useSalesOrderNumbers } from '../../hooks/useSalesOrderLookup'
+import { sortPickingLists } from './pickingSort'
 import { beepOk, beepError, beepDone } from '../../utils/feedback'
 
 const PL_STATUS = {
@@ -39,8 +41,10 @@ export default function PickingScanPage() {
 
 function PickPicker({ onPick }) {
   const list = useQuery({ queryKey: ['pl-list'], queryFn: pickingListsApi.list })
+  const { numberOf } = useSalesOrderNumbers()
   const [manual, setManual] = useState('')
-  const items = (list.data || []).filter(p => p.status !== 'COMPLETED')
+  // Cùng thứ tự ưu tiên với trang Lệnh lấy hàng: đang lấy lên trước.
+  const items = sortPickingLists((list.data || []).filter(p => p.status !== 'COMPLETED'))
   return (
     <>
       <Space.Compact style={{ width: '100%', marginBottom: 12 }}>
@@ -61,7 +65,7 @@ function PickPicker({ onPick }) {
                   <List.Item.Meta
                     title={<b>{p.pickNumber || p.id}</b>}
                     description={<Tag color={PL_STATUS[p.status]?.color}>{PL_STATUS[p.status]?.label || p.status}</Tag>} />
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>SO: {p.soId}</Typography.Text>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>SO: {numberOf(p.soId)}</Typography.Text>
                 </List.Item>
               )} />}
       </Card>

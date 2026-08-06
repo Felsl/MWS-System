@@ -3,7 +3,7 @@ import RowLink from '../../components/RowLink'
 import { useState } from 'react'
 import { useProducts } from '../../hooks/useProducts'
 import { useBinLabels } from '../../hooks/useBinLabels'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useRecordView } from '../../hooks/useRecordView'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -20,6 +20,8 @@ import { useAuth } from '../../auth/AuthContext'
 import { getErrorMessage } from '../../api/client'
 import { P } from '../../constants/permissions'
 import { pickingListsApi } from '../../api/pickingLists.api'
+import { useSalesOrderNumbers } from '../../hooks/useSalesOrderLookup'
+import { sortPickingLists } from './pickingSort'
 import { usersApi } from '../../api/users.api'
 
 const PL_STATUS = {
@@ -55,10 +57,14 @@ export default function PickingListsPage() {
 
 function PLList({ onOpen, onCreate }) {
   const list = useQuery({ queryKey: ['pl-list'], queryFn: pickingListsApi.list })
+  const { numberOf } = useSalesOrderNumbers()
+  // Ưu tiên việc đang làm: Đang lấy -> Chờ lấy -> Hoàn thành.
+  const rows = sortPickingLists(list.data || [])
   const columns = [
     { title: 'Mã lệnh', dataIndex: 'pickNumber', render: (_, r) => <RowLink onClick={() => onOpen(r.id)}>{r.pickNumber || r.id}</RowLink> },
     { title: 'Trạng thái', dataIndex: 'status', width: 130, render: plTag },
-    { title: 'Đơn bán (SO)', dataIndex: 'soId' },
+    // /sales-orders/<id> là URL THẬT nên dùng <Link> (mở tab mới được), không RowLink.
+    { title: 'Đơn bán (SO)', dataIndex: 'soId', render: (v) => v ? <Link to={`/sales-orders/${v}`}>{numberOf(v)}</Link> : '—' },
     { title: 'Người lấy', dataIndex: 'assignedTo', width: 140, render: (v) => v || '—' },
     { title: 'Bắt đầu', dataIndex: 'startedAt', width: 150, render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
   ]
@@ -74,7 +80,7 @@ function PLList({ onOpen, onCreate }) {
         </Space>
         
       </Space>
-      <FitTable rowKey="id" loading={list.isLoading} dataSource={list.data || []} columns={columns}
+      <FitTable rowKey="id" loading={list.isLoading} dataSource={rows} columns={columns}
         scroll={{ x: 'max-content' }} pagination={{ pageSize: 10 }} />
     </>
   )
@@ -113,6 +119,7 @@ function PLDetail({ id }) {
   })
   const { map: productMap } = useProducts()
   const { labelOf } = useBinLabels()
+  const { numberOf } = useSalesOrderNumbers()
 
   const refresh = (u) => { qc.setQueryData(['pl', id], u); qc.invalidateQueries({ queryKey: ['pl-list'] }) }
 
@@ -174,7 +181,10 @@ function PLDetail({ id }) {
     >
       <Descriptions size="small" column={{ xs: 1, sm: 2 }} bordered
         items={[
-          { key: 'so', label: 'Đơn bán', children: pl.soId },
+          {
+            key: 'so', label: 'Đơn bán',
+            children: pl.soId ? <Link to={`/sales-orders/${pl.soId}`}>{numberOf(pl.soId)}</Link> : '—',
+          },
           { key: 'as', label: 'Người lấy', children: pl.assignedTo || '— (chưa gán)' },
           { key: 'st', label: 'Bắt đầu', children: pl.startedAt ? dayjs(pl.startedAt).format('DD/MM/YYYY HH:mm') : '—' },
           { key: 'cp', label: 'Hoàn thành', children: pl.completedAt ? dayjs(pl.completedAt).format('DD/MM/YYYY HH:mm') : '—' },

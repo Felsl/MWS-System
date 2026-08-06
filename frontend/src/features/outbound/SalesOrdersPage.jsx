@@ -24,19 +24,12 @@ import { getErrorMessage } from '../../api/client'
 import { handleFormError } from '../../utils/formErrors'
 import { P } from '../../constants/permissions'
 import { salesOrdersApi } from '../../api/salesOrders.api'
+import { usePickingStatusBySo } from '../../hooks/useSalesOrderLookup'
+import { SO_STATUS_OPTS, soStatusMeta } from './soStatus'
 import { pickingListsApi } from '../../api/pickingLists.api'
 import { customersApi } from '../../api/partners.api'
 import { warehousesApi } from '../../api/warehouses.api'
 
-const SO_STATUS = {
-  DRAFT: { color: 'default', label: 'Nháp' },
-  ALLOCATED: { color: 'blue', label: 'Đã phân bổ' },
-  PICKING: { color: 'gold', label: 'Đang lấy hàng' },
-  SHIPPED: { color: 'green', label: 'Đã xuất' },
-  CANCELLED: { color: 'red', label: 'Đã huỷ' },
-}
-const soTag = (s) => <Tag color={SO_STATUS[s]?.color || 'default'}>{SO_STATUS[s]?.label || s}</Tag>
-const SO_STATUS_OPTS = Object.entries(SO_STATUS).map(([value, m]) => ({ value, label: m.label }))
 
 function useNameMaps() {
   const customers = useQuery({ queryKey: ['customers'], queryFn: customersApi.list })
@@ -44,6 +37,12 @@ function useNameMaps() {
   const customerMap = useMemo(() => Object.fromEntries((customers.data || []).map(c => [c.id, c])), [customers.data])
   const warehouseMap = useMemo(() => Object.fromEntries((warehouses.data || []).map(w => [w.id, w])), [warehouses.data])
   return { customers, warehouses, customerMap, warehouseMap }
+}
+
+// `picked` = lệnh lấy của đơn đã COMPLETED -> đổi nhãn (xem soStatus.js).
+const soTag = (s, picked = false) => {
+  const m = soStatusMeta(s, picked)
+  return <Tag color={m.color}>{m.label}</Tag>
 }
 
 export default function SalesOrdersPage() {
@@ -71,6 +70,8 @@ function SOList({ onOpen, onCreate }) {
     setKeyword, setStatus, setPager, setSorter,
   } = useListParams()
   const { customerMap, warehouseMap } = useNameMaps()
+  // Đơn ở PICKING nhưng lệnh lấy đã xong -> đổi nhãn (backend không đổi status).
+  const { isPicked } = usePickingStatusBySo()
 
   const list = useQuery({
     queryKey: ['so-list', keyword, status, page, size, sort, dir],
@@ -81,7 +82,7 @@ function SOList({ onOpen, onCreate }) {
 
   const columns = [
     { title: 'Mã đơn', dataIndex: 'soNumber', sorter: true, sortOrder: columnSortOrder(sorter, 'soNumber'), render: (v, r) => <RowLink onClick={() => onOpen(r.id)}>{v || r.id}</RowLink> },
-    { title: 'Trạng thái', dataIndex: 'status', width: 140, sorter: true, sortOrder: columnSortOrder(sorter, 'status'), render: soTag },
+    { title: 'Trạng thái', dataIndex: 'status', width: 140, sorter: true, sortOrder: columnSortOrder(sorter, 'status'), render: (v, r) => soTag(v, isPicked(r.id)) },
     { title: 'Khách hàng', dataIndex: 'customerId', render: (v) => customerMap[v]?.name || v },
     { title: 'Kho', dataIndex: 'warehouseId', render: (v) => warehouseMap[v]?.name || v, width: 150 },
     { title: 'Cần giao', dataIndex: 'requiredDate', width: 120, sorter: true, sortOrder: columnSortOrder(sorter, 'requiredDate'), render: (v) => v ? dayjs(v).format('DD/MM/YYYY') : '—' },
@@ -236,6 +237,7 @@ function SODetail({ id }) {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { productMap, customerMap, warehouseMap } = useLookups()
+  const { isPicked } = usePickingStatusBySo()
 
   const { data: so, isLoading, isError, error } = useQuery({
     queryKey: ['so', id], queryFn: () => salesOrdersApi.get(id),
@@ -273,7 +275,7 @@ function SODetail({ id }) {
 
   return (
     <Card
-      title={<Space>Đơn bán <b>{so.soNumber || so.id}</b> {soTag(s)}</Space>}
+      title={<Space>Đơn bán <b>{so.soNumber || so.id}</b> {soTag(s, isPicked(so.id))}</Space>}
       extra={
         <Space wrap>
           {s === 'DRAFT' && (
