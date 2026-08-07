@@ -46,7 +46,7 @@ public class ProductEntity {
     @Column(name = "weight", precision = 10, scale = 2)
     private BigDecimal weight;
 
-    @Column(name = "volume", precision = 10, scale = 2)
+    @Column(name = "volume", precision = 12, scale = 6)
     private BigDecimal volume;
 
     @Column(name = "hazardous_flag")

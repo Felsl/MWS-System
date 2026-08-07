@@ -15,4 +15,8 @@ public class PurchaseOrderLineRequest {
     private int quantityOrdered;
 
     private BigDecimal unitPrice;
+
+    // [lat6] NCC theo dòng — bắt buộc (đơn mua nhiều NCC, không còn NCC ở đầu phiếu).
+    @NotBlank(message = "supplierId không được trống")
+    private String supplierId;
 }

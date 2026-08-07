@@ -10,7 +10,7 @@ import java.util.List;
 
 @Data
 public class CreatePurchaseOrderRequest {
-    @NotBlank(message = "supplierId không được trống")
+    // [lat6] NCC đầu phiếu KHÔNG còn bắt buộc — mỗi dòng tự chọn NCC; BE set header = NCC dòng đầu.
     private String supplierId;
 
     @NotBlank(message = "warehouseId không được trống")

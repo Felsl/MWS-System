@@ -28,4 +28,8 @@ public class PurchaseOrderDetailEntity {
 
     @Column(name = "unit_price", nullable = false)
     private BigDecimal unitPrice;
+
+    // [lat6] NCC theo từng dòng (đơn mua nhiều NCC); nullable, tương thích ngược.
+    @Column(name = "supplier_id", length = 20)
+    private String supplierId;
 }

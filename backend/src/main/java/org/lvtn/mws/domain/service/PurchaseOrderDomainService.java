@@ -57,10 +57,15 @@ public class PurchaseOrderDomainService {
             throw new IllegalArgumentException("Đơn mua phải có ít nhất một dòng hàng");
         }
         String poId = idGenerator.generate();
+        // [lat6] NCC theo dòng: không còn NCC ở đầu phiếu. Giữ purchase_orders.supplier_id
+        // (NOT NULL) = NCC của dòng đầu để tương thích ngược (hiển thị list + suy NCC cũ);
+        // NCC thật của từng dòng nằm ở purchase_order_details.supplier_id.
+        String headerSupplierId = (supplierId != null && !supplierId.isBlank())
+                ? supplierId : lines.get(0).getSupplierId();
         PurchaseOrder po = PurchaseOrder.builder()
                 .id(poId)
                 .poNumber(generatePoNumber())
-                .supplierId(supplierId)
+                .supplierId(headerSupplierId)
                 .warehouseId(warehouseId)
                 .expectedDate(expectedDate)
                 .createdBy(createdBy)
@@ -77,6 +82,7 @@ public class PurchaseOrderDomainService {
                     .quantityOrdered(line.getQuantityOrdered())
                     .quantityReceived(0)
                     .unitPrice(line.getUnitPrice())
+                    .supplierId(line.getSupplierId())
                     .build());
         }
         poDetailRepository.saveAll(details);

@@ -45,7 +45,8 @@ public interface PurchaseOrderWebMapper {
                 .map(line -> new PurchaseOrderLineCommand(
                         line.getProductId(),
                         line.getQuantityOrdered(),
-                        line.getUnitPrice()))
+                        line.getUnitPrice(),
+                        line.getSupplierId()))
                 .collect(Collectors.toList());
     }
 }

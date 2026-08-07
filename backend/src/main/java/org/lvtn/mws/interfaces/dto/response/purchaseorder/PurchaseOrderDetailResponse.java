@@ -14,4 +14,5 @@ public class PurchaseOrderDetailResponse {
     private int quantityOrdered;
     private int quantityReceived;
     private BigDecimal unitPrice;
+    private String supplierId;
 }

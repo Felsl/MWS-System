@@ -1,0 +1,155 @@
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/model/PurchaseOrderDetail.java b/backend/src/main/java/org/lvtn/mws/domain/model/PurchaseOrderDetail.java
+index b60fb7e..7d181cb 100644
+--- a/backend/src/main/java/org/lvtn/mws/domain/model/PurchaseOrderDetail.java
++++ b/backend/src/main/java/org/lvtn/mws/domain/model/PurchaseOrderDetail.java
+@@ -15,6 +15,7 @@ public class PurchaseOrderDetail {
+     private final int quantityOrdered;
+     private int quantityReceived;
+     private final BigDecimal unitPrice;
++    private final String supplierId; // nullable — NCC theo dòng
+ 
+     private PurchaseOrderDetail(Builder b) {
+         this.id               = Objects.requireNonNull(b.id, "PO detail id is required");
+@@ -26,12 +27,13 @@ public class PurchaseOrderDetail {
+         this.quantityOrdered  = b.quantityOrdered;
+         this.quantityReceived = b.quantityReceived;
+         this.unitPrice        = b.unitPrice != null ? b.unitPrice : BigDecimal.ZERO;
++        this.supplierId       = b.supplierId;
+     }
+ 
+     public static Builder builder() { return new Builder(); }
+ 
+     public static class Builder {
+-        private String id, poId, productId;
++        private String id, poId, productId, supplierId;
+         private int quantityOrdered;
+         private int quantityReceived = 0;
+         private BigDecimal unitPrice;
+@@ -42,6 +44,7 @@ public class PurchaseOrderDetail {
+         public Builder quantityOrdered(int v)    { this.quantityOrdered = v; return this; }
+         public Builder quantityReceived(int v)   { this.quantityReceived = v; return this; }
+         public Builder unitPrice(BigDecimal v)   { this.unitPrice = v; return this; }
++        public Builder supplierId(String v)      { this.supplierId = v; return this; }
+         public PurchaseOrderDetail build()       { return new PurchaseOrderDetail(this); }
+     }
+ 
+@@ -78,4 +81,5 @@ public class PurchaseOrderDetail {
+     public int getQuantityOrdered() { return quantityOrdered; }
+     public int getQuantityReceived(){ return quantityReceived; }
+     public BigDecimal getUnitPrice(){ return unitPrice; }
++    public String getSupplierId()   { return supplierId; }
+ }
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/model/PurchaseOrderLineCommand.java b/backend/src/main/java/org/lvtn/mws/domain/model/PurchaseOrderLineCommand.java
+index 6407134..88ac88f 100644
+--- a/backend/src/main/java/org/lvtn/mws/domain/model/PurchaseOrderLineCommand.java
++++ b/backend/src/main/java/org/lvtn/mws/domain/model/PurchaseOrderLineCommand.java
+@@ -7,13 +7,16 @@ public class PurchaseOrderLineCommand {
+     private final String productId;
+     private final int quantityOrdered;
+     private final BigDecimal unitPrice;
++    private final String supplierId;
+ 
+-    public PurchaseOrderLineCommand(String productId, int quantityOrdered, BigDecimal unitPrice) {
++    public PurchaseOrderLineCommand(String productId, int quantityOrdered, BigDecimal unitPrice, String supplierId) {
+         this.productId = productId;
+         this.quantityOrdered = quantityOrdered;
+         this.unitPrice = unitPrice;
++        this.supplierId = supplierId;
+     }
+     public String getProductId()    { return productId; }
+     public int getQuantityOrdered() { return quantityOrdered; }
+     public BigDecimal getUnitPrice(){ return unitPrice; }
++    public String getSupplierId()   { return supplierId; }
+ }
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/service/PurchaseOrderDomainService.java b/backend/src/main/java/org/lvtn/mws/domain/service/PurchaseOrderDomainService.java
+index 34e940c..9b88964 100644
+--- a/backend/src/main/java/org/lvtn/mws/domain/service/PurchaseOrderDomainService.java
++++ b/backend/src/main/java/org/lvtn/mws/domain/service/PurchaseOrderDomainService.java
+@@ -57,10 +57,15 @@ public class PurchaseOrderDomainService {
+             throw new IllegalArgumentException("Đơn mua phải có ít nhất một dòng hàng");
+         }
+         String poId = idGenerator.generate();
++        // [lat6] NCC theo dòng: không còn NCC ở đầu phiếu. Giữ purchase_orders.supplier_id
++        // (NOT NULL) = NCC của dòng đầu để tương thích ngược (hiển thị list + suy NCC cũ);
++        // NCC thật của từng dòng nằm ở purchase_order_details.supplier_id.
++        String headerSupplierId = (supplierId != null && !supplierId.isBlank())
++                ? supplierId : lines.get(0).getSupplierId();
+         PurchaseOrder po = PurchaseOrder.builder()
+                 .id(poId)
+                 .poNumber(generatePoNumber())
+-                .supplierId(supplierId)
++                .supplierId(headerSupplierId)
+                 .warehouseId(warehouseId)
+                 .expectedDate(expectedDate)
+                 .createdBy(createdBy)
+@@ -77,6 +82,7 @@ public class PurchaseOrderDomainService {
+                     .quantityOrdered(line.getQuantityOrdered())
+                     .quantityReceived(0)
+                     .unitPrice(line.getUnitPrice())
++                    .supplierId(line.getSupplierId())
+                     .build());
+         }
+         poDetailRepository.saveAll(details);
+diff --git a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/entity/PurchaseOrderDetailEntity.java b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/entity/PurchaseOrderDetailEntity.java
+index 0dbc998..a3a5823 100644
+--- a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/entity/PurchaseOrderDetailEntity.java
++++ b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/entity/PurchaseOrderDetailEntity.java
+@@ -28,4 +28,8 @@ public class PurchaseOrderDetailEntity {
+ 
+     @Column(name = "unit_price", nullable = false)
+     private BigDecimal unitPrice;
++
++    // [lat6] NCC theo từng dòng (đơn mua nhiều NCC); nullable, tương thích ngược.
++    @Column(name = "supplier_id", length = 20)
++    private String supplierId;
+ }
+diff --git a/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/purchaseorder/CreatePurchaseOrderRequest.java b/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/purchaseorder/CreatePurchaseOrderRequest.java
+index 9b202b0..1fefd5c 100644
+--- a/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/purchaseorder/CreatePurchaseOrderRequest.java
++++ b/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/purchaseorder/CreatePurchaseOrderRequest.java
+@@ -10,7 +10,7 @@ import java.util.List;
+ 
+ @Data
+ public class CreatePurchaseOrderRequest {
+-    @NotBlank(message = "supplierId không được trống")
++    // [lat6] NCC đầu phiếu KHÔNG còn bắt buộc — mỗi dòng tự chọn NCC; BE set header = NCC dòng đầu.
+     private String supplierId;
+ 
+     @NotBlank(message = "warehouseId không được trống")
+diff --git a/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/purchaseorder/PurchaseOrderLineRequest.java b/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/purchaseorder/PurchaseOrderLineRequest.java
+index efc3233..f0aa73a 100644
+--- a/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/purchaseorder/PurchaseOrderLineRequest.java
++++ b/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/purchaseorder/PurchaseOrderLineRequest.java
+@@ -15,4 +15,8 @@ public class PurchaseOrderLineRequest {
+     private int quantityOrdered;
+ 
+     private BigDecimal unitPrice;
++
++    // [lat6] NCC theo dòng — bắt buộc (đơn mua nhiều NCC, không còn NCC ở đầu phiếu).
++    @NotBlank(message = "supplierId không được trống")
++    private String supplierId;
+ }
+diff --git a/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/purchaseorder/PurchaseOrderDetailResponse.java b/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/purchaseorder/PurchaseOrderDetailResponse.java
+index 43ad707..72a6e1a 100644
+--- a/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/purchaseorder/PurchaseOrderDetailResponse.java
++++ b/backend/src/main/java/org/lvtn/mws/interfaces/dto/response/purchaseorder/PurchaseOrderDetailResponse.java
+@@ -14,4 +14,5 @@ public class PurchaseOrderDetailResponse {
+     private int quantityOrdered;
+     private int quantityReceived;
+     private BigDecimal unitPrice;
++    private String supplierId;
+ }
+diff --git a/backend/src/main/java/org/lvtn/mws/interfaces/mapper/PurchaseOrderWebMapper.java b/backend/src/main/java/org/lvtn/mws/interfaces/mapper/PurchaseOrderWebMapper.java
+index eeb3809..5b31362 100644
+--- a/backend/src/main/java/org/lvtn/mws/interfaces/mapper/PurchaseOrderWebMapper.java
++++ b/backend/src/main/java/org/lvtn/mws/interfaces/mapper/PurchaseOrderWebMapper.java
+@@ -45,7 +45,8 @@ public interface PurchaseOrderWebMapper {
+                 .map(line -> new PurchaseOrderLineCommand(
+                         line.getProductId(),
+                         line.getQuantityOrdered(),
+-                        line.getUnitPrice()))
++                        line.getUnitPrice(),
++                        line.getSupplierId()))
+                 .collect(Collectors.toList());
+     }
+ }

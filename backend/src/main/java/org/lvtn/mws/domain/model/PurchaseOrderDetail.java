@@ -15,6 +15,7 @@ public class PurchaseOrderDetail {
     private final int quantityOrdered;
     private int quantityReceived;
     private final BigDecimal unitPrice;
+    private final String supplierId; // nullable — NCC theo dòng
 
     private PurchaseOrderDetail(Builder b) {
         this.id               = Objects.requireNonNull(b.id, "PO detail id is required");
@@ -26,12 +27,13 @@ public class PurchaseOrderDetail {
         this.quantityOrdered  = b.quantityOrdered;
         this.quantityReceived = b.quantityReceived;
         this.unitPrice        = b.unitPrice != null ? b.unitPrice : BigDecimal.ZERO;
+        this.supplierId       = b.supplierId;
     }
 
     public static Builder builder() { return new Builder(); }
 
     public static class Builder {
-        private String id, poId, productId;
+        private String id, poId, productId, supplierId;
         private int quantityOrdered;
         private int quantityReceived = 0;
         private BigDecimal unitPrice;
@@ -42,6 +44,7 @@ public class PurchaseOrderDetail {
         public Builder quantityOrdered(int v)    { this.quantityOrdered = v; return this; }
         public Builder quantityReceived(int v)   { this.quantityReceived = v; return this; }
         public Builder unitPrice(BigDecimal v)   { this.unitPrice = v; return this; }
+        public Builder supplierId(String v)      { this.supplierId = v; return this; }
         public PurchaseOrderDetail build()       { return new PurchaseOrderDetail(this); }
     }
 
@@ -78,4 +81,5 @@ public class PurchaseOrderDetail {
     public int getQuantityOrdered() { return quantityOrdered; }
     public int getQuantityReceived(){ return quantityReceived; }
     public BigDecimal getUnitPrice(){ return unitPrice; }
+    public String getSupplierId()   { return supplierId; }
 }
