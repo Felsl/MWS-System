@@ -39,11 +39,28 @@ export default function BarcodeLabelsPage() {
   const [selectedKeys, setSelectedKeys] = useState([])
   const [barcodeLib, setBarcodeLib] = useState(null)
 
-  const { options: productOptions, map: productMap, isLoading: loadingProducts } = useProducts()
+  const { map: productMap } = useProducts()
 
   const whQuery = useQuery({ queryKey: ['warehouses', 'list'], queryFn: () => warehousesApi.list() })
   const warehouses = whQuery.data || []
   const whName = (id) => warehouses.find(w => w.id === id)?.name || id
+
+  // Danh sách sản phẩm CHỈ trong kho đang chọn (tồn theo kho), kèm NCC gộp theo SP.
+  const invQuery = useQuery({
+    queryKey: ['barcode-inv', warehouseId],
+    queryFn: () => inventoryApi.getByWarehouse(warehouseId),
+    enabled: !!warehouseId,
+  })
+  const whInventory = useMemo(() => invQuery.data || [], [invQuery.data])
+  const whProductOptions = useMemo(() => whInventory.map(r => ({
+    value: r.productId,
+    label: `${productMap[r.productId]?.name || r.productId}${productMap[r.productId]?.sku ? ` · ${productMap[r.productId].sku}` : ''}`,
+  })), [whInventory, productMap])
+  // NCC theo sản phẩm trong kho — dùng làm fallback cho lô lẻ không truy được nguồn.
+  const productSupplier = useMemo(
+    () => Object.fromEntries(whInventory.map(r => [r.productId, r.supplierName])),
+    [whInventory],
+  )
 
   const bothChosen = !!(warehouseId && productId)
   const batchQuery = useQuery({
@@ -55,7 +72,7 @@ export default function BarcodeLabelsPage() {
 
   // Đổi bộ lọc thì bỏ chọn cũ (id lô không còn trong danh sách mới) — làm ngay
   // tại handler thay vì trong effect.
-  const onWarehouse = (v) => { setWarehouseId(v); setSelectedKeys([]) }
+  const onWarehouse = (v) => { setWarehouseId(v); setProductId(undefined); setSelectedKeys([]) }
   const onProduct = (v) => { setProductId(v); setSelectedKeys([]) }
 
   // Nạp jsbarcode một lần khi vào trang.
@@ -116,6 +133,7 @@ export default function BarcodeLabelsPage() {
 
   const columns = [
     { title: 'Mã lô', dataIndex: 'batchNumber' },
+    { title: 'Nhà cung cấp', dataIndex: 'supplierName', ellipsis: true, render: (v) => v || productSupplier[productId] || '—' },
     { title: 'Ô kệ', dataIndex: 'binLocation', render: (v) => v || '—' },
     { title: 'Tồn', dataIndex: 'quantity', align: 'right' },
     {
@@ -153,11 +171,15 @@ export default function BarcodeLabelsPage() {
               options={warehouses.map(w => ({ value: w.id, label: w.name }))} />
           </div>
           <div>
-            <div style={{ fontSize: 12, marginBottom: 4 }}>Sản phẩm</div>
+            <div style={{ fontSize: 12, marginBottom: 4 }}>Sản phẩm {warehouseId ? '(trong kho đã chọn)' : ''}</div>
             <Select
-              style={{ width: 320 }} placeholder="Chọn sản phẩm" showSearch optionFilterProp="label"
-              loading={loadingProducts} value={productId} onChange={onProduct}
-              options={productOptions} />
+              style={{ width: 320 }}
+              placeholder={warehouseId ? 'Chọn sản phẩm trong kho' : 'Chọn kho trước'}
+              showSearch optionFilterProp="label"
+              disabled={!warehouseId} loading={invQuery.isLoading}
+              value={productId} onChange={onProduct}
+              notFoundContent={warehouseId ? 'Kho này chưa có sản phẩm tồn' : null}
+              options={whProductOptions} />
           </div>
           <div>
             <div style={{ fontSize: 12, marginBottom: 4 }}>Số bản / lô</div>
@@ -168,7 +190,7 @@ export default function BarcodeLabelsPage() {
 
       <Card
         size="small"
-        title={`Danh sách lô${selectedKeys.length ? ` — đã chọn ${selectedKeys.length}` : ''}`}
+        title={`Danh sách lô${productId ? ` — ${productMap[productId]?.name || productId}` : ''}${selectedKeys.length ? ` · đã chọn ${selectedKeys.length}` : ''}`}
         style={{ marginBottom: 16 }}>
         {!bothChosen
           ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chọn kho và sản phẩm để xem danh sách lô" />
@@ -201,7 +223,11 @@ export default function BarcodeLabelsPage() {
                       <div className="bl-label" key={key}>
                         <div>
                           <div className="bl-code">{b.batchNumber}</div>
-                          <div className="bl-name">{productMap[b.productId]?.name || b.productId}</div>
+                          <div className="bl-name">
+                            {productMap[b.productId]?.name || b.productId}
+                            {(b.supplierName || productSupplier[b.productId])
+                              ? ` · ${b.supplierName || productSupplier[b.productId]}` : ''}
+                          </div>
                         </div>
                         <div className="bl-bar">
                           <svg ref={(el) => { if (el) svgRefs.current[key] = el }} />

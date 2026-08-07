@@ -3,6 +3,10 @@ package org.lvtn.mws.application.usecases.goodsreceipt;
 import lombok.RequiredArgsConstructor;
 import org.lvtn.mws.application.event.StockMovementEvent;
 import org.lvtn.mws.domain.model.GoodsReceipt;
+import org.lvtn.mws.domain.repository.IGoodsReceiptRepository;
+import org.lvtn.mws.domain.repository.IGoodsReceiptDetailRepository;
+import org.lvtn.mws.infrastructure.capacity.BinCapacityGuard;
+import java.util.List;
 import org.lvtn.mws.domain.model.GoodsReceiptCompletion;
 import org.lvtn.mws.domain.model.StockMovement;
 import org.lvtn.mws.domain.service.GoodsReceiptDomainService;
@@ -29,9 +33,20 @@ public class CompleteGoodsReceiptUseCase {
 
     private final GoodsReceiptDomainService domainService;
     private final ApplicationEventPublisher eventPublisher;
+    private final IGoodsReceiptRepository goodsReceiptRepository;
+    private final IGoodsReceiptDetailRepository goodsReceiptDetailRepository;
+    private final BinCapacityGuard binCapacityGuard;
 
     @Transactional
     public GoodsReceipt execute(String grnId) {
+        // [PA1] Chặn cứng trước khi hoàn tất: tổng hàng putaway theo ô kệ không được vượt sức chứa -> 409.
+        GoodsReceipt grn = goodsReceiptRepository.findById(grnId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phiếu nhập: " + grnId));
+        List<BinCapacityGuard.Incoming> incomings = goodsReceiptDetailRepository.findByGrnId(grnId).stream()
+                .map(d -> new BinCapacityGuard.Incoming(d.getProductId(), d.getBinLocationId(), d.getQuantity()))
+                .toList();
+        binCapacityGuard.assertFits(grn.getWarehouseId(), incomings);
+
         int maxAttempts = 3;
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {

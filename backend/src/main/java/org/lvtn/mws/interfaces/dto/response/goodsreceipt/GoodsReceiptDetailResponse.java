@@ -1,5 +1,6 @@
 package org.lvtn.mws.interfaces.dto.response.goodsreceipt;
 
+import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -16,4 +17,6 @@ public class GoodsReceiptDetailResponse {
     private String batchNumber;
     private LocalDate expiryDate;
     private String binLocationId;
+    private String supplierId;
+    private BigDecimal unitPrice;
 }

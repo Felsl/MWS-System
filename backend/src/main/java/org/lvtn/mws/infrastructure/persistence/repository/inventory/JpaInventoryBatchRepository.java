@@ -51,4 +51,17 @@ public interface JpaInventoryBatchRepository extends JpaRepository<InventoryBatc
 
     /** [GIAI ĐOẠN 6] Toàn bộ lô của một kho — chụp ảnh tồn khi bắt đầu kiểm kê. */
     List<InventoryBatchEntity> findByWarehouseId(String warehouseId);
+
+    /**
+     * [PA1] Tổng mức chiếm theo ô kệ cho một kho: [binLocationId, Σ(qty*weight), Σ(qty*volume)].
+     * Theta-join sang ProductEntity (khóa String, không @ManyToOne). Chỉ tính lô còn hàng (quantity > 0),
+     * mọi trạng thái (hàng niêm phong vẫn chiếm chỗ). Sản phẩm thiếu weight/volume -> COALESCE 0.
+     */
+    @Query("SELECT b.binLocationId, " +
+           "COALESCE(SUM(b.quantity * p.weight), 0), " +
+           "COALESCE(SUM(b.quantity * p.volume), 0) " +
+           "FROM InventoryBatchEntity b, ProductEntity p " +
+           "WHERE p.id = b.productId AND b.warehouseId = :warehouseId AND b.quantity > 0 " +
+           "GROUP BY b.binLocationId")
+    List<Object[]> sumOccupancyByBin(@Param("warehouseId") String warehouseId);
 }

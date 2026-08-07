@@ -27,6 +27,7 @@ public class InventoryController {
     private final CommitStockDeductionUseCase commitUseCase;
     private final CreateInventoryBatchUseCase createBatchUseCase;
     private final GetBatchesUseCase getBatchesUseCase;
+    private final GetBatchSuppliersUseCase getBatchSuppliersUseCase;
     private final GetExpiringBatchesUseCase getExpiringBatchesUseCase;
     private final org.lvtn.mws.application.usecases.warehouse.GetBinLocationCodesUseCase getBinLocationCodesUseCase;
     private final UpdateBatchStatusUseCase updateBatchStatusUseCase;
@@ -50,7 +51,12 @@ public class InventoryController {
 
     @GetMapping("/warehouse/{warehouseId}")
     public List<InventoryResponse> getByWarehouse(@PathVariable String warehouseId) {
-        return mapper.toResponseList(getUseCase.executeByWarehouse(warehouseId));
+        Map<String, String> productSuppliers = getBatchSuppliersUseCase.productSuppliersByWarehouse(warehouseId);
+        List<InventoryResponse> list = mapper.toResponseList(getUseCase.executeByWarehouse(warehouseId));
+        for (InventoryResponse r : list) {
+            r.setSupplierName(productSuppliers.get(r.getProductId()));
+        }
+        return list;
     }
 
     // ── Stock operations ──────────────────────────────────────────────────
@@ -104,8 +110,10 @@ public class InventoryController {
     public List<InventoryBatchResponse> getBatches(@RequestParam String productId,
                                                    @RequestParam String warehouseId) {
         Map<String, String> binCodes = getBinLocationCodesUseCase.executeByWarehouse(warehouseId);
+        Map<String, String> batchSuppliers = getBatchSuppliersUseCase.executeByProductAndWarehouse(productId, warehouseId);
         return getBatchesUseCase.execute(productId, warehouseId).stream()
-                .map(b -> mapper.toBatchResponse(b, binCodes.get(b.getBinLocationId())))
+                .map(b -> mapper.toBatchResponse(b, binCodes.get(b.getBinLocationId()),
+                        batchSuppliers.get(b.getBatchNumber())))
                 .toList();
     }
 

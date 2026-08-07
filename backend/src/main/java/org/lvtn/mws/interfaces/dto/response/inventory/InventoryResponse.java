@@ -10,4 +10,6 @@ public class InventoryResponse {
     private int quantity;
     private int reservedQuantity;
     private int availableQuantity;
+    /** [PA1] NCC gộp cho sản phẩm này trong kho (suy từ GRN->PO); null nếu không truy được nguồn. */
+    private String supplierName;
 }

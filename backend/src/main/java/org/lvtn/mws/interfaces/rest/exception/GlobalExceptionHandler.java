@@ -3,6 +3,7 @@ package org.lvtn.mws.interfaces.rest.exception;
 import org.lvtn.mws.domain.model.InsufficientStockException;
 import org.lvtn.mws.domain.model.UnauthorizedAdjustmentException;
 import org.lvtn.mws.domain.model.WarehouseFrozenException;
+import org.lvtn.mws.domain.model.BinCapacityExceededException;
 import org.lvtn.mws.interfaces.dto.response.ErrorResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,6 +77,12 @@ public class GlobalExceptionHandler {
     // [GIAI ĐOẠN 6] Kho đang đóng băng vì kiểm kê.
     @ExceptionHandler(WarehouseFrozenException.class)
     public ResponseEntity<ErrorResponse> handleWarehouseFrozen(WarehouseFrozenException ex) {
+        return build(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    // [PA1] Đưa hàng vào ô kệ vượt sức chứa.
+    @ExceptionHandler(BinCapacityExceededException.class)
+    public ResponseEntity<ErrorResponse> handleBinCapacity(BinCapacityExceededException ex) {
         return build(HttpStatus.CONFLICT, ex.getMessage());
     }
 

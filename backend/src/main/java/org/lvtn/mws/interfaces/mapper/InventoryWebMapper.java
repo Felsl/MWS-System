@@ -51,6 +51,13 @@ public interface InventoryWebMapper {
         return response;
     }
 
+    /** Bản kèm mã ô kệ + tên nhà cung cấp (suy ra từ GRN->PO). */
+    default InventoryBatchResponse toBatchResponse(InventoryBatch domain, String binLocation, String supplierName) {
+        InventoryBatchResponse response = toBatchResponse(domain, binLocation);
+        if (response != null) response.setSupplierName(supplierName);
+        return response;
+    }
+
     default List<InventoryBatchResponse> toBatchResponseList(List<InventoryBatch> domains) {
         if (domains == null) return List.of();
         return domains.stream().map(this::toBatchResponse).toList();

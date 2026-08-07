@@ -28,7 +28,7 @@ public class ApproveAdjustmentVoucherUseCase {
     @Value("${stocktake.adjustment.tier1-authority:}")               private String tier1Authority;
     @Value("${stocktake.adjustment.tier2-authority:STOCKTAKE_APPROVE}") private String tier2Authority;
     @Value("${stocktake.adjustment.tier3-authority:STOCKTAKE_APPROVE}") private String tier3Authority;
-    @Value("${stocktake.adjustment.tier4-authority:ADMIN}")          private String tier4Authority;
+    @Value("${stocktake.adjustment.tier4-authority:ROLE_ADMIN}")          private String tier4Authority;
 
     @Transactional
     public AdjustmentVoucher execute(String voucherId, Set<String> approverAuthorities, String approvedBy) {

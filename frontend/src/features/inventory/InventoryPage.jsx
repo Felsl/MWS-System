@@ -54,6 +54,8 @@ function StockByWarehouse() {
   const columns = [
     { title: 'Sản phẩm', dataIndex: 'productId', render: (pid) => productMap[pid]?.name || pid },
     { title: 'SKU', dataIndex: 'productId', width: 130, render: (pid) => productMap[pid]?.sku || '—' },
+    // NCC gộp (suy ở BE từ GRN->PO); một SP có thể từ nhiều NCC -> "A / B". '—' nếu không truy được nguồn.
+    { title: 'Nhà cung cấp', dataIndex: 'supplierName', width: 180, ellipsis: true, render: (v) => v || '—' },
     { title: 'Tồn', dataIndex: 'quantity', width: 100, align: 'right' },
     { title: 'Đang giữ', dataIndex: 'reservedQuantity', width: 110, align: 'right' },
     {
@@ -130,6 +132,9 @@ function BatchView() {
 
   const columns = [
     { title: 'Số lô', dataIndex: 'batchNumber', width: 150 },
+    // Nhà cung cấp suy ra ở BE lúc query (GRN -> PO -> supplier); '—' khi lô không
+    // truy được nguồn (tạo tay / điều chuyển / điều chỉnh, không qua phiếu nhập).
+    { title: 'Nhà cung cấp', dataIndex: 'supplierName', width: 200, ellipsis: true, render: (v) => v || '—' },
     { title: 'Ô kệ', dataIndex: 'binLocation', width: 150, render: (v, r) => v || r.binLocationId || '—' },
     { title: 'SL', dataIndex: 'quantity', width: 90, align: 'right' },
     { title: 'NSX', dataIndex: 'manufacturedDate', width: 120, render: (v) => v ? dayjs(v).format('DD/MM/YYYY') : '—' },

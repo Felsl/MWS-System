@@ -3,13 +3,13 @@ import PageHeader from '../../components/PageHeader'
 import RowLink from '../../components/RowLink'
 import { sorterToParams, columnSortOrder } from '../../utils/sort'
 import FitTable from '../../components/FitTable'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useProducts } from '../../hooks/useProducts'
 import { useLocation } from 'react-router-dom'
-import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Button, Input, Form, Select, InputNumber, DatePicker, Row, Col,
-  Table, Space, Typography, Tag, Descriptions, Empty, Divider, App as AntdApp,
+  Table, Space, Typography, Tag, Descriptions, Empty, Divider, App as AntdApp, Alert,
 } from 'antd'
 import {
   PlusOutlined, SearchOutlined, DeleteOutlined, CheckCircleOutlined,
@@ -20,8 +20,12 @@ import Can from '../../components/Can'
 import { getErrorMessage } from '../../api/client'
 import { P } from '../../constants/permissions'
 import { goodsReceiptsApi } from '../../api/goodsReceipts.api'
+import { inventoryApi } from '../../api/inventory.api'
+import { allocateBins } from './allocateBins'
 import { purchaseOrdersApi } from '../../api/purchaseOrders.api'
 import { warehousesApi } from '../../api/warehouses.api'
+import { suppliersApi } from '../../api/partners.api'
+import { useAuth } from '../../auth/AuthContext'
 import { useBinLabels } from '../../hooks/useBinLabels'
 
 const GRN_STATUS = {
@@ -125,6 +129,17 @@ function CreateGRN({ initialPoId, onCreated }) {
   const [poId, setPoId] = useState(initialPoId || '')
   const { products, list: productList } = useProductMap()
   const { warehouses } = useWarehouseMap()
+  const { user } = useAuth()
+  // Giá khoá mặc định (tự điền từ giá vốn); chỉ ADMIN mới sửa tay được.
+  const canEditPrice = user?.role === 'ADMIN'
+  const suppliers = useQuery({ queryKey: ['suppliers'], queryFn: suppliersApi.list })
+  const supplierOptions = (suppliers.data || []).map(s => ({ value: s.id, label: `${s.name}${s.code ? ` (${s.code})` : ''}` }))
+  const pById = Object.fromEntries((productList || []).map(p => [p.id, p]))
+  // Khi đổi sản phẩm ở một dòng -> tự gắn đơn giá = giá vốn (costPrice) của sản phẩm.
+  const fillPriceFromProduct = (name, productId) => {
+    const p = pById[productId]
+    form.setFieldValue(['lines', name, 'unitPrice'], p?.costPrice != null ? Number(p.costPrice) : 0)
+  }
 
   const warehouseId = Form.useWatch('warehouseId', form)
   const bins = useQuery({
@@ -145,7 +160,10 @@ function CreateGRN({ initialPoId, onCreated }) {
         lines: (po.data.details || []).map(d => ({
           productId: d.productId,
           poDetailId: d.id,
+          supplierId: d.supplierId || null,
           quantity: Math.max(0, (d.quantityOrdered || 0) - (d.quantityReceived || 0)) || 1,
+          unitPrice: d.unitPrice != null ? Number(d.unitPrice)
+            : (pById[d.productId]?.costPrice != null ? Number(pById[d.productId].costPrice) : 0),
         })),
       })
     }
@@ -170,11 +188,78 @@ function CreateGRN({ initialPoId, onCreated }) {
         batchNumber: l.batchNumber || null,
         expiryDate: l.expiryDate ? l.expiryDate.format('YYYY-MM-DD') : null,
         binLocationId: l.binLocationId,
+        supplierId: l.supplierId || null,
+        unitPrice: l.unitPrice != null ? l.unitPrice : null,
       })),
     })
   }
 
   const binOptions = (bins.data || []).map(b => ({ value: b.id, label: b.coordinateLabel || b.id }))
+
+  // [PA1] Cảnh báo mềm khi nhập: cộng (đang chiếm + sắp thêm) theo ô kệ, so với giới hạn cấu hình.
+  // KHÔNG chặn ở đây — chỉ báo. Chặn cứng nằm ở BE lúc HOÀN TẤT phiếu (-> 409).
+  const lines = Form.useWatch('lines', form)
+  const capacityWarnings = useMemo(() => {
+    const binById = Object.fromEntries((bins.data || []).map(b => [b.id, b]))
+    const pById = Object.fromEntries((productList || []).map(p => [p.id, p]))
+    const add = {} // binId -> { w, v }
+    for (const l of (lines || [])) {
+      if (!l || !l.binLocationId || !l.productId || !l.quantity) continue
+      const p = pById[l.productId]; if (!p) continue
+      const a = add[l.binLocationId] || (add[l.binLocationId] = { w: 0, v: 0 })
+      a.w += Number(p.weight || 0) * Number(l.quantity)
+      a.v += Number(p.volume || 0) * Number(l.quantity)
+    }
+    const warns = []
+    for (const [binId, a] of Object.entries(add)) {
+      const b = binById[binId]; if (!b) continue
+      const label = b.coordinateLabel || binId
+      const maxW = Number(b.maxWeight || 0), maxV = Number(b.maxVolume || 0)
+      const projW = Number(b.occupiedWeight || 0) + a.w
+      const projV = Number(b.occupiedVolume || 0) + a.v
+      if (maxW > 0 && projW > maxW) warns.push(`${label}: tải trọng ${projW.toFixed(1)}/${maxW} kg`)
+      if (maxV > 0 && projV > maxV) warns.push(`${label}: thể tích ${projV.toFixed(1)}/${maxV} m³`)
+    }
+    return warns
+  }, [lines, bins.data, productList])
+
+  // [lat7] Tự phân bổ ô kệ: lấy các ô đã có sẵn từng sản phẩm để ưu tiên gom.
+  const distinctProductIds = useMemo(
+    () => [...new Set((lines || []).map(l => l?.productId).filter(Boolean))],
+    [lines],
+  )
+  const batchQueries = useQueries({
+    queries: distinctProductIds.map(pid => ({
+      queryKey: ['batches', pid, warehouseId],
+      queryFn: () => inventoryApi.getBatches(pid, warehouseId),
+      enabled: !!warehouseId && !!pid,
+    })),
+  })
+  const existingBinsByProduct = useMemo(() => {
+    const m = {}
+    distinctProductIds.forEach((pid, i) => {
+      m[pid] = new Set((batchQueries[i]?.data || []).map(b => b.binLocationId).filter(Boolean))
+    })
+    return m
+  }, [distinctProductIds, batchQueries])
+  const existingReady = batchQueries.every(q => !q.isLoading)
+
+  const runAllocate = () => {
+    const cur = form.getFieldValue('lines') || []
+    const pMap = Object.fromEntries((productList || []).map(p => [p.id, p]))
+    const next = allocateBins(cur, bins.data || [], pMap, existingBinsByProduct)
+    form.setFieldsValue({ lines: next })
+  }
+
+  // Tự phân bổ MỘT LẦN khi nạp xong đơn mua + đã có danh sách ô kệ + tồn từng SP.
+  const allocatedForPo = useRef(null)
+  useEffect(() => {
+    if (!po.data || !bins.data || !existingReady) return
+    if (allocatedForPo.current === poId) return
+    allocatedForPo.current = poId
+    runAllocate()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [po.data, bins.data, existingReady, poId])
 
   return (
     <Card title="Tạo phiếu nhập">
@@ -207,6 +292,17 @@ function CreateGRN({ initialPoId, onCreated }) {
 
         <Divider orientation="left" style={{ margin: '4px 0 12px' }}>Dòng nhập (putaway)</Divider>
         {!warehouseId && <Typography.Text type="secondary">Chọn kho trước để nạp danh sách ô kệ.</Typography.Text>}
+        {warehouseId && (
+          <div style={{ marginBottom: 8 }}>
+            <Button size="small" onClick={runAllocate}
+              disabled={!bins.data?.length || !(lines || []).some(l => l?.productId && l?.quantity)}>
+              Tự phân bổ ô kệ
+            </Button>
+            <Typography.Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
+              Ưu tiên ô đã có cùng sản phẩm, tách sang ô khác khi đầy; sửa tay lại được. Không đủ chỗ sẽ hiện cảnh báo bên dưới.
+            </Typography.Text>
+          </div>
+        )}
         <Form.List name="lines">
           {(fields, { add, remove }) => (
             <>
@@ -216,7 +312,23 @@ function CreateGRN({ initialPoId, onCreated }) {
                   <Col flex="220px">
                     <Form.Item {...rest} name={[name, 'productId']} rules={[{ required: true, message: 'SP' }]}>
                       <Select showSearch optionFilterProp="label" placeholder="Sản phẩm"
-                        options={productOptions(productList)} loading={products.isLoading} />
+                        options={productOptions(productList)} loading={products.isLoading}
+                        onChange={(pid) => fillPriceFromProduct(name, pid)} />
+                    </Form.Item>
+                  </Col>
+                  <Col flex="180px">
+                    <Form.Item {...rest} name={[name, 'supplierId']}>
+                      <Select showSearch optionFilterProp="label" placeholder="Nhà cung cấp"
+                        allowClear options={supplierOptions} loading={suppliers.isLoading} />
+                    </Form.Item>
+                  </Col>
+                  <Col flex="120px">
+                    <Form.Item {...rest} name={[name, 'unitPrice']}
+                      tooltip={canEditPrice ? 'Tự điền theo giá vốn, có thể sửa' : 'Giá vốn — chỉ ADMIN sửa được'}>
+                      <InputNumber min={0} placeholder="Đơn giá" style={{ width: '100%' }}
+                        disabled={!canEditPrice}
+                        formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                        parser={(v) => (v || '').replace(/,/g, '')} />
                     </Form.Item>
                   </Col>
                   <Col flex="90px">
@@ -252,6 +364,13 @@ function CreateGRN({ initialPoId, onCreated }) {
         </Form.List>
 
         <div style={{ marginTop: 16, textAlign: 'right' }}>
+          {capacityWarnings.length > 0 && (
+            <Alert type="warning" showIcon style={{ marginBottom: 12, textAlign: 'left' }}
+              message="Vượt sức chứa ô kệ (cảnh báo — vẫn tạo phiếu được; chặn cứng khi hoàn tất)"
+              description={<ul style={{ margin: 0, paddingLeft: 18 }}>
+                {capacityWarnings.map((w, i) => <li key={i}>{w}</li>)}
+              </ul>} />
+          )}
           <Button type="primary" onClick={submit} loading={createMut.isPending}>Tạo phiếu nhập</Button>
         </div>
       </Form>
@@ -264,6 +383,9 @@ function GRNDetail({ id }) {
   const qc = useQueryClient()
   const { map: productMap } = useProductMap()
   const { labelOf } = useBinLabels()
+  const suppliers = useQuery({ queryKey: ['suppliers'], queryFn: suppliersApi.list })
+  const supplierMap = Object.fromEntries((suppliers.data || []).map(s => [s.id, s]))
+  const fmtVnd = (v) => v == null ? '—' : `${Number(v).toLocaleString('vi-VN')} đ`
 
   const { data: grn, isLoading, isError, error } = useQuery({
     queryKey: ['grn', id],
@@ -284,6 +406,8 @@ function GRNDetail({ id }) {
 
   const columns = [
     { title: 'Sản phẩm', dataIndex: 'productId', render: (pid) => productMap[pid]?.name || pid },
+    { title: 'Nhà cung cấp', dataIndex: 'supplierId', width: 160, ellipsis: true, render: (v) => supplierMap[v]?.name || '—' },
+    { title: 'Đơn giá', dataIndex: 'unitPrice', width: 120, align: 'right', render: fmtVnd },
     { title: 'SL', dataIndex: 'quantity', width: 80, align: 'right' },
     { title: 'Số lô', dataIndex: 'batchNumber', width: 130, render: (v) => v || '—' },
     { title: 'HSD', dataIndex: 'expiryDate', width: 120, render: (v) => v ? dayjs(v).format('DD/MM/YYYY') : '—' },

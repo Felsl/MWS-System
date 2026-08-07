@@ -1,6 +1,7 @@
 package org.lvtn.mws.domain.repository;
 
 import org.lvtn.mws.domain.model.InventoryBatch;
+import org.lvtn.mws.domain.model.BinOccupancy;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -28,4 +29,7 @@ public interface IInventoryBatchRepository {
     List<InventoryBatch> findByWarehouseId(String warehouseId);
 
     void saveAll(List<InventoryBatch> batches);
+
+    /** [PA1] Mức chiếm (kg, thể tích) của từng ô kệ trong kho, tính sống từ tồn × products.weight/volume. */
+    List<BinOccupancy> sumOccupancyByWarehouse(String warehouseId);
 }

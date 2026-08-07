@@ -11,10 +11,15 @@ import org.lvtn.mws.interfaces.dto.response.warehouse.BulkGenerateResultResponse
 import org.lvtn.mws.interfaces.dto.response.warehouse.WarehouseResponse;
 import org.lvtn.mws.interfaces.mapper.WarehouseWebMapper;
 import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import org.lvtn.mws.domain.model.BinOccupancy;
+
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -31,8 +36,13 @@ public class WarehouseController {
     private final DeleteWarehouseUseCase           deleteUseCase;
     private final BulkGenerateBinLocationsUseCase  bulkGenerateUseCase;
     private final GetBinLocationsByWarehouseUseCase getBinLocationsUseCase;
+    private final GetBinOccupancyUseCase           getBinOccupancyUseCase;
     private final DeleteBinLocationUseCase         deleteBinLocationUseCase;
     private final WarehouseWebMapper               mapper;
+
+    // [PA1] Giới hạn sức chứa ô kệ từ cấu hình (0 = không giới hạn), dùng chung mọi ô.
+    @Value("${warehouse.bin.max-weight-kg:0}") private BigDecimal maxWeightKg;
+    @Value("${warehouse.bin.max-volume-m3:0}") private BigDecimal maxVolumeM3;
 
     // ─── Warehouse CRUD ────────────────────────────────────────────────────
 
@@ -126,8 +136,16 @@ public class WarehouseController {
 
     @GetMapping("/{id}/bin-locations")
     public List<BinLocationResponse> getBinLocations(@PathVariable String id) {
-        return getBinLocationsUseCase.execute(id)
-                .stream().map(mapper::toBinResponse).collect(Collectors.toList());
+        Map<String, BinOccupancy> occupancy = getBinOccupancyUseCase.executeByWarehouse(id);
+        return getBinLocationsUseCase.execute(id).stream().map(b -> {
+            BinLocationResponse r = mapper.toBinResponse(b);
+            BinOccupancy o = occupancy.get(r.getId());
+            r.setOccupiedWeight(o != null ? o.weight() : BigDecimal.ZERO);
+            r.setOccupiedVolume(o != null ? o.volume() : BigDecimal.ZERO);
+            r.setMaxWeight(maxWeightKg);
+            r.setMaxVolume(maxVolumeM3);
+            return r;
+        }).collect(Collectors.toList());
     }
 
     @DeleteMapping("/{warehouseId}/bin-locations/{binId}")

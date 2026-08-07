@@ -15,6 +15,8 @@ public class InventoryBatchResponse {
     /** Mã vị trí ô kệ dạng zone-aisle-rack-bin (VD: A-01-R1-B1). */
     private String binLocation;
     private String batchNumber;
+    /** Nhà cung cấp suy ra từ phiếu nhập (GRN->PO->supplier); null nếu lô không truy được nguồn. */
+    private String supplierName;
     private int quantity;
     private LocalDate expiryDate;
     private LocalDate manufacturedDate;

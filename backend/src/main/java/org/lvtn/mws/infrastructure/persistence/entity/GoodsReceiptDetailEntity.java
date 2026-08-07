@@ -1,5 +1,6 @@
 package org.lvtn.mws.infrastructure.persistence.entity;
 
+import java.math.BigDecimal;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -34,4 +35,11 @@ public class GoodsReceiptDetailEntity {
 
     @Column(name = "bin_location_id", length = 20, nullable = false)
     private String binLocationId;
+
+    // [lat4] NCC + đơn giá (giá vốn) chọn theo từng dòng khi nhập; nullable, tương thích ngược.
+    @Column(name = "supplier_id", length = 20)
+    private String supplierId;
+
+    @Column(name = "unit_price", precision = 15, scale = 2)
+    private BigDecimal unitPrice;
 }

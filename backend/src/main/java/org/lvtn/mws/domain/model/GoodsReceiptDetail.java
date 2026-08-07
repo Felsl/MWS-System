@@ -1,5 +1,6 @@
 package org.lvtn.mws.domain.model;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Objects;
 
@@ -18,6 +19,8 @@ public class GoodsReceiptDetail {
     private final String batchNumber;  // nullable
     private final LocalDate expiryDate; // nullable
     private final String binLocationId;
+    private final String supplierId;   // nullable — NCC chọn theo dòng
+    private final BigDecimal unitPrice; // nullable — đơn giá (giá vốn) theo dòng
 
     private GoodsReceiptDetail(Builder b) {
         this.id            = Objects.requireNonNull(b.id, "GRN detail id is required");
@@ -29,12 +32,16 @@ public class GoodsReceiptDetail {
         this.batchNumber   = b.batchNumber;
         this.expiryDate    = b.expiryDate;
         this.binLocationId = Objects.requireNonNull(b.binLocationId, "binLocationId is required");
+        this.supplierId    = b.supplierId;
+        this.unitPrice     = b.unitPrice;
     }
 
     public static Builder builder() { return new Builder(); }
 
     public static class Builder {
         private String id, grnId, productId, poDetailId, batchNumber, binLocationId;
+        private String supplierId;
+        private BigDecimal unitPrice;
         private int quantity;
         private LocalDate expiryDate;
 
@@ -46,6 +53,8 @@ public class GoodsReceiptDetail {
         public Builder batchNumber(String v)   { this.batchNumber = v; return this; }
         public Builder expiryDate(LocalDate v) { this.expiryDate = v; return this; }
         public Builder binLocationId(String v) { this.binLocationId = v; return this; }
+        public Builder supplierId(String v)    { this.supplierId = v; return this; }
+        public Builder unitPrice(BigDecimal v) { this.unitPrice = v; return this; }
         public GoodsReceiptDetail build()      { return new GoodsReceiptDetail(this); }
     }
 
@@ -65,4 +74,6 @@ public class GoodsReceiptDetail {
     public String getBatchNumber()  { return batchNumber; }
     public LocalDate getExpiryDate(){ return expiryDate; }
     public String getBinLocationId(){ return binLocationId; }
+    public String getSupplierId()   { return supplierId; }
+    public BigDecimal getUnitPrice(){ return unitPrice; }
 }

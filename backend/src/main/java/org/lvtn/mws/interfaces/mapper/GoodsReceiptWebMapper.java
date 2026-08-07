@@ -47,7 +47,9 @@ public interface GoodsReceiptWebMapper {
                         line.getQuantity(),
                         line.getBatchNumber(),
                         line.getExpiryDate(),
-                        line.getBinLocationId()))
+                        line.getBinLocationId(),
+                        line.getSupplierId(),
+                        line.getUnitPrice()))
                 .collect(Collectors.toList());
     }
 }

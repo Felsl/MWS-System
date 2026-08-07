@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Table, Button, Space, Modal, Form, Input, Popconfirm, Typography, Tag, Switch,
-  Drawer, Divider, App as AntdApp,
+  Drawer, Divider, App as AntdApp, Progress, Tooltip, theme,
 } from 'antd'
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, ClusterOutlined,
@@ -134,9 +134,31 @@ export default function WarehousesPage() {
 function BinLocationsDrawer({ warehouse, onClose }) {
   const { message } = AntdApp.useApp()
   const qc = useQueryClient()
+  const { token } = theme.useToken()   // màu cảnh báo theo token => đúng ở cả nền tối
   const open = !!warehouse
   const [genForm] = Form.useForm()
   const [showGen, setShowGen] = useState(false)
+
+  // [PA1] Cột sức chứa: thanh % đầy + cảnh báo mềm (chỉ đổi màu, KHÔNG chặn).
+  // max từ cấu hình (dùng chung mọi ô); 0/thiếu => "không giới hạn", chỉ hiện số đang chiếm.
+  const capacityColumn = (title, usedKey, maxKey, unit) => ({
+    title, key: usedKey, width: 150,
+    render: (_, row) => {
+      const used = Number(row[usedKey] || 0)
+      const max = Number(row[maxKey] || 0)
+      const usedText = Number.isInteger(used) ? used : used.toFixed(1)
+      if (!max) return <Typography.Text type="secondary">{used ? `${usedText} ${unit}` : '—'}</Typography.Text>
+      const pct = Math.round((used / max) * 100)
+      const strokeColor = pct > 100 ? token.colorError : pct >= 90 ? token.colorWarning : undefined
+      return (
+        <Tooltip title={`${usedText} / ${max} ${unit}${pct > 100 ? ' · vượt sức chứa' : ''}`}>
+          <Progress percent={Math.min(pct, 100)} size="small"
+            status={pct > 100 ? 'exception' : 'normal'} strokeColor={strokeColor}
+            format={() => `${pct}%`} />
+        </Tooltip>
+      )
+    },
+  })
 
   const bins = useQuery({
     queryKey: ['bins', warehouse?.id],
@@ -184,6 +206,8 @@ function BinLocationsDrawer({ warehouse, onClose }) {
     { title: 'Aisle', dataIndex: 'aisle', width: 80 },
     { title: 'Rack', dataIndex: 'rack', width: 80 },
     { title: 'Bin', dataIndex: 'bin', width: 80 },
+    capacityColumn('Tải trọng', 'occupiedWeight', 'maxWeight', 'kg'),
+    capacityColumn('Thể tích', 'occupiedVolume', 'maxVolume', 'm³'),
     {
       title: '', key: '_a', width: 60,
       render: (_, row) => (

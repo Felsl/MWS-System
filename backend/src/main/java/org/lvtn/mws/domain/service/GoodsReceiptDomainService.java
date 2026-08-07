@@ -133,6 +133,8 @@ public class GoodsReceiptDomainService {
                     .batchNumber(line.getBatchNumber())
                     .expiryDate(line.getExpiryDate())
                     .binLocationId(line.getBinLocationId())
+                    .supplierId(line.getSupplierId())
+                    .unitPrice(line.getUnitPrice())
                     .build());
         }
         grnDetailRepository.saveAll(details);
