@@ -9,4 +9,6 @@ public interface IPurchaseOrderDetailRepository {
     void saveAll(List<PurchaseOrderDetail> details);
     Optional<PurchaseOrderDetail> findById(String id);
     List<PurchaseOrderDetail> findByPoId(String poId);
+    /** Xoá toàn bộ dòng của một PO — dùng khi sửa đơn (thay mới toàn bộ dòng hàng). */
+    void deleteByPoId(String poId);
 }

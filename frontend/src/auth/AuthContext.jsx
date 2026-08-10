@@ -13,6 +13,7 @@ export function AuthProvider({ children }) {
   const logout = useCallback((silent = false) => {
     tokenStore.clear()
     localStorage.removeItem('mws_perms')
+    localStorage.removeItem('mws_role')
     setUser(null)
     if (!silent) message.info('Đã đăng xuất')
     // Điều hướng do ProtectedRoute lo (redirect về /login)
@@ -43,6 +44,7 @@ export function AuthProvider({ children }) {
     const data = await authApi.login(username, password) // LoginResponse
     tokenStore.set(data)
     localStorage.setItem('mws_perms', JSON.stringify(data.permissions || []))
+    localStorage.setItem('mws_role', data.role || '')
     setUser({
       userId: data.userId,
       username: data.username,
@@ -59,6 +61,7 @@ export function AuthProvider({ children }) {
       user,
       loading,
       isAuthenticated: !!user,
+      isAdmin: user?.role === 'ADMIN',
       permissions: user?.permissions || [],
       hasPermission: (p) => (Array.isArray(p) ? p.some(x => perms.has(x)) : perms.has(p)),
       login,
@@ -70,14 +73,21 @@ export function AuthProvider({ children }) {
 }
 
 function normalizeMe(me) {
-  // /me trả UserResponse (không có permissions). Giữ permissions cũ nếu có.
+  // /me trả UserResponse: chỉ có roleName (TÊN hiển thị), KHÔNG có mã role.
+  // Nếu chỉ lấy roleName thì sau F5 user.role != 'ADMIN' -> mất các nút chỉ-ADMIN.
+  // Nên ưu tiên mã role đã lưu lúc login; roleName chỉ là fallback cuối.
   return {
     userId: me.id,
     username: me.username,
     fullName: me.fullName,
-    role: me.roleName || me.role,
+    role: safeReadRole() || me.roleName || me.role,
     permissions: me.permissions || safeReadPerms(),
   }
+}
+
+// /me không trả mã role => đọc lại mã đã lưu lúc login (giống permissions).
+function safeReadRole() {
+  return localStorage.getItem('mws_role') || ''
 }
 
 // /me không trả permissions => đọc lại từ localStorage đã lưu lúc login.

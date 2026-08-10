@@ -8,6 +8,7 @@ import org.lvtn.mws.application.usecases.purchaseorder.GetPurchaseOrderDetailsUs
 import org.lvtn.mws.application.usecases.purchaseorder.RejectPurchaseOrderUseCase;
 import org.lvtn.mws.application.usecases.purchaseorder.SubmitPurchaseOrderForApprovalUseCase;
 import org.lvtn.mws.application.usecases.purchaseorder.SubmitPurchaseOrderForReviewUseCase;
+import org.lvtn.mws.application.usecases.purchaseorder.UpdatePurchaseOrderUseCase;
 import org.lvtn.mws.domain.model.PurchaseOrder;
 import org.lvtn.mws.interfaces.dto.request.purchaseorder.CreatePurchaseOrderRequest;
 import org.lvtn.mws.interfaces.dto.response.purchaseorder.PurchaseOrderResponse;
@@ -19,6 +20,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -37,6 +39,7 @@ public class PurchaseOrderController {
     private final SubmitPurchaseOrderForApprovalUseCase submitForApprovalUseCase;
     private final ApprovePurchaseOrderUseCase approveUseCase;
     private final RejectPurchaseOrderUseCase rejectUseCase;
+    private final UpdatePurchaseOrderUseCase updateUseCase;
     private final GetPurchaseOrderByIdUseCase getByIdUseCase;
     private final GetPurchaseOrderDetailsUseCase getDetailsUseCase;
     private final org.lvtn.mws.application.usecases.purchaseorder.GetAllPurchaseOrdersUseCase getAllUseCase;
@@ -54,6 +57,21 @@ public class PurchaseOrderController {
                 authentication.getName(),
                 webMapper.toCommands(request.getLines()));
         return ResponseEntity.status(HttpStatus.CREATED).body(buildResponse(po));
+    }
+
+    /** Sửa đơn mua chưa duyệt — CHỈ ADMIN. Trả về đơn sau khi sửa (kèm dòng chi tiết). */
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    @PutMapping("/{id}")
+    public ResponseEntity<PurchaseOrderResponse> update(
+            @PathVariable String id,
+            @Valid @RequestBody CreatePurchaseOrderRequest request) {
+        PurchaseOrder po = updateUseCase.execute(
+                id,
+                request.getSupplierId(),
+                request.getWarehouseId(),
+                request.getExpectedDate(),
+                webMapper.toCommands(request.getLines()));
+        return ResponseEntity.ok(buildResponse(po));
     }
 
     @PreAuthorize("hasAuthority('INBOUND_CREATE_PO')")

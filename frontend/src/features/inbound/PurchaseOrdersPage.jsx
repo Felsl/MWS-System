@@ -7,7 +7,7 @@ import { useMemo } from "react";
 import { useProducts } from "../../hooks/useProducts";
 import { useRecordView } from "../../hooks/useRecordView";
 import { useListParams } from "../../hooks/useListParams";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   keepPreviousData,
   useQuery,
@@ -43,6 +43,7 @@ import {
   CloseOutlined,
   InboxOutlined,
   ArrowLeftOutlined,
+  EditOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import Can from "../../components/Can";
@@ -287,10 +288,15 @@ function useLookups() {
 const productOptions = (list) =>
   list.map((p) => ({ value: p.id, label: `${p.name} · ${p.sku}` }));
 
-// ---- Form tạo PO ----
+// ---- Form tạo / sửa PO ----
+// Khi điều hướng kèm state { editPo } (từ nút "Sửa" ở màn chi tiết) thì form
+// chạy ở chế độ SỬA: prefill toàn bộ dữ liệu đơn và submit gọi API update.
 function CreatePO({ onCreated }) {
   const { message } = AntdApp.useApp();
   const [form] = Form.useForm();
+  const location = useLocation();
+  const editPo = location.state?.editPo || null;
+  const isEdit = !!editPo;
   const { suppliers, warehouses, productList } = useLookups();
   const { user } = useAuth();
   // Đơn giá tự điền theo giá vốn (costPrice); khoá mặc định, chỉ ADMIN sửa tay.
@@ -304,10 +310,37 @@ function CreatePO({ onCreated }) {
     );
   };
 
-  const createMut = useMutation({
-    mutationFn: purchaseOrdersApi.create,
+  // Giá trị khởi tạo: chế độ sửa nạp lại kho/ngày dự kiến/toàn bộ dòng của đơn.
+  const initialValues = isEdit
+    ? {
+        warehouseId: editPo.warehouseId,
+        expectedDate: editPo.expectedDate ? dayjs(editPo.expectedDate) : null,
+        lines: (editPo.details || []).map((d) => ({
+          productId: d.productId,
+          supplierId: d.supplierId,
+          quantityOrdered: d.quantityOrdered,
+          unitPrice: d.unitPrice != null ? Number(d.unitPrice) : undefined,
+        })),
+      }
+    : { lines: [{}] };
+
+  const qc = useQueryClient();
+  const saveMut = useMutation({
+    mutationFn: (body) =>
+      isEdit
+        ? purchaseOrdersApi.update(editPo.id, body)
+        : purchaseOrdersApi.create(body),
     onSuccess: (po) => {
-      message.success(`Đã tạo đơn ${po.poNumber || ""}`.trim());
+      // Ghi thẳng dữ liệu vừa lưu vào cache để màn chi tiết hiện NGAY (không cần F5):
+      // response update/create đã kèm details (giá/NCC mới). Không có dòng này thì
+      // useQuery(['po', id]) trả bản cache cũ trước khi refetch → thấy giá cũ.
+      qc.setQueryData(["po", po.id], po);
+      qc.invalidateQueries({ queryKey: ["po-list"] });
+      message.success(
+        isEdit
+          ? `Đã cập nhật đơn ${po.poNumber || ""}`.trim()
+          : `Đã tạo đơn ${po.poNumber || ""}`.trim(),
+      );
       onCreated(po);
     },
     onError: (e) => handleFormError(form, e, message),
@@ -315,7 +348,7 @@ function CreatePO({ onCreated }) {
 
   const submit = async () => {
     const v = await form.validateFields();
-    createMut.mutate({
+    saveMut.mutate({
       warehouseId: v.warehouseId,
       expectedDate: v.expectedDate ? v.expectedDate.format("YYYY-MM-DD") : null,
       lines: v.lines.map((l) => ({
@@ -328,8 +361,12 @@ function CreatePO({ onCreated }) {
   };
 
   return (
-    <Card title="Tạo đơn mua mới">
-      <Form form={form} layout="vertical" initialValues={{ lines: [{}] }}>
+    <Card
+      title={
+        isEdit ? `Sửa đơn mua ${editPo.poNumber || editPo.id}` : "Tạo đơn mua mới"
+      }
+    >
+      <Form form={form} layout="vertical" initialValues={initialValues}>
         <Row gutter={16}>
           <Col xs={24} md={12}>
             <Form.Item
@@ -454,8 +491,8 @@ function CreatePO({ onCreated }) {
         </Form.List>
 
         <div style={{ marginTop: 16, textAlign: "right" }}>
-          <Button type="primary" onClick={submit} loading={createMut.isPending}>
-            Tạo đơn
+          <Button type="primary" onClick={submit} loading={saveMut.isPending}>
+            {isEdit ? "Lưu thay đổi" : "Tạo đơn"}
           </Button>
         </div>
       </Form>
@@ -466,7 +503,7 @@ function CreatePO({ onCreated }) {
 // ---- Chi tiết PO + workflow ----
 function PODetail({ id }) {
   const { message } = AntdApp.useApp();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { productMap, supplierMap, warehouseMap } = useLookups();
@@ -596,6 +633,17 @@ function PODetail({ id }) {
                 Trình phê duyệt
               </Button>
             </Can>
+          )}
+          {s === "PENDING_APPROVAL" && user?.role === "ADMIN" && (
+            <Button
+              icon={<EditOutlined />}
+              disabled={busy}
+              onClick={() =>
+                navigate("/purchase-orders/new", { state: { editPo: po } })
+              }
+            >
+              Sửa
+            </Button>
           )}
           {s === "PENDING_APPROVAL" && (
             <Can permission={P.INBOUND_APPROVE_PO}>

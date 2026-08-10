@@ -35,4 +35,9 @@ public class PurchaseOrderDetailRepositoryImpl implements IPurchaseOrderDetailRe
     public List<PurchaseOrderDetail> findByPoId(String poId) {
         return mapper.toDomainList(jpa.findByPoId(poId));
     }
+
+    @Override
+    public void deleteByPoId(String poId) {
+        jpa.deleteByPoId(poId);
+    }
 }

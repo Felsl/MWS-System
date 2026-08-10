@@ -89,6 +89,68 @@ public class PurchaseOrderDomainService {
         return saved;
     }
 
+    // ── Update (sửa đơn) ─────────────────────────────────────────────────────
+
+    /**
+     * Sửa toàn bộ nội dung một đơn mua: kho nhận, ngày dự kiến và toàn bộ dòng hàng.
+     * Chỉ cho sửa khi đơn CHƯA được duyệt (DRAFT / PENDING_REVIEW / PENDING_APPROVAL);
+     * đơn đã duyệt/đặt/đóng/từ chối/huỷ không được sửa vì có thể đã phát sinh nhập kho.
+     * Giữ nguyên id, poNumber, người tạo, thời điểm tạo và TRẠNG THÁI hiện tại
+     * (đơn đang chờ phê duyệt sau khi sửa vẫn ở PENDING_APPROVAL để người duyệt duyệt tiếp).
+     * Toàn bộ dòng cũ bị thay bằng dòng mới.
+     */
+    public PurchaseOrder update(String poId, String supplierId, String warehouseId,
+                                java.time.LocalDate expectedDate, List<PurchaseOrderLineCommand> lines) {
+        if (lines == null || lines.isEmpty()) {
+            throw new IllegalArgumentException("Đơn mua phải có ít nhất một dòng hàng");
+        }
+        PurchaseOrder current = findById(poId);
+        PurchaseOrder.Status s = current.getStatus();
+        if (s != PurchaseOrder.Status.DRAFT
+                && s != PurchaseOrder.Status.PENDING_REVIEW
+                && s != PurchaseOrder.Status.PENDING_APPROVAL) {
+            throw new IllegalStateException("Chỉ đơn chưa được duyệt mới được sửa");
+        }
+
+        // NCC đầu phiếu (purchase_orders.supplier_id NOT NULL) = NCC dòng đầu, giống lúc tạo.
+        String headerSupplierId = (supplierId != null && !supplierId.isBlank())
+                ? supplierId : lines.get(0).getSupplierId();
+
+        // Các trường id/poNumber/warehouseId/supplierId là bất biến trong model nên dựng lại
+        // aggregate, giữ nguyên id/poNumber/người tạo/thời điểm tạo/trạng thái/người duyệt.
+        PurchaseOrder updated = PurchaseOrder.builder()
+                .id(current.getId())
+                .poNumber(current.getPoNumber())
+                .supplierId(headerSupplierId)
+                .warehouseId(warehouseId)
+                .expectedDate(expectedDate)
+                .createdBy(current.getCreatedBy())
+                .status(current.getStatus())
+                .approvedBy(current.getApprovedBy())
+                .approvedAt(current.getApprovedAt())
+                .createdAt(current.getCreatedAt())
+                .updatedAt(java.time.LocalDateTime.now())
+                .build();
+        PurchaseOrder saved = poRepository.save(updated);
+
+        // Thay toàn bộ dòng: xoá dòng cũ, ghi dòng mới.
+        poDetailRepository.deleteByPoId(poId);
+        List<PurchaseOrderDetail> details = new ArrayList<>();
+        for (PurchaseOrderLineCommand line : lines) {
+            details.add(PurchaseOrderDetail.builder()
+                    .id(idGenerator.generate())
+                    .poId(poId)
+                    .productId(line.getProductId())
+                    .quantityOrdered(line.getQuantityOrdered())
+                    .quantityReceived(0)
+                    .unitPrice(line.getUnitPrice())
+                    .supplierId(line.getSupplierId())
+                    .build());
+        }
+        poDetailRepository.saveAll(details);
+        return saved;
+    }
+
     // ── Workflow transitions ───────────────────────────────────────────────
 
     public PurchaseOrder submitForReview(String poId) {
