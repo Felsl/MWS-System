@@ -24,6 +24,7 @@ import { getErrorMessage } from '../../api/client'
 import { handleFormError } from '../../utils/formErrors'
 import { P } from '../../constants/permissions'
 import { salesOrdersApi } from '../../api/salesOrders.api'
+import { inventoryApi } from '../../api/inventory.api'
 import { usePickingStatusBySo } from '../../hooks/useSalesOrderLookup'
 import { SO_STATUS_OPTS, soStatusMeta } from './soStatus'
 import { pickingListsApi } from '../../api/pickingLists.api'
@@ -122,13 +123,39 @@ function useLookups() {
   const { query: products, list: productList, map: productMap } = useProducts()
   return { customers, warehouses, products, productList, productMap, customerMap, warehouseMap }
 }
-const productOptions = (list) => list.map(p => ({ value: p.id, label: `${p.name} · ${p.sku}` }))
-
 function CreateSO({ onCreated }) {
   const { message } = AntdApp.useApp()
   const { user } = useAuth()
   const [form] = Form.useForm()
   const { customers, warehouses, productList } = useLookups()
+
+  // Kho xuất -> chỉ lấy sản phẩm CÓ TỒN trong kho đó, và tồn khả dụng để chặn SL.
+  const warehouseId = Form.useWatch('warehouseId', form)
+  const lines = Form.useWatch('lines', form)
+  const inv = useQuery({
+    queryKey: ['so-inv', warehouseId],
+    queryFn: () => inventoryApi.getByWarehouse(warehouseId),
+    enabled: !!warehouseId,
+  })
+  const whInv = inv.data || []
+  const pById = Object.fromEntries((productList || []).map(p => [p.id, p]))
+  // Chỉ sản phẩm còn tồn khả dụng > 0 trong kho đang chọn.
+  const whProductOptions = whInv
+    .filter(r => r.availableQuantity > 0)
+    .map(r => ({
+      value: r.productId,
+      label: `${pById[r.productId]?.name || r.productId}${pById[r.productId]?.sku ? ` · ${pById[r.productId].sku}` : ''} (tồn ${r.availableQuantity})`,
+    }))
+  const availByProduct = Object.fromEntries(whInv.map(r => [r.productId, r.availableQuantity]))
+
+  // Chọn sản phẩm -> tự điền đơn giá = giá vốn + 20% (làm tròn); vẫn sửa được.
+  const fillPriceFromProduct = (name, productId) => {
+    const cp = pById[productId]?.costPrice
+    const price = cp != null ? Math.round(Number(cp) * 1.2) : 0
+    form.setFieldValue(['lines', name, 'unitPrice'], price)
+  }
+  // Đổi kho -> xoá các dòng cũ (sản phẩm thuộc kho khác không còn hợp lệ).
+  const onWarehouseChange = () => form.setFieldsValue({ lines: [{}] })
 
   const createMut = useMutation({
     mutationFn: salesOrdersApi.create,
@@ -167,6 +194,7 @@ function CreateSO({ onCreated }) {
           <Col xs={24} md={8}>
             <Form.Item name="warehouseId" label="Kho xuất" rules={[{ required: true, message: 'Chọn kho' }]}>
               <Select showSearch optionFilterProp="label" loading={warehouses.isLoading} placeholder="Chọn kho"
+                onChange={onWarehouseChange}
                 options={(warehouses.data || []).map(w => ({ value: w.id, label: `${w.name} (${w.code})` }))} />
             </Form.Item>
           </Col>
@@ -195,12 +223,30 @@ function CreateSO({ onCreated }) {
                 <Row gutter={8} key={key} align="middle">
                   <Col flex="auto">
                     <Form.Item {...rest} name={[name, 'productId']} rules={[{ required: true, message: 'Chọn SP' }]}>
-                      <Select showSearch optionFilterProp="label" placeholder="Sản phẩm" options={productOptions(productList)} />
+                      <Select showSearch optionFilterProp="label"
+                        placeholder={warehouseId ? 'Sản phẩm trong kho' : 'Chọn kho trước'}
+                        disabled={!warehouseId} loading={inv.isLoading}
+                        notFoundContent={warehouseId ? 'Kho này không còn tồn khả dụng' : null}
+                        options={whProductOptions}
+                        onChange={(pid) => fillPriceFromProduct(name, pid)} />
                     </Form.Item>
                   </Col>
                   <Col flex="120px">
-                    <Form.Item {...rest} name={[name, 'quantityOrdered']} rules={[{ required: true, message: 'SL' }]}>
-                      <InputNumber min={1} placeholder="SL" style={{ width: '100%' }} />
+                    <Form.Item {...rest} name={[name, 'quantityOrdered']}
+                      rules={[
+                        { required: true, message: 'SL' },
+                        ({ getFieldValue }) => ({
+                          validator(_, value) {
+                            const pid = getFieldValue(['lines', name, 'productId'])
+                            const avail = availByProduct[pid]
+                            if (pid == null || avail == null || value == null || value <= avail) return Promise.resolve()
+                            return Promise.reject(new Error(`Tối đa ${avail} (tồn khả dụng)`))
+                          },
+                        }),
+                      ]}>
+                      <InputNumber min={1}
+                        max={availByProduct[lines?.[name]?.productId] ?? undefined}
+                        placeholder="SL" style={{ width: '100%' }} />
                     </Form.Item>
                   </Col>
                   <Col flex="150px">
