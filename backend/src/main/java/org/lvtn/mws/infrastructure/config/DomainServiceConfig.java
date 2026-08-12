@@ -65,9 +65,11 @@ public class DomainServiceConfig {
             ISalesOrderRepository salesOrderRepository,
             IInventoryRepository inventoryRepository,
             IIdGenerator idGenerator,
-            ISalesOrderNumberGenerator salesOrderNumberGenerator) {
+            ISalesOrderNumberGenerator salesOrderNumberGenerator,
+            IUserRepository userRepository
+            ) {
         return new SalesOrderDomainService(
-                salesOrderRepository, inventoryRepository, idGenerator, salesOrderNumberGenerator);
+                salesOrderRepository, inventoryRepository, idGenerator, salesOrderNumberGenerator,userRepository);
     }
 
     @Bean
@@ -76,10 +78,12 @@ public class DomainServiceConfig {
             ISalesOrderRepository salesOrderRepository,
             IInventoryBatchRepository inventoryBatchRepository,
             IStockMovementRepository stockMovementRepository,
-            IIdGenerator idGenerator) {
+            IIdGenerator idGenerator,
+            IUserRepository iUserRepository
+    ) {
         return new PickingDomainService(
                 pickingListRepository, salesOrderRepository, inventoryBatchRepository,
-                stockMovementRepository, idGenerator);
+                stockMovementRepository, idGenerator,iUserRepository);
     }
 
     @Bean

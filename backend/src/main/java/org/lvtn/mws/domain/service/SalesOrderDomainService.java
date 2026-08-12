@@ -1,16 +1,11 @@
 package org.lvtn.mws.domain.service;
 
-import org.lvtn.mws.domain.model.Inventory;
-import org.lvtn.mws.domain.model.SalesOrder;
-import org.lvtn.mws.domain.model.SalesOrderDetail;
-import org.lvtn.mws.domain.model.SalesOrderLineCommand;
-import org.lvtn.mws.domain.repository.IIdGenerator;
-import org.lvtn.mws.domain.repository.IInventoryRepository;
-import org.lvtn.mws.domain.repository.ISalesOrderNumberGenerator;
-import org.lvtn.mws.domain.repository.ISalesOrderRepository;
+import org.lvtn.mws.domain.model.*;
+import org.lvtn.mws.domain.repository.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -21,16 +16,20 @@ public class SalesOrderDomainService {
 
     private final ISalesOrderRepository soRepository;
     private final IInventoryRepository inventoryRepository;
+    private final IUserRepository userRepository;
     private final IIdGenerator idGenerator;
     private final ISalesOrderNumberGenerator soNumberGenerator;
 
     public SalesOrderDomainService(ISalesOrderRepository soRepository,
                                    IInventoryRepository inventoryRepository,
                                    IIdGenerator idGenerator,
-                                   ISalesOrderNumberGenerator soNumberGenerator) {
+                                   ISalesOrderNumberGenerator soNumberGenerator,
+                                   IUserRepository userRepository
+                                   ) {
         this.soRepository       = soRepository;
         this.inventoryRepository = inventoryRepository;
         this.idGenerator        = idGenerator;
+        this.userRepository = userRepository;
         this.soNumberGenerator  = soNumberGenerator;
     }
 
@@ -41,16 +40,23 @@ public class SalesOrderDomainService {
                              LocalDate requiredDate,
                              String createdBy,
                              List<SalesOrderLineCommand> lines) {
+        BigDecimal totalDiscountAmount=BigDecimal.ZERO,totalAmount= BigDecimal.ZERO;
+
         if (lines == null || lines.isEmpty()) {
             throw new IllegalArgumentException("Đơn bán hàng phải có ít nhất 1 dòng sản phẩm");
         }
+        for (SalesOrderLineCommand line : lines) {
+            totalAmount = BigDecimal.valueOf(line.quantityOrdered()).multiply(line.unitPrice());
+            totalDiscountAmount = totalAmount.multiply(line.discountPercent().divide(BigDecimal.valueOf(100)));
+        }
+
         String soId = idGenerator.generate();
         SalesOrder so = new SalesOrder.Builder()
                 .id(soId)
                 .soNumber(soNumberGenerator.next())
                 .warehouseId(warehouseId)
                 .customerId(customerId)
-                .discountAmount(discountAmount)
+                .discountAmount(totalDiscountAmount)
                 .priority(priority)
                 .requiredDate(requiredDate)
                 .status(SalesOrder.Status.DRAFT)
@@ -77,7 +83,25 @@ public class SalesOrderDomainService {
     }
 
     public List<SalesOrder> findAll() {
-        return soRepository.findAll();
+        List<SalesOrder> findAll =soRepository.findAll();
+        List<SalesOrder> newList = new ArrayList<SalesOrder>();
+
+        for(SalesOrder sl : findAll){
+            String createBy = userRepository.findById(sl.getCreatedBy()).map(User::getUsername).orElse("-");
+            SalesOrder temp = new SalesOrder.Builder()
+                    .id(sl.getId())
+                    .soNumber(sl.getSoNumber())
+                    .warehouseId(sl.getWarehouseId())
+                    .customerId(sl.getCustomerId())
+                    .discountAmount(sl.getDiscountAmount())
+                    .priority(sl.getPriority())
+                    .requiredDate(sl.getRequiredDate())
+                    .status(SalesOrder.Status.DRAFT)
+                    .createdBy(createBy)
+                    .build();
+            newList.add(temp);
+        }
+        return newList;
     }
 
     /** [A2] Danh sách đơn xuất đã lọc theo phạm vi kho của user. */
@@ -88,6 +112,30 @@ public class SalesOrderDomainService {
     /** [B4] Tìm kiếm + phân trang (đã lọc theo phạm vi kho). */
     public org.lvtn.mws.domain.common.PageResult<SalesOrder> search(
             String keyword, String status, org.lvtn.mws.domain.common.PageQuery pageQuery) {
+//        org.lvtn.mws.domain.common.PageResult<SalesOrder> pageResult = soRepository.search(keyword, status, pageQuery);
+//        java.util.List<SalesOrder> domainList = pageResult.content().stream()
+//                .toList();
+//
+//        List<SalesOrder> newList = new ArrayList<SalesOrder>();
+//
+//        for(SalesOrder sl : domainList){
+//            String createBy = userRepository.findById(sl.getCreatedBy()).map(User::getUsername).orElse("-");
+//            SalesOrder temp = new SalesOrder.Builder()
+//                    .id(sl.getId())
+//                    .soNumber(sl.getSoNumber())
+//                    .warehouseId(sl.getWarehouseId())
+//                    .customerId(sl.getCustomerId())
+//                    .discountAmount(sl.getDiscountAmount())
+//                    .priority(sl.getPriority())
+//                    .requiredDate(sl.getRequiredDate())
+//                    .status(SalesOrder.Status.DRAFT)
+//                    .createdBy(createBy)
+//                    .build();
+//            newList.add(temp);
+//        }
+//
+//        return new org.lvtn.mws.domain.common.PageResult<>(newList.stream().toList(),
+//        pageResult.page(), pageResult.size(), pageResult.totalElements());
         return soRepository.search(keyword, status, pageQuery);
     }
 

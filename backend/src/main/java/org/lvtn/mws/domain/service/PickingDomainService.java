@@ -1,18 +1,9 @@
 package org.lvtn.mws.domain.service;
 
-import org.lvtn.mws.domain.model.InventoryBatch;
-import org.lvtn.mws.domain.model.InsufficientStockException;
-import org.lvtn.mws.domain.model.PickingList;
-import org.lvtn.mws.domain.model.PickingListDetail;
-import org.lvtn.mws.domain.model.SalesOrder;
-import org.lvtn.mws.domain.model.SalesOrderDetail;
-import org.lvtn.mws.domain.model.StockMovement;
-import org.lvtn.mws.domain.repository.IIdGenerator;
-import org.lvtn.mws.domain.repository.IInventoryBatchRepository;
-import org.lvtn.mws.domain.repository.IPickingListRepository;
-import org.lvtn.mws.domain.repository.ISalesOrderRepository;
-import org.lvtn.mws.domain.repository.IStockMovementRepository;
+import org.lvtn.mws.domain.model.*;
+import org.lvtn.mws.domain.repository.*;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +21,7 @@ import java.util.Map;
 public class PickingDomainService {
 
     private final IPickingListRepository pickingRepository;
+    private final IUserRepository userRepository;
     private final ISalesOrderRepository soRepository;
     private final IInventoryBatchRepository batchRepository;
     private final IStockMovementRepository stockMovementRepository;
@@ -39,11 +31,13 @@ public class PickingDomainService {
                                 ISalesOrderRepository soRepository,
                                 IInventoryBatchRepository batchRepository,
                                 IStockMovementRepository stockMovementRepository,
-                                IIdGenerator idGenerator) {
+                                IIdGenerator idGenerator,
+                                IUserRepository iUserRepository) {
         this.pickingRepository       = pickingRepository;
         this.soRepository            = soRepository;
         this.batchRepository         = batchRepository;
         this.stockMovementRepository = stockMovementRepository;
+        this.userRepository          = iUserRepository;
         this.idGenerator             = idGenerator;
     }
 
@@ -224,7 +218,24 @@ public class PickingDomainService {
 
     /** Danh sách toàn bộ lệnh gom hàng (đọc). */
     public List<PickingList> findAll() {
-        return pickingRepository.findAll();
+        List<PickingList> findAll =pickingRepository.findAll();
+        List<PickingList> newList = new ArrayList<PickingList>();
+
+        for(PickingList sl : findAll){
+            String userName = userRepository.findById(sl.getAssignedTo()).map(User::getUsername).orElse("-");
+            PickingList temp = new PickingList.Builder()
+                    .id(sl.getId())
+                    .pickNumber(sl.getPickNumber())
+                    .soId(sl.getSoId())
+                    .transferOrderId(sl.getTransferOrderId())
+                    .assignedTo(userName)
+                    .status(sl.getStatus())
+                    .startedAt(sl.getStartedAt())
+                    .completedAt(sl.getCompletedAt())
+                    .build();
+            newList.add(temp);
+        }
+        return newList;
     }
 
     public PickingList getById(String id) {

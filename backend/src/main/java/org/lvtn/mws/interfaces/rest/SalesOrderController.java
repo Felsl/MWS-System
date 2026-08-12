@@ -15,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
 
@@ -39,7 +40,7 @@ public class SalesOrderController {
                         l.productId(), l.quantityOrdered(), l.unitPrice(), l.discountPercent()))
                 .toList();
         var so = createSalesOrderUseCase.execute(
-                req.warehouseId(), req.customerId(), req.discountAmount(),
+                req.warehouseId(), req.customerId(), BigDecimal.ZERO,
                 req.priority() == null ? 0 : req.priority(), req.requiredDate(), req.createdBy(), lines);
         return ResponseEntity.status(HttpStatus.CREATED).body(mapper.toResponse(so));
     }

@@ -204,11 +204,6 @@ function CreateSO({ onCreated }) {
             </Form.Item>
           </Col>
           <Col xs={12} md={4}>
-            <Form.Item name="discountAmount" label="Giảm giá (đ)">
-              <InputNumber min={0} style={{ width: '100%' }} formatter={fmt} parser={parse} />
-            </Form.Item>
-          </Col>
-          <Col xs={12} md={4}>
             <Form.Item name="priority" label="Ưu tiên" tooltip="Số càng lớn càng ưu tiên (mặc định 0)">
               <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
             </Form.Item>

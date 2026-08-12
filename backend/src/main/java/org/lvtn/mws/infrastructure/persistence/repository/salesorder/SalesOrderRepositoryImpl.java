@@ -61,6 +61,7 @@ public class SalesOrderRepositoryImpl implements ISalesOrderRepository {
                 pageQuery.page(), pageQuery.size(),
                 resolveSort(pageQuery));
         var pageEntity = jpa.findAll(spec, pageable);
+
         return new org.lvtn.mws.domain.common.PageResult<>(
                 pageEntity.getContent().stream().map(mapper::toDomain).toList(),
                 pageQuery.page(), pageQuery.size(), pageEntity.getTotalElements());

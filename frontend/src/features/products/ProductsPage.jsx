@@ -319,21 +319,19 @@ export default function ProductsPage() {
             >
               <Input style={{ width: 200 }} />
             </Form.Item>
-            <Form.Item name="barcode" label="Barcode">
-              <Input style={{ width: 200 }} />
-            </Form.Item>
-          </Space>
-          <Form.Item
+                      <Form.Item
             name="name"
             label="Tên sản phẩm"
             rules={[{ required: true, message: "Nhập tên" }]}
           >
-            <Input />
+            <Input style={{width: 372}} />
           </Form.Item>
+          </Space>
+
           <Space style={{ display: "flex" }} align="start" wrap>
             <Form.Item name="categoryId" label="Nhóm sản phẩm">
               <Select
-                style={{ width: 200 }}
+                style={{ width: 268 }}
                 options={catOptions}
                 allowClear
                 loading={categories.isLoading}
