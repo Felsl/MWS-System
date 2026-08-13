@@ -187,7 +187,7 @@ function WarehouseAccessModal({ user, onClose }) {
       onCancel={onClose}
       onOk={() => {
         if (!selected.length) {
-          message.warning('Chọn ít nhất 1 kho. BE hiện chưa hỗ trợ bỏ toàn bộ kho của người dùng.')
+          message.warning('Chọn ít nhất 1 kho. hiện tại chưa hỗ trợ bỏ toàn bộ kho của người dùng.')
           return
         }
         saveMut.mutate(selected)
@@ -197,7 +197,7 @@ function WarehouseAccessModal({ user, onClose }) {
       destroyOnClose
     >
       <Typography.Paragraph type="secondary">
-        Chọn các kho người dùng được phép thao tác. BE sẽ lọc dữ liệu theo danh sách này.
+        Chọn các kho người dùng được phép thao tác. 
       </Typography.Paragraph>
 
       {warehouses.isError && (

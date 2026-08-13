@@ -16,6 +16,7 @@ import { purchaseOrdersApi } from '../../api/purchaseOrders.api'
 import { salesOrdersApi } from '../../api/salesOrders.api'
 import { transferOrdersApi } from '../../api/transferOrders.api'
 import { adjustmentsApi } from '../../api/adjustments.api'
+import { stockDemandsApi } from '../../api/stockDemands.api'
 import { useStockOverview } from './useStockOverview'
 import { useProducts } from '../../hooks/useProducts'
 import StockBarChart from '../../components/StockBarChart'
@@ -129,6 +130,9 @@ export default function DashboardPage() {
       {/* Khu tồn kho: biểu đồ + cảnh báo, dùng CHUNG một lần lấy dữ liệu. */}
       {has(P.INVENTORY_VIEW) && has(P.WAREHOUSE_VIEW) && <StockSection />}
 
+      {/* [Bán vượt tồn] Nhu cầu nhập gấp — chỉ bộ phận mua hàng. */}
+      {has(P.INBOUND_CREATE_PO) && <DemandSection />}
+
       <Card title="Thông báo gần đây" style={{ marginTop: 16 }}>
         {(!notifications || notifications.length === 0)
           ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có thông báo" />
@@ -150,6 +154,51 @@ export default function DashboardPage() {
   )
 }
 
+
+/**
+ * [Bán vượt tồn] Card "Nhu cầu chưa đủ hàng" — danh sách backorder OPEN, nhiều thiếu trước.
+ * Chỉ hiện cho bộ phận mua (đã gate bằng quyền INBOUND_CREATE_PO ở nơi gọi).
+ */
+function DemandSection() {
+  const navigate = useNavigate()
+  const q = useQuery({ queryKey: ['stock-demands'], queryFn: stockDemandsApi.open })
+  const rows = (q.data || []).slice().sort((a, b) => b.quantityShort - a.quantityShort)
+
+  // Tạo PO điền sẵn đúng dòng nhu cầu (loại hàng, SL, kho, NCC).
+  const createPO = (d) => navigate('/purchase-orders/new', {
+    state: {
+      prefill: {
+        warehouseId: d.warehouseId,
+        lines: [{ productId: d.productId, supplierId: d.supplierId || undefined, quantityOrdered: d.quantityShort }],
+      },
+    },
+  })
+
+  return (
+    <Card title={<span><WarningOutlined /> Nhu cầu chưa đủ hàng (cần nhập gấp)</span>} style={{ marginTop: 16 }}>
+      {q.isLoading
+        ? <Skeleton active paragraph={{ rows: 3 }} title={false} />
+        : rows.length === 0
+          ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không có nhu cầu nào" />
+          : (
+            <List size="small" dataSource={rows}
+              renderItem={(d) => (
+                <List.Item
+                  actions={[
+                    <Button key="po" type="link" size="small"
+                      onClick={() => createPO(d)}>Tạo PO</Button>,
+                  ]}>
+                  <List.Item.Meta
+                    title={<span>{d.productName || d.productId}
+                      {d.soNumber ? <Tag style={{ marginLeft: 8 }}>{d.soNumber}</Tag> : null}</span>}
+                    description={<span>Kho {d.warehouseName || d.warehouseId}{(d.supplierName || d.supplierId) ? ` · NCC ${d.supplierName || d.supplierId}` : ''}</span>} />
+                  <Tag color="orange">thiếu {d.quantityShort}</Tag>
+                </List.Item>
+              )} />
+          )}
+    </Card>
+  )
+}
 
 /**
  * Khu tồn kho trên Dashboard, 2 hàng dùng CHUNG một hook (useStockOverview):

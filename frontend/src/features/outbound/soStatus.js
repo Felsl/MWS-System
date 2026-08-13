@@ -7,6 +7,7 @@
 export const SO_STATUS = {
   DRAFT: { color: 'default', label: 'Nháp' },
   ALLOCATED: { color: 'blue', label: 'Đã phân bổ' },
+  PARTIALLY_ALLOCATED: { color: 'orange', label: 'Phân bổ một phần' },
   PICKING: { color: 'gold', label: 'Đang lấy hàng' },
   SHIPPED: { color: 'green', label: 'Đã xuất' },
   CANCELLED: { color: 'red', label: 'Đã huỷ' },

@@ -64,12 +64,15 @@ public class DomainServiceConfig {
     public SalesOrderDomainService salesOrderDomainService(
             ISalesOrderRepository salesOrderRepository,
             IInventoryRepository inventoryRepository,
+            IInventoryBatchRepository inventoryBatchRepository,
+            org.lvtn.mws.domain.repository.IStockDemandRepository stockDemandRepository,
             IIdGenerator idGenerator,
             ISalesOrderNumberGenerator salesOrderNumberGenerator,
             IUserRepository userRepository
             ) {
         return new SalesOrderDomainService(
-                salesOrderRepository, inventoryRepository, idGenerator, salesOrderNumberGenerator,userRepository);
+                salesOrderRepository, inventoryRepository, inventoryBatchRepository,
+                stockDemandRepository, idGenerator, salesOrderNumberGenerator, userRepository);
     }
 
     @Bean

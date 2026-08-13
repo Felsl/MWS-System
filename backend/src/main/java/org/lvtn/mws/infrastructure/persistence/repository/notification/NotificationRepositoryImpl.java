@@ -40,4 +40,9 @@ public class NotificationRepositoryImpl implements INotificationRepository {
     public int markAllReadForUser(String userId) {
         return jpa.markAllReadForUser(userId);
     }
+
+    @Override
+    public int deleteByReference(String referenceType, String referenceId) {
+        return jpa.deleteByReference(referenceType, referenceId);
+    }
 }

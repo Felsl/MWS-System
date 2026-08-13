@@ -64,8 +64,10 @@ public class PickingDomainService {
 
         for (SalesOrderDetail line : so.getDetails()) {
             int remaining = line.getQuantityOrdered();
+            // [Bán theo NCC] chỉ gom lô của đúng NCC dòng đã chọn (null = mọi NCC).
             List<InventoryBatch> batches =
-                    batchRepository.findActiveBatchesForPicking(line.getProductId(), so.getWarehouseId());
+                    batchRepository.findActiveBatchesForPickingBySupplier(
+                            line.getProductId(), so.getWarehouseId(), line.getSupplierId());
 
             for (InventoryBatch batch : batches) {
                 if (remaining <= 0) break;
@@ -177,8 +179,10 @@ public class PickingDomainService {
             }
 
             int remaining = shortfall;
+            // [Bán theo NCC] bù thiếu vẫn trong phạm vi NCC của lô đang nhặt.
             List<InventoryBatch> batches =
-                    batchRepository.findActiveBatchesForPicking(productId, warehouseId);
+                    batchRepository.findActiveBatchesForPickingBySupplier(
+                            productId, warehouseId, scanned.getSupplierId());
 
             for (InventoryBatch batch : batches) {
                 if (remaining <= 0) break;

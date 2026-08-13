@@ -14,4 +14,7 @@ public interface INotificationRepository {
     long countUnreadForUser(String userId);
     /** Đánh dấu đã đọc toàn bộ thông báo cá nhân của user; trả số dòng cập nhật. */
     int markAllReadForUser(String userId);
+
+    /** [PO] Xóa hẳn thông báo theo đối tượng (vd ẩn "PO chờ duyệt" khi PO đã duyệt/từ chối). */
+    int deleteByReference(String referenceType, String referenceId);
 }

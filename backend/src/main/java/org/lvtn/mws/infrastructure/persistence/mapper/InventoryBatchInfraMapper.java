@@ -16,6 +16,8 @@ public interface InventoryBatchInfraMapper {
         e.setBinLocationId(domain.getBinLocationId());
         e.setBatchNumber(domain.getBatchNumber());
         e.setQuantity(domain.getQuantity());
+        e.setReservedQuantity(domain.getReservedQuantity());
+        e.setSupplierId(domain.getSupplierId());
         e.setExpiryDate(domain.getExpiryDate());
         e.setManufacturedDate(domain.getManufacturedDate());
         e.setStatus(domain.getStatus());
@@ -33,6 +35,8 @@ public interface InventoryBatchInfraMapper {
                 .binLocationId(e.getBinLocationId())
                 .batchNumber(e.getBatchNumber())
                 .quantity(e.getQuantity())
+                .reservedQuantity(e.getReservedQuantity())
+                .supplierId(e.getSupplierId())
                 .expiryDate(e.getExpiryDate())
                 .manufacturedDate(e.getManufacturedDate())
                 .status(e.getStatus())

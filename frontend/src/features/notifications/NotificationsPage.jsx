@@ -1,5 +1,6 @@
 import { List, Button, Typography, Tag, Space, Empty, Badge , theme } from 'antd'
 import { CheckOutlined, ReloadOutlined } from '@ant-design/icons'
+import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import { useNotifications } from '../../context/NotificationContext'
 import { useFitY } from '../../hooks/useFitY'
@@ -8,6 +9,19 @@ export default function NotificationsPage() {
   const { notifications, loading, unreadCount, connected, markRead, markAllRead, refetch } = useNotifications()
   const { ref: listRef, y: listH } = useFitY()
   const { token } = theme.useToken()
+  const navigate = useNavigate()
+
+  const routeOf = (n) => {
+    if (!n.referenceId) return null
+    if (n.referenceType === 'PURCHASE_ORDER') return `/purchase-orders/${n.referenceId}`
+    if (n.referenceType === 'SALES_ORDER') return `/sales-orders/${n.referenceId}`
+    return null
+  }
+  const onItem = (n) => {
+    if (!n.isRead) markRead(n.id)
+    const to = routeOf(n)
+    if (to) navigate(to)
+  }
 
   return (
     <div>
@@ -35,8 +49,9 @@ export default function NotificationsPage() {
             dataSource={notifications}
             renderItem={(n) => (
               <List.Item
-                style={{ background: n.isRead ? undefined : token.controlItemBgActive, padding: '12px 16px', borderRadius: token.borderRadiusLG, marginBottom: 6 }}
-                actions={n.isRead ? [] : [<a key="r" onClick={() => markRead(n.id)}>Đánh dấu đã đọc</a>]}
+                onClick={() => onItem(n)}
+                style={{ cursor: routeOf(n) ? 'pointer' : 'default', background: n.isRead ? undefined : token.controlItemBgActive, padding: '12px 16px', borderRadius: token.borderRadiusLG, marginBottom: 6 }}
+                actions={n.isRead ? [] : [<a key="r" onClick={(e) => { e.stopPropagation(); markRead(n.id) }}>Đánh dấu đã đọc</a>]}
               >
                 <List.Item.Meta
                   title={

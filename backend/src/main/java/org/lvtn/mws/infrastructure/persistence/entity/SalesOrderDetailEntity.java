@@ -21,11 +21,19 @@ public class SalesOrderDetailEntity {
     @Column(name = "product_id", nullable = false, length = 20)
     private String productId;
 
+    /** [Bán theo NCC] NCC được chọn cho dòng (nullable = bất kỳ). */
+    @Column(name = "supplier_id", length = 20)
+    private String supplierId;
+
     @Column(name = "quantity_ordered", nullable = false)
     private Integer quantityOrdered;
 
     @Column(name = "quantity_picked", nullable = false)
     private Integer quantityPicked;
+
+    /** [Bán theo NCC] số đã giữ chỗ được (0 nếu backorder toàn phần). */
+    @Column(name = "quantity_allocated", nullable = false)
+    private Integer quantityAllocated;
 
     @Column(name = "unit_price", nullable = false)
     private BigDecimal unitPrice;

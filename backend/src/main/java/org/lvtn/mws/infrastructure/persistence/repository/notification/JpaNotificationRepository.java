@@ -26,4 +26,10 @@ public interface JpaNotificationRepository extends JpaRepository<NotificationEnt
     @Query(value = "UPDATE notifications SET is_read = TRUE " +
             "WHERE user_id = :userId AND is_read = FALSE", nativeQuery = true)
     int markAllReadForUser(@Param("userId") String userId);
+
+    @Modifying
+    @Query(value = "DELETE FROM notifications " +
+            "WHERE reference_type = :referenceType AND reference_id = :referenceId", nativeQuery = true)
+    int deleteByReference(@Param("referenceType") String referenceType,
+                          @Param("referenceId") String referenceId);
 }

@@ -28,6 +28,8 @@ public class InventoryController {
     private final CreateInventoryBatchUseCase createBatchUseCase;
     private final GetBatchesUseCase getBatchesUseCase;
     private final GetBatchSuppliersUseCase getBatchSuppliersUseCase;
+    private final org.lvtn.mws.application.usecases.inventory.GetAvailableBySupplierUseCase getAvailableBySupplierUseCase;
+    private final org.lvtn.mws.application.usecases.inventory.GetSellableByWarehouseUseCase getSellableByWarehouseUseCase;
     private final GetExpiringBatchesUseCase getExpiringBatchesUseCase;
     private final org.lvtn.mws.application.usecases.warehouse.GetBinLocationCodesUseCase getBinLocationCodesUseCase;
     private final UpdateBatchStatusUseCase updateBatchStatusUseCase;
@@ -57,6 +59,21 @@ public class InventoryController {
             r.setSupplierName(productSuppliers.get(r.getProductId()));
         }
         return list;
+    }
+
+    /** [Bán theo NCC] Tồn khả dụng gom theo NCC cho (sản phẩm, kho) — cho dropdown chọn NCC ở đơn bán. */
+    @GetMapping("/available-by-supplier")
+    public List<org.lvtn.mws.interfaces.dto.response.inventory.AvailableBySupplierResponse> availableBySupplier(
+            @RequestParam String productId,
+            @RequestParam String warehouseId) {
+        return getAvailableBySupplierUseCase.execute(productId, warehouseId);
+    }
+
+    /** [Bán theo NCC] Sản phẩm CÓ THỂ BÁN trong kho (chỉ lô ACTIVE & chưa hết hạn) — cho dropdown chọn SP. */
+    @GetMapping("/sellable-by-warehouse")
+    public List<org.lvtn.mws.interfaces.dto.response.inventory.SellableProductResponse> sellableByWarehouse(
+            @RequestParam String warehouseId) {
+        return getSellableByWarehouseUseCase.execute(warehouseId);
     }
 
     // ── Stock operations ──────────────────────────────────────────────────

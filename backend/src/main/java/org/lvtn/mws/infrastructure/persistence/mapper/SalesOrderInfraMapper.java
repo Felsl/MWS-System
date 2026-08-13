@@ -41,8 +41,10 @@ public interface SalesOrderInfraMapper {
         SalesOrderDetailEntity de = new SalesOrderDetailEntity();
         de.setId(d.getId());
         de.setProductId(d.getProductId());
+        de.setSupplierId(d.getSupplierId());
         de.setQuantityOrdered(d.getQuantityOrdered());
         de.setQuantityPicked(d.getQuantityPicked());
+        de.setQuantityAllocated(d.getQuantityAllocated());
         de.setUnitPrice(d.getUnitPrice());
         de.setDiscountPercent(d.getDiscountPercent());
         return de;
@@ -57,8 +59,10 @@ public interface SalesOrderInfraMapper {
                         .id(de.getId())
                         .soId(e.getId())
                         .productId(de.getProductId())
+                        .supplierId(de.getSupplierId())
                         .quantityOrdered(de.getQuantityOrdered())
                         .quantityPicked(de.getQuantityPicked() == null ? 0 : de.getQuantityPicked())
+                        .quantityAllocated(de.getQuantityAllocated() == null ? 0 : de.getQuantityAllocated())
                         .unitPrice(de.getUnitPrice())
                         .discountPercent(de.getDiscountPercent())
                         .build());

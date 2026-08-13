@@ -32,8 +32,8 @@ public interface SalesOrderWebMapper {
     default SalesOrderDetailResponse toDetailResponse(SalesOrderDetail d) {
         if (d == null) return null;
         return new SalesOrderDetailResponse(
-                d.getId(), d.getSoId(), d.getProductId(),
-                d.getQuantityOrdered(), d.getQuantityPicked(),
+                d.getId(), d.getSoId(), d.getProductId(), d.getSupplierId(),
+                d.getQuantityOrdered(), d.getQuantityPicked(), d.getQuantityAllocated(),
                 d.getUnitPrice(), d.getDiscountPercent());
     }
 

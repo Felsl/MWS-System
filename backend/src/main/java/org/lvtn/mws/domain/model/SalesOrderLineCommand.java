@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 /** Lệnh tạo 1 dòng đơn bán hàng (value object thuần Java, dùng chung application<->domain). */
 public record SalesOrderLineCommand(
         String productId,
+        String supplierId,
         int quantityOrdered,
         BigDecimal unitPrice,
         BigDecimal discountPercent) {

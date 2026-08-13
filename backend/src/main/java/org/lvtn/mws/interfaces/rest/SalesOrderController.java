@@ -37,7 +37,7 @@ public class SalesOrderController {
     public ResponseEntity<SalesOrderResponse> create(@Valid @RequestBody CreateSalesOrderRequest req) {
         List<SalesOrderLineCommand> lines = req.lines().stream()
                 .map(l -> new SalesOrderLineCommand(
-                        l.productId(), l.quantityOrdered(), l.unitPrice(), l.discountPercent()))
+                        l.productId(), l.supplierId(), l.quantityOrdered(), l.unitPrice(), l.discountPercent()))
                 .toList();
         var so = createSalesOrderUseCase.execute(
                 req.warehouseId(), req.customerId(), BigDecimal.ZERO,

@@ -46,8 +46,7 @@ export default function PickingListsPage() {
         </Space>
 
       </div>
-      {/* BUG CŨ: PLList gọi setView() của component cha => ReferenceError khi bấm
-          "Tạo lệnh". Nay truyền hẳn onCreate xuống. */}
+
       {mode === 'list' && <PLList onOpen={openDetail} onCreate={openCreate} />}
       {mode === 'create' && <CreatePL onCreated={(pl) => openDetail(pl.id, { replace: true })} />}
       {mode === 'detail' && id && <PLDetail id={id} />}
@@ -138,8 +137,8 @@ function PLDetail({ id }) {
   const columns = [
     { title: 'Sản phẩm', dataIndex: 'productId', render: (pid) => productMap[pid]?.name || pid },
     { title: 'Ô kệ', dataIndex: 'binLocationId', width: 130, render: (v) => labelOf(v) },
-    { title: 'Lô cần', dataIndex: 'batchId', width: 130, render: (v) => v || '—' },
-    { title: 'Lô thực', dataIndex: 'actualBatchId', width: 130, render: (v) => v || '—' },
+    { title: 'Lô cần lấy', dataIndex: 'batchId', width: 130, render: (v) => v || '—' },
+    { title: 'Lô thực lấy', dataIndex: 'actualBatchId', width: 130, render: (v) => v || '—' },
     { title: 'SL cần', dataIndex: 'quantityToPick', width: 90, align: 'right' },
     { title: 'SL lấy', dataIndex: 'quantityPicked', width: 90, align: 'right' },
     {

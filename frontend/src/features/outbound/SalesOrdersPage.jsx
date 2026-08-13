@@ -1,7 +1,7 @@
 import ExportButton from '../../components/ExportButton'
 import PageHeader from '../../components/PageHeader'
 import FitTable from '../../components/FitTable'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useProducts } from '../../hooks/useProducts'
 import { useRecordView } from '../../hooks/useRecordView'
 import { useListParams } from '../../hooks/useListParams'
@@ -11,7 +11,7 @@ import { columnSortOrder } from '../../utils/sort'
 import RowLink from '../../components/RowLink'
 import {
   Card, Button, Input, Form, Select, DatePicker, InputNumber, Row, Col,
-  Table, Space, Tag, Descriptions, Empty, Popconfirm, Divider, App as AntdApp,
+  Table, Space, Tag, Descriptions, Empty, Popconfirm, Divider, Alert, App as AntdApp,
 } from 'antd'
 import {
   PlusOutlined, SearchOutlined, DeleteOutlined, ReloadOutlined, ArrowLeftOutlined,
@@ -133,20 +133,36 @@ function CreateSO({ onCreated }) {
   const warehouseId = Form.useWatch('warehouseId', form)
   const lines = Form.useWatch('lines', form)
   const inv = useQuery({
-    queryKey: ['so-inv', warehouseId],
-    queryFn: () => inventoryApi.getByWarehouse(warehouseId),
+    // Chỉ lấy sản phẩm CÓ THỂ BÁN: lô ACTIVE & chưa hết hạn (loại EXPIRED/không ACTIVE/quá hạn).
+    queryKey: ['so-sellable', warehouseId],
+    queryFn: () => inventoryApi.sellableByWarehouse(warehouseId),
     enabled: !!warehouseId,
   })
   const whInv = inv.data || []
   const pById = Object.fromEntries((productList || []).map(p => [p.id, p]))
-  // Chỉ sản phẩm còn tồn khả dụng > 0 trong kho đang chọn.
+  // Sản phẩm còn tồn bán được > 0 trong kho đang chọn.
   const whProductOptions = whInv
     .filter(r => r.availableQuantity > 0)
     .map(r => ({
       value: r.productId,
       label: `${pById[r.productId]?.name || r.productId}${pById[r.productId]?.sku ? ` · ${pById[r.productId].sku}` : ''} (tồn ${r.availableQuantity})`,
     }))
-  const availByProduct = Object.fromEntries(whInv.map(r => [r.productId, r.availableQuantity]))
+
+  // [Bán theo NCC] tồn khả dụng theo NCC cho từng sản phẩm đã chọn: { productId: [{supplierId,supplierName,availableQuantity}] }
+  const [supByProduct, setSupByProduct] = useState({})
+  const loadSuppliers = async (productId) => {
+    if (!productId || !warehouseId) return
+    try {
+      const data = await inventoryApi.availableBySupplier(productId, warehouseId)
+      setSupByProduct(prev => ({ ...prev, [productId]: data || [] }))
+    } catch { /* để dropdown rỗng nếu lỗi */ }
+  }
+  const supValue = (s) => s.supplierId ?? ''            // '' đại diện lô chưa gắn NCC
+  const availOfLine = (lp) => {
+    const list = supByProduct[lp?.productId] || []
+    const sel = list.find(s => supValue(s) === (lp?.supplierId ?? ''))
+    return sel?.availableQuantity
+  }
 
   // Chọn sản phẩm -> tự điền đơn giá = giá vốn + 20% (làm tròn); vẫn sửa được.
   const fillPriceFromProduct = (name, productId) => {
@@ -154,14 +170,25 @@ function CreateSO({ onCreated }) {
     const price = cp != null ? Math.round(Number(cp) * 1.2) : 0
     form.setFieldValue(['lines', name, 'unitPrice'], price)
   }
-  // Đổi kho -> xoá các dòng cũ (sản phẩm thuộc kho khác không còn hợp lệ).
-  const onWarehouseChange = () => form.setFieldsValue({ lines: [{}] })
+  // Đổi kho -> xoá các dòng cũ (sản phẩm thuộc kho khác không còn hợp lệ) + xoá cache NCC.
+  const onWarehouseChange = () => { form.setFieldsValue({ lines: [{}] }); setSupByProduct({}) }
 
   const createMut = useMutation({
     mutationFn: salesOrdersApi.create,
     onSuccess: (so) => { message.success(`Đã tạo đơn ${so.soNumber || ''}`.trim()); onCreated(so) },
     onError: (e) => handleFormError(form, e, message),
   })
+
+  // [Bán vượt tồn] Các dòng đặt vượt tồn khả dụng của NCC -> sẽ tạo nhu cầu nhập (backorder).
+  const shortLines = (lines || []).map((l, i) => {
+    if (!l || !l.productId || l.quantityOrdered == null) return null
+    const avail = availOfLine(l)
+    if (avail == null || l.quantityOrdered <= avail) return null
+    const pname = pById[l.productId]?.name || l.productId
+    const sup = (supByProduct[l.productId] || []).find(x => supValue(x) === (l.supplierId ?? ''))
+    const sname = sup?.supplierName || '— Không rõ NCC'
+    return { key: i, text: `${pname} (${sname}): đặt ${l.quantityOrdered} / tồn ${avail} → thiếu ${l.quantityOrdered - avail}` }
+  }).filter(Boolean)
 
   const submit = async () => {
     const v = await form.validateFields()
@@ -174,6 +201,7 @@ function CreateSO({ onCreated }) {
       createdBy: user?.userId,               // BE yêu cầu createdBy
       lines: v.lines.map(l => ({
         productId: l.productId,
+        supplierId: l.supplierId ? l.supplierId : null,   // '' (không rõ NCC) -> null
         quantityOrdered: l.quantityOrdered,
         unitPrice: l.unitPrice,
         discountPercent: l.discountPercent ?? null,
@@ -210,11 +238,19 @@ function CreateSO({ onCreated }) {
           </Col>
         </Row>
 
+        {shortLines.length > 0 && (
+          <Alert type="warning" showIcon style={{ marginBottom: 12 }}
+            message="Có dòng bán vượt tồn — hệ thống sẽ tạo yêu cầu nhập gấp và báo bộ phận mua"
+            description={<ul style={{ margin: 0, paddingLeft: 18 }}>{shortLines.map(s => <li key={s.key}>{s.text}</li>)}</ul>} />
+        )}
         <Divider orientation="left" style={{ margin: '4px 0 12px' }}>Dòng hàng</Divider>
         <Form.List name="lines">
           {(fields, { add, remove }) => (
             <>
-              {fields.map(({ key, name, ...rest }) => (
+              {fields.map(({ key, name, ...rest }) => {
+                const lp = lines?.[name] || {}
+                const supList = supByProduct[lp.productId] || []
+                return (
                 <Row gutter={8} key={key} align="middle">
                   <Col flex="auto">
                     <Form.Item {...rest} name={[name, 'productId']} rules={[{ required: true, message: 'Chọn SP' }]}>
@@ -223,24 +259,27 @@ function CreateSO({ onCreated }) {
                         disabled={!warehouseId} loading={inv.isLoading}
                         notFoundContent={warehouseId ? 'Kho này không còn tồn khả dụng' : null}
                         options={whProductOptions}
-                        onChange={(pid) => fillPriceFromProduct(name, pid)} />
+                        onChange={(pid) => {
+                          fillPriceFromProduct(name, pid)
+                          form.setFieldValue(['lines', name, 'supplierId'], undefined)
+                          form.setFieldValue(['lines', name, 'quantityOrdered'], undefined)
+                          loadSuppliers(pid)
+                        }} />
+                    </Form.Item>
+                  </Col>
+                  <Col flex="180px">
+                    <Form.Item {...rest} name={[name, 'supplierId']} rules={[{ required: true, message: 'Chọn NCC' }]}>
+                      <Select placeholder={lp.productId ? 'Nhà cung cấp' : 'Chọn SP trước'}
+                        disabled={!lp.productId}
+                        notFoundContent="Không có NCC còn tồn"
+                        options={supList.map(s => ({ value: supValue(s), label: `${s.supplierName || '— Không rõ NCC'} (tồn ${s.availableQuantity})` }))}
+                        onChange={() => form.setFieldValue(['lines', name, 'quantityOrdered'], undefined)} />
                     </Form.Item>
                   </Col>
                   <Col flex="120px">
                     <Form.Item {...rest} name={[name, 'quantityOrdered']}
-                      rules={[
-                        { required: true, message: 'SL' },
-                        ({ getFieldValue }) => ({
-                          validator(_, value) {
-                            const pid = getFieldValue(['lines', name, 'productId'])
-                            const avail = availByProduct[pid]
-                            if (pid == null || avail == null || value == null || value <= avail) return Promise.resolve()
-                            return Promise.reject(new Error(`Tối đa ${avail} (tồn khả dụng)`))
-                          },
-                        }),
-                      ]}>
+                      rules={[{ required: true, message: 'SL' }]}>
                       <InputNumber min={1}
-                        max={availByProduct[lines?.[name]?.productId] ?? undefined}
                         placeholder="SL" style={{ width: '100%' }} />
                     </Form.Item>
                   </Col>
@@ -258,7 +297,8 @@ function CreateSO({ onCreated }) {
                     <Button danger type="text" icon={<DeleteOutlined />} disabled={fields.length === 1} onClick={() => remove(name)} />
                   </Col>
                 </Row>
-              ))}
+                )
+              })}
               <Button type="dashed" block icon={<PlusOutlined />} onClick={() => add({})}>Thêm dòng</Button>
             </>
           )}
@@ -335,7 +375,7 @@ function SODetail({ id }) {
             <Button type="primary" icon={<CarOutlined />}
               onClick={() => navigate(`/shipments/new?soId=${so.id}`)}>Tạo vận đơn</Button>
           )}
-          {(s === 'DRAFT' || s === 'ALLOCATED') && (
+          {(s === 'DRAFT' || s === 'ALLOCATED' || s === 'PARTIALLY_ALLOCATED') && (
             <Can permission={P.OUTBOUND_CREATE_SO}>
               <Popconfirm title="Huỷ đơn bán này?"
                 description={<span>Huỷ đơn <b>{so.soNumber || so.id}</b>. Hàng đã phân bổ sẽ được trả lại tồn khả dụng.</span>}

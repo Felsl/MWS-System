@@ -42,6 +42,21 @@ public class InventoryBatchRepositoryImpl implements IInventoryBatchRepository {
     }
 
     @Override
+    public List<InventoryBatch> findActiveBatchesForPickingBySupplier(String productId, String warehouseId, String supplierId) {
+        return jpa.findActiveBatchesForPickingBySupplier(productId, warehouseId, supplierId).stream()
+                .map(mapper::toDomain).collect(Collectors.toList());
+    }
+
+    @Override
+    public java.util.Map<String, Integer> sumSellableByWarehouse(String warehouseId) {
+        java.util.Map<String, Integer> out = new java.util.LinkedHashMap<>();
+        for (Object[] row : jpa.sumSellableByWarehouse(warehouseId)) {
+            out.put((String) row[0], ((Number) row[1]).intValue());
+        }
+        return out;
+    }
+
+    @Override
     public List<InventoryBatch> findExpiredActiveBatches(LocalDate today) {
         return jpa.findExpiredActiveBatches(today).stream()
                 .map(mapper::toDomain).collect(Collectors.toList());

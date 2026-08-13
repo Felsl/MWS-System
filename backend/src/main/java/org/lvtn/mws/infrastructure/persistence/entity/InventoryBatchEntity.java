@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 @Table(name = "inventory_batches",
        uniqueConstraints = @UniqueConstraint(
                name = "uq_product_batch_location",
-               columnNames = {"product_id", "warehouse_id", "bin_location_id", "batch_number"}))
+               columnNames = {"product_id", "warehouse_id", "bin_location_id", "batch_number", "supplier_id"}))
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor
 public class InventoryBatchEntity {
 
@@ -32,6 +32,14 @@ public class InventoryBatchEntity {
 
     @Column(name = "quantity", nullable = false)
     private int quantity;
+
+    /** [Bán theo NCC] số đang giữ chỗ trên lô (0..quantity). */
+    @Column(name = "reserved_quantity", nullable = false)
+    private int reservedQuantity;
+
+    /** [Bán theo NCC] NCC của lô, đóng dấu khi nhập kho (nullable — lô cũ chưa có). */
+    @Column(name = "supplier_id", length = 20)
+    private String supplierId;
 
     @Column(name = "expiry_date")
     private LocalDate expiryDate;

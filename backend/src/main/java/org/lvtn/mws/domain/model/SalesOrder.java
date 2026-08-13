@@ -14,7 +14,7 @@ import java.util.Objects;
  */
 public class SalesOrder {
 
-    public enum Status { DRAFT, ALLOCATED, PICKING, SHIPPED, CANCELLED }
+    public enum Status { DRAFT, ALLOCATED, PARTIALLY_ALLOCATED, PICKING, SHIPPED, CANCELLED }
 
     private final String id;
     private String soNumber;
@@ -94,6 +94,24 @@ public class SalesOrder {
         touch();
     }
 
+    /** [Bán vượt tồn] DRAFT -> PARTIALLY_ALLOCATED: giữ được một phần, phần còn thiếu ghi nhu cầu. */
+    public void allocatePartial() {
+        requireStatus(Status.DRAFT, "Chỉ đơn DRAFT mới được phân bổ");
+        if (details.isEmpty()) {
+            throw new IllegalStateException("Đơn chưa có dòng hàng nào, không thể phân bổ");
+        }
+        this.status = Status.PARTIALLY_ALLOCATED;
+        touch();
+    }
+
+    /** [Bán vượt tồn] Khi hàng về bù đủ backorder: PARTIALLY_ALLOCATED -> ALLOCATED. */
+    public void markFullyAllocated() {
+        if (this.status == Status.PARTIALLY_ALLOCATED) {
+            this.status = Status.ALLOCATED;
+            touch();
+        }
+    }
+
     /** ALLOCATED -> PICKING (khi sinh xong picking list). */
     public void markPicking() {
         requireStatus(Status.ALLOCATED, "Chỉ đơn ALLOCATED mới chuyển sang PICKING");
@@ -118,7 +136,9 @@ public class SalesOrder {
     }
 
     public boolean wasReserved() {
-        return this.status == Status.ALLOCATED || this.status == Status.PICKING;
+        return this.status == Status.ALLOCATED
+                || this.status == Status.PARTIALLY_ALLOCATED
+                || this.status == Status.PICKING;
     }
 
     private void requireStatus(Status expected, String message) {

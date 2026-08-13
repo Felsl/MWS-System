@@ -14,6 +14,12 @@ public interface IInventoryBatchRepository {
     /** FEFO query: ACTIVE batches ordered by expiry_date ASC, then created_at ASC */
     List<InventoryBatch> findActiveBatchesForPicking(String productId, String warehouseId);
 
+    /** [Bán theo NCC] FEFO nhưng chỉ lô của NCC chỉ định; supplierId null = mọi NCC. */
+    List<InventoryBatch> findActiveBatchesForPickingBySupplier(String productId, String warehouseId, String supplierId);
+
+    /** [Bán theo NCC] Tồn bán được (ACTIVE + chưa hết hạn) gom theo sản phẩm cho 1 kho: productId -> available. */
+    java.util.Map<String, Integer> sumSellableByWarehouse(String warehouseId);
+
     /** For nightly cron: batches still ACTIVE but expiry_date < today */
     List<InventoryBatch> findExpiredActiveBatches(LocalDate today);
 

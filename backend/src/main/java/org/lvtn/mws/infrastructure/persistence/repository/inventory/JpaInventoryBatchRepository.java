@@ -22,6 +22,29 @@ public interface JpaInventoryBatchRepository extends JpaRepository<InventoryBatc
     List<InventoryBatchEntity> findActiveBatchesForPicking(@Param("productId") String productId,
                                                            @Param("warehouseId") String warehouseId);
 
+    /** [Bán theo NCC] FEFO lọc theo NCC. supplierId NULL = mọi NCC (kể cả lô chưa gắn NCC). */
+    @Query("SELECT b FROM InventoryBatchEntity b " +
+           "WHERE b.productId = :productId AND b.warehouseId = :warehouseId " +
+           "  AND b.status = 'ACTIVE' AND b.quantity > 0 " +
+           "  AND (b.expiryDate IS NULL OR b.expiryDate >= CURRENT_DATE) " +
+           "  AND (:supplierId IS NULL OR b.supplierId = :supplierId) " +
+           "ORDER BY CASE WHEN b.expiryDate IS NULL THEN 1 ELSE 0 END, b.expiryDate ASC, b.createdAt ASC")
+    List<InventoryBatchEntity> findActiveBatchesForPickingBySupplier(@Param("productId") String productId,
+                                                                     @Param("warehouseId") String warehouseId,
+                                                                     @Param("supplierId") String supplierId);
+
+    /**
+     * [Bán theo NCC] Tồn KHẢ DỤNG bán được gom theo sản phẩm cho 1 kho:
+     * chỉ lô ACTIVE và CHƯA hết hạn, (quantity - reserved) > 0. Dùng cho dropdown chọn SP ở đơn bán.
+     */
+    @Query("SELECT b.productId, SUM(b.quantity - b.reservedQuantity) FROM InventoryBatchEntity b " +
+           "WHERE b.warehouseId = :warehouseId " +
+           "  AND b.status = 'ACTIVE' " +
+           "  AND (b.expiryDate IS NULL OR b.expiryDate >= CURRENT_DATE) " +
+           "GROUP BY b.productId " +
+           "HAVING SUM(b.quantity - b.reservedQuantity) > 0")
+    List<Object[]> sumSellableByWarehouse(@Param("warehouseId") String warehouseId);
+
     @Query("SELECT b FROM InventoryBatchEntity b " +
            "WHERE b.status = 'ACTIVE' AND b.expiryDate < :today")
     List<InventoryBatchEntity> findExpiredActiveBatches(@Param("today") LocalDate today);

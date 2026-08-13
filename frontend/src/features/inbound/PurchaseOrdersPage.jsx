@@ -297,6 +297,8 @@ function CreatePO({ onCreated }) {
   const location = useLocation();
   const editPo = location.state?.editPo || null;
   const isEdit = !!editPo;
+  // [Nhu cầu -> Tạo PO] điền sẵn (kho/dòng hàng) nhưng vẫn là TẠO MỚI (không phải sửa).
+  const prefill = location.state?.prefill || null;
   const { suppliers, warehouses, productList } = useLookups();
   const { user } = useAuth();
   // Đơn giá tự điền theo giá vốn (costPrice); khoá mặc định, chỉ ADMIN sửa tay.
@@ -310,7 +312,7 @@ function CreatePO({ onCreated }) {
     );
   };
 
-  // Giá trị khởi tạo: chế độ sửa nạp lại kho/ngày dự kiến/toàn bộ dòng của đơn.
+  // Giá trị khởi tạo: chế độ sửa nạp lại đơn; chế độ điền-sẵn nạp kho + dòng từ nhu cầu.
   const initialValues = isEdit
     ? {
         warehouseId: editPo.warehouseId,
@@ -320,6 +322,17 @@ function CreatePO({ onCreated }) {
           supplierId: d.supplierId,
           quantityOrdered: d.quantityOrdered,
           unitPrice: d.unitPrice != null ? Number(d.unitPrice) : undefined,
+        })),
+      }
+    : prefill
+    ? {
+        warehouseId: prefill.warehouseId,
+        lines: (prefill.lines || [{}]).map((l) => ({
+          productId: l.productId,
+          supplierId: l.supplierId,
+          quantityOrdered: l.quantityOrdered,
+          // đơn giá gợi ý theo giá vốn (nếu đã tải được sản phẩm); vẫn sửa được.
+          unitPrice: pById[l.productId]?.costPrice != null ? Number(pById[l.productId].costPrice) : undefined,
         })),
       }
     : { lines: [{}] };

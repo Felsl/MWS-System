@@ -231,11 +231,14 @@ public class GoodsReceiptDomainService {
                 ? detail.getBatchNumber()
                 : "LOT-" + idGenerator.generate();
 
+        // [Bán theo NCC] Chỉ gộp vào lô CÙNG NCC — hàng NCC A và B không trộn chung một lô.
+        String supplierId = detail.getSupplierId();
         Optional<InventoryBatch> existing = batchRepository
                 .findByProductIdAndWarehouseId(detail.getProductId(), warehouseId)
                 .stream()
                 .filter(b -> batchNumber.equals(b.getBatchNumber())
-                        && detail.getBinLocationId().equals(b.getBinLocationId()))
+                        && detail.getBinLocationId().equals(b.getBinLocationId())
+                        && java.util.Objects.equals(supplierId, b.getSupplierId()))
                 .findFirst();
 
         if (existing.isPresent()) {
@@ -251,6 +254,7 @@ public class GoodsReceiptDomainService {
                 .warehouseId(warehouseId)
                 .binLocationId(detail.getBinLocationId())
                 .batchNumber(batchNumber)
+                .supplierId(supplierId) // [Bán theo NCC] đóng dấu NCC lên lô
                 .quantity(detail.getQuantity())
                 .expiryDate(detail.getExpiryDate())
                 .manufacturedDate(null) // goods_receipt_details has no manufactured_date column

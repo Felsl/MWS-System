@@ -1,12 +1,14 @@
 import { Badge, Button, Dropdown, List, Typography, Empty, Tooltip, theme } from 'antd'
 import { BellOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 import dayjs from 'dayjs'
 import { useNotifications } from '../context/NotificationContext'
 
 export default function NotificationBell() {
   const navigate = useNavigate()
   const { notifications, unreadCount, connected, markRead, markAllRead, canRead } = useNotifications()
+  const [open, setOpen] = useState(false)
   // Toàn bộ màu lấy từ design token của antd thay vì hardcode #fff/#f0f0f0/#e6f4ff.
   // Bản cũ hardcode nên khi bật dark mode là chữ trắng trên nền trắng.
   const { token } = theme.useToken()
@@ -15,8 +17,18 @@ export default function NotificationBell() {
 
   const recent = notifications.slice(0, 8)
 
+  // Điều hướng tới đối tượng của thông báo (PO -> phiếu PO, đơn bán/backorder -> đơn bán).
+  const routeOf = (n) => {
+    if (!n.referenceId) return null
+    if (n.referenceType === 'PURCHASE_ORDER') return `/purchase-orders/${n.referenceId}`
+    if (n.referenceType === 'SALES_ORDER') return `/sales-orders/${n.referenceId}`
+    return null
+  }
+
   const onItem = (n) => {
     if (!n.isRead) markRead(n.id)
+    const to = routeOf(n)
+    if (to) { setOpen(false); navigate(to) }
   }
 
   const dropdownContent = (
@@ -64,7 +76,8 @@ export default function NotificationBell() {
   )
 
   return (
-    <Dropdown popupRender={() => dropdownContent} trigger={['click']} placement="bottomRight">
+    <Dropdown popupRender={() => dropdownContent} trigger={['click']} placement="bottomRight"
+      open={open} onOpenChange={setOpen}>
       <Tooltip title={connected ? 'Realtime đang kết nối' : 'Realtime chưa kết nối'}>
         <Badge count={unreadCount} size="small" offset={[-2, 2]}>
           <Button type="text" aria-label="Thông báo"

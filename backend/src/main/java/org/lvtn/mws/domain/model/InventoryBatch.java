@@ -14,6 +14,8 @@ public class InventoryBatch {
     private final String binLocationId;
     private final String batchNumber;
     private int quantity;
+    private int reservedQuantity;   // [Bán theo NCC] số đang giữ chỗ trên lô này
+    private String supplierId;      // [Bán theo NCC] NCC của lô (đóng dấu khi nhập)
     private LocalDate expiryDate;
     private LocalDate manufacturedDate;
     private Status status;
@@ -27,6 +29,8 @@ public class InventoryBatch {
         this.binLocationId   = Objects.requireNonNull(b.binLocationId, "binLocationId is required");
         this.batchNumber     = Objects.requireNonNull(b.batchNumber,   "batchNumber is required");
         this.quantity        = b.quantity;
+        this.reservedQuantity= b.reservedQuantity;
+        this.supplierId      = b.supplierId;
         this.expiryDate      = b.expiryDate;
         this.manufacturedDate= b.manufacturedDate;
         this.status          = b.status != null ? b.status : Status.ACTIVE;
@@ -37,6 +41,8 @@ public class InventoryBatch {
     public static class Builder {
         private String id, productId, warehouseId, binLocationId, batchNumber;
         private int quantity = 0;
+        private int reservedQuantity = 0;
+        private String supplierId;
         private LocalDate expiryDate, manufacturedDate;
         private Status status;
         private LocalDateTime createdAt;
@@ -48,6 +54,8 @@ public class InventoryBatch {
         public Builder binLocationId(String v)    { this.binLocationId = v; return this; }
         public Builder batchNumber(String v)      { this.batchNumber = v; return this; }
         public Builder quantity(int v)            { this.quantity = v; return this; }
+        public Builder reservedQuantity(int v)    { this.reservedQuantity = v; return this; }
+        public Builder supplierId(String v)       { this.supplierId = v; return this; }
         public Builder expiryDate(LocalDate v)    { this.expiryDate = v; return this; }
         public Builder manufacturedDate(LocalDate v){ this.manufacturedDate = v; return this; }
         public Builder status(Status v)           { this.status = v; return this; }
@@ -66,6 +74,27 @@ public class InventoryBatch {
                     "Lô " + batchNumber + " không đủ hàng: cần " + qty + ", còn " + this.quantity);
         }
         this.quantity -= qty;
+        // Picking tiêu thụ hàng đã giữ chỗ: nhả bớt reserved cho khớp bất biến reserved<=quantity.
+        if (this.reservedQuantity > this.quantity) this.reservedQuantity = this.quantity;
+    }
+
+    /** [Bán theo NCC] Số có thể bán/giữ thêm trên lô = tồn thật − đã giữ chỗ. */
+    public int availableQuantity() { return this.quantity - this.reservedQuantity; }
+
+    /** Giữ chỗ qty trên lô (khi phân bổ đơn bán). Ném nếu không đủ phần khả dụng. */
+    public void reserve(int qty) {
+        if (qty <= 0) throw new IllegalArgumentException("Số lượng giữ chỗ phải lớn hơn 0");
+        if (availableQuantity() < qty) {
+            throw new InsufficientStockException(
+                    "Lô " + batchNumber + " không đủ để giữ chỗ: cần " + qty + ", khả dụng " + availableQuantity());
+        }
+        this.reservedQuantity += qty;
+    }
+
+    /** Nhả giữ chỗ (hủy đơn / khi picking đã tiêu thụ). Không cho âm. */
+    public void release(int qty) {
+        if (qty <= 0) return;
+        this.reservedQuantity = Math.max(0, this.reservedQuantity - qty);
     }
 
     public void addQuantity(int qty) {
@@ -85,6 +114,8 @@ public class InventoryBatch {
     public String getBinLocationId()    { return binLocationId; }
     public String getBatchNumber()      { return batchNumber; }
     public int getQuantity()            { return quantity; }
+    public int getReservedQuantity()    { return reservedQuantity; }
+    public String getSupplierId()       { return supplierId; }
     public LocalDate getExpiryDate()    { return expiryDate; }
     public LocalDate getManufacturedDate() { return manufacturedDate; }
     public Status getStatus()           { return status; }
