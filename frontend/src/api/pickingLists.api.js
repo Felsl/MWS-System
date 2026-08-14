@@ -7,5 +7,6 @@ export const pickingListsApi = {
   assign: (id, userId) => api.post(`${base}/${id}/assign`, { userId }).then(r => r.data),
   confirm: (detailId, body) => api.post(`${base}/details/${detailId}/confirm`, body).then(r => r.data),
   reportShort: (detailId, body) => api.post(`${base}/details/${detailId}/short`, body).then(r => r.data),
+  candidateBatches: (detailId) => api.get(`${base}/details/${detailId}/candidate-batches`).then(r => r.data),
   complete: (id) => api.post(`${base}/${id}/complete`).then(r => r.data),
 }

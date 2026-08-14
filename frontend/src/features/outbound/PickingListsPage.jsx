@@ -7,16 +7,15 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useRecordView } from '../../hooks/useRecordView'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Card, Button, Input, Form, Select, InputNumber, Table, Space, Typography, Tag,
+  Card, Button, Input, Select, Table, Space, Typography, Tag,
   Descriptions, Empty, Modal, App as AntdApp,
 } from 'antd'
 import {
-  PlusOutlined, ReloadOutlined, ArrowLeftOutlined, CheckOutlined,
-  WarningOutlined, UserAddOutlined, CheckCircleOutlined,
+  PlusOutlined, ReloadOutlined, ArrowLeftOutlined,
+  UserAddOutlined, CheckCircleOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import Can from '../../components/Can'
-import { useAuth } from '../../auth/AuthContext'
 import { getErrorMessage } from '../../api/client'
 import { P } from '../../constants/permissions'
 import { pickingListsApi } from '../../api/pickingLists.api'
@@ -64,7 +63,7 @@ function PLList({ onOpen, onCreate }) {
     { title: 'Trạng thái', dataIndex: 'status', width: 130, render: plTag },
     // /sales-orders/<id> là URL THẬT nên dùng <Link> (mở tab mới được), không RowLink.
     { title: 'Đơn bán (SO)', dataIndex: 'soId', render: (v) => v ? <Link to={`/sales-orders/${v}`}>{numberOf(v)}</Link> : '—' },
-    { title: 'Người lấy', dataIndex: 'assignedTo', width: 140, render: (v) => v || '—' },
+    { title: 'Người lấy', dataIndex: 'assignedToName', width: 140, render: (v, r) => v || r.assignedTo || '—' },
     { title: 'Bắt đầu', dataIndex: 'startedAt', width: 150, render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
   ]
   return (
@@ -108,10 +107,8 @@ function CreatePL({ onCreated }) {
 
 function PLDetail({ id }) {
   const { message } = AntdApp.useApp()
-  const { user } = useAuth()
   const qc = useQueryClient()
   const [assignOpen, setAssignOpen] = useState(false)
-  const [pickModal, setPickModal] = useState(null) // { mode:'confirm'|'short', detail }
 
   const { data: pl, isLoading, isError, error } = useQuery({
     queryKey: ['pl', id], queryFn: () => pickingListsApi.get(id),
@@ -137,26 +134,13 @@ function PLDetail({ id }) {
   const columns = [
     { title: 'Sản phẩm', dataIndex: 'productId', render: (pid) => productMap[pid]?.name || pid },
     { title: 'Ô kệ', dataIndex: 'binLocationId', width: 130, render: (v) => labelOf(v) },
-    { title: 'Lô cần lấy', dataIndex: 'batchId', width: 130, render: (v) => v || '—' },
+    { title: 'Lô cần lấy', dataIndex: 'batchNumber', width: 130, render: (v, r) => v || r.batchId || '—' },
     { title: 'Lô thực lấy', dataIndex: 'actualBatchId', width: 130, render: (v) => v || '—' },
     { title: 'SL cần', dataIndex: 'quantityToPick', width: 90, align: 'right' },
     { title: 'SL lấy', dataIndex: 'quantityPicked', width: 90, align: 'right' },
     {
       title: 'Xác nhận', dataIndex: 'confirmed', width: 110,
       render: (c) => c ? <Tag color="green">Đã lấy</Tag> : <Tag>Chưa</Tag>,
-    },
-    {
-      title: 'Thao tác', key: '_a', width: 190, fixed: 'right',
-      render: (_, d) => d.confirmed ? '—' : (
-        <Can permission={P.OUTBOUND_PICK}>
-          <Space>
-            <Button size="small" type="primary" icon={<CheckOutlined />}
-              onClick={() => setPickModal({ mode: 'confirm', detail: d })}>Xác nhận</Button>
-            <Button size="small" danger icon={<WarningOutlined />}
-              onClick={() => setPickModal({ mode: 'short', detail: d })}>Thiếu</Button>
-          </Space>
-        </Can>
-      ),
     },
   ]
 
@@ -184,7 +168,7 @@ function PLDetail({ id }) {
             key: 'so', label: 'Đơn bán',
             children: pl.soId ? <Link to={`/sales-orders/${pl.soId}`}>{numberOf(pl.soId)}</Link> : '—',
           },
-          { key: 'as', label: 'Người lấy', children: pl.assignedTo || '— (chưa gán)' },
+          { key: 'as', label: 'Người lấy', children: pl.assignedToName || pl.assignedTo || '— (chưa gán)' },
           { key: 'st', label: 'Bắt đầu', children: pl.startedAt ? dayjs(pl.startedAt).format('DD/MM/YYYY HH:mm') : '—' },
           { key: 'cp', label: 'Hoàn thành', children: pl.completedAt ? dayjs(pl.completedAt).format('DD/MM/YYYY HH:mm') : '—' },
         ]} />
@@ -195,8 +179,6 @@ function PLDetail({ id }) {
       )}
 
       <AssignModal open={assignOpen} onClose={() => setAssignOpen(false)} pickId={id} onDone={refresh} />
-      <PickActionModal state={pickModal} onClose={() => setPickModal(null)}
-        confirmedBy={user?.userId} onDone={refresh} />
     </Card>
   )
 }
@@ -221,62 +203,6 @@ function AssignModal({ open, onClose, pickId, onDone }) {
       <Select showSearch optionFilterProp="label" style={{ width: '100%' }} placeholder="Chọn nhân viên"
         loading={users.isLoading} value={userId} onChange={setUserId}
         options={(users.data || []).map(u => ({ value: u.id, label: `${u.fullName || u.username} (${u.username})` }))} />
-    </Modal>
-  )
-}
-
-function PickActionModal({ state, onClose, confirmedBy, onDone }) {
-  const { message } = AntdApp.useApp()
-  const [form] = Form.useForm()
-  const mode = state?.mode
-  const detail = state?.detail
-
-  const confirmMut = useMutation({
-    mutationFn: (body) => pickingListsApi.confirm(detail.id, body),
-    onSuccess: (u) => { message.success('Đã xác nhận lấy'); onDone(u); onClose() },
-    onError: (e) => message.error(getErrorMessage(e)),
-  })
-  const shortMut = useMutation({
-    mutationFn: (body) => pickingListsApi.reportShort(detail.id, body),
-    onSuccess: (u) => { message.success('Đã ghi nhận thiếu hàng'); onDone(u); onClose() },
-    onError: (e) => message.error(getErrorMessage(e)),
-  })
-
-  const submit = async () => {
-    const v = await form.validateFields()
-    if (mode === 'confirm') {
-      confirmMut.mutate({ scannedBatchNumber: v.scannedBatchNumber, confirmedBy })
-    } else {
-      shortMut.mutate({ scannedBatchNumber: v.scannedBatchNumber, actualQty: v.actualQty, reason: v.reason, confirmedBy })
-    }
-  }
-
-  return (
-    <Modal
-      title={mode === 'confirm' ? 'Xác nhận lấy hàng' : 'Báo thiếu hàng'}
-      open={!!state} onCancel={onClose} onOk={submit}
-      confirmLoading={confirmMut.isPending || shortMut.isPending}
-      afterOpenChange={(o) => { if (o) form.setFieldsValue({ scannedBatchNumber: '', actualQty: detail?.quantityToPick, reason: '' }) }}
-      destroyOnClose
-    >
-      <Form form={form} layout="vertical">
-        <Form.Item name="scannedBatchNumber" label="Số lô đã quét"
-          rules={[{ required: true, message: 'Nhập/quét số lô' }]}>
-          <Input placeholder="Quét mã lô thực tế" autoFocus />
-        </Form.Item>
-        {mode === 'short' && (
-          <>
-            <Form.Item name="actualQty" label="Số lượng thực lấy"
-              rules={[{ required: true, message: 'Nhập SL thực' }]}>
-              <InputNumber min={0} max={detail?.quantityToPick} style={{ width: '100%' }} />
-            </Form.Item>
-            <Form.Item name="reason" label="Lý do thiếu"
-              rules={[{ required: true, message: 'Nhập lý do' }]}>
-              <Input.TextArea rows={2} />
-            </Form.Item>
-          </>
-        )}
-      </Form>
     </Modal>
   )
 }

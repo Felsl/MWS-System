@@ -11,6 +11,8 @@ public class TransferOrderDetailResponse {
     private String productId;
     private String batchId;
     private String designatedBatchId;
+    private String supplierId;
+    private String batchMode;
     private int quantity;
     private int quantityReceived;
     private int lostQuantity;

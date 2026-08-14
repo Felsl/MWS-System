@@ -52,14 +52,20 @@ function StockByWarehouse() {
   })
 
   const columns = [
-    { title: 'Sản phẩm', dataIndex: 'productId', render: (pid) => productMap[pid]?.name || pid },
-    { title: 'SKU', dataIndex: 'productId', width: 130, render: (pid) => productMap[pid]?.sku || '—' },
+    { title: 'Sản phẩm', dataIndex: 'productId', render: (pid) => productMap[pid]?.name || pid,
+      sorter: (a, b) => (productMap[a.productId]?.name || a.productId).localeCompare(productMap[b.productId]?.name || b.productId) },
+    { title: 'SKU', dataIndex: 'productId', width: 130, render: (pid) => productMap[pid]?.sku || '—',
+      sorter: (a, b) => (productMap[a.productId]?.sku || '').localeCompare(productMap[b.productId]?.sku || '') },
     // NCC gộp (suy ở BE từ GRN->PO); một SP có thể từ nhiều NCC -> "A / B". '—' nếu không truy được nguồn.
-    { title: 'Nhà cung cấp', dataIndex: 'supplierName', width: 180, ellipsis: true, render: (v) => v || '—' },
-    { title: 'Tồn', dataIndex: 'quantity', width: 100, align: 'right' },
-    { title: 'Đang giữ', dataIndex: 'reservedQuantity', width: 110, align: 'right' },
+    { title: 'Nhà cung cấp', dataIndex: 'supplierName', width: 180, ellipsis: true, render: (v) => v || '—',
+      sorter: (a, b) => (a.supplierName || '').localeCompare(b.supplierName || '') },
+    { title: 'Tồn', dataIndex: 'quantity', width: 100, align: 'right',
+      sorter: (a, b) => a.quantity - b.quantity },
+    { title: 'Đang giữ', dataIndex: 'reservedQuantity', width: 110, align: 'right',
+      sorter: (a, b) => a.reservedQuantity - b.reservedQuantity },
     {
       title: 'Khả dụng', dataIndex: 'availableQuantity', width: 130, align: 'right',
+      sorter: (a, b) => a.availableQuantity - b.availableQuantity,
       render: (v, r) => {
         const safety = productMap[r.productId]?.safetyStock
         const low = safety != null && v < safety

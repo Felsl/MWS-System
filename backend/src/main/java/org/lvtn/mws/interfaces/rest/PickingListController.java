@@ -36,6 +36,14 @@ public class PickingListController {
     private final GetPickingListByIdUseCase getPickingListByIdUseCase;
     private final GetAllPickingListsUseCase getAllPickingListsUseCase;
     private final PickingWebMapper mapper;
+    private final org.lvtn.mws.application.usecases.picking.GetCandidateShortBatchesUseCase getCandidateShortBatchesUseCase;
+
+    /** [Báo thiếu] Lô ứng viên (cùng SP + NCC + kho, ACTIVE) cho một dòng nhặt. */
+    @GetMapping("/details/{detailId}/candidate-batches")
+    public ResponseEntity<List<org.lvtn.mws.interfaces.dto.response.picking.CandidateBatchResponse>> candidateBatches(
+            @PathVariable String detailId) {
+        return ResponseEntity.ok(getCandidateShortBatchesUseCase.execute(detailId));
+    }
 
     /** Sinh lệnh gom hàng theo FEFO cho đơn đã ALLOCATED; chuyển SO -> PICKING. */
     @PreAuthorize("hasAuthority('OUTBOUND_PICK')")

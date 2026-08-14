@@ -150,7 +150,6 @@ function TOList({ onOpen, onCreate }) {
 }
 
 // Ô chọn lô cho 1 dòng: mặc định "Tự động (FEFO)", có thể chỉ định lô cụ thể (gợi ý theo FEFO).
-const AUTO = '__auto__'
 function BatchLineSelect({ fromWarehouseId, productId, quantity, value, onChange, binMap = {} }) {
   const enabled = !!fromWarehouseId && !!productId && quantity > 0
   const sug = useQuery({
@@ -158,17 +157,14 @@ function BatchLineSelect({ fromWarehouseId, productId, quantity, value, onChange
     queryFn: () => inventoryApi.allocateBatches(productId, fromWarehouseId, quantity),
     enabled,
   })
-  const options = [
-    { value: AUTO, label: 'Tự động (FEFO) — picker quét lô bất kỳ' },
-    ...(sug.data || []).map(s => ({
-      value: s.batchId,
-      label: `Chỉ định: ${s.batchNumber} · ${binMap[s.binLocationId] || s.binLocationId} · gợi ý ${s.suggestedQuantity}`,
-    })),
-  ]
+  const options = (sug.data || []).map(s => ({
+    value: s.batchId,
+    label: `${s.batchNumber} · ${binMap[s.binLocationId] || s.binLocationId} · gợi ý ${s.suggestedQuantity}`,
+  }))
   return (
-    <Select value={value || AUTO} onChange={onChange} options={options}
+    <Select showSearch optionFilterProp="label" value={value} onChange={onChange} options={options}
       loading={sug.isFetching} style={{ width: '100%' }}
-      disabled={!enabled} placeholder={enabled ? undefined : 'Chọn kho nguồn + SP + SL trước'} />
+      disabled={!enabled} placeholder={enabled ? 'Chọn lô chỉ định' : 'Chọn SP + SL trước'} />
   )
 }
 
@@ -179,15 +175,16 @@ function CreateTO({ onCreated }) {
   const { warehouses } = useNameMaps()
   const { list: productList } = useProductMap()
   const fromId = Form.useWatch('fromWarehouseId', form)
+  const lines = Form.useWatch('lines', form)
 
-  // Chỉ cho chọn sản phẩm ĐANG CÓ TỒN ở kho nguồn.
+  // Chỉ cho chọn sản phẩm BÁN/CHUYỂN ĐƯỢC ở kho nguồn: lô ACTIVE & chưa hết hạn.
   const invInWh = useQuery({
-    queryKey: ['inv-by-wh', fromId],
-    queryFn: () => inventoryApi.getByWarehouse(fromId),
+    queryKey: ['transfer-sellable', fromId],
+    queryFn: () => inventoryApi.sellableByWarehouse(fromId),
     enabled: !!fromId,
   })
   const allowedProductIds = useMemo(
-    () => new Set((invInWh.data || []).filter(r => (r.quantity ?? 0) > 0).map(r => r.productId)),
+    () => new Set((invInWh.data || []).filter(r => (r.availableQuantity ?? 0) > 0).map(r => r.productId)),
     [invInWh.data],
   )
   const availableProducts = useMemo(
@@ -196,9 +193,22 @@ function CreateTO({ onCreated }) {
   )
   const binMap = useBinLabelMap(fromId)
 
-  // Đổi kho nguồn -> reset dòng hàng (sản phẩm cũ có thể không còn tồn ở kho mới).
+  // [Điều chuyển theo NCC] tồn khả dụng theo NCC cho mỗi SP đã chọn ở kho nguồn.
+  const [supByProduct, setSupByProduct] = useState({})
+  const supValue = (s) => s.supplierId ?? ''
+  const loadSuppliers = async (productId) => {
+    if (!productId || !fromId) return
+    try {
+      const data = await inventoryApi.availableBySupplier(productId, fromId)
+      setSupByProduct(prev => ({ ...prev, [productId]: data || [] }))
+    } catch { /* để rỗng nếu lỗi */ }
+  }
+
+  // Đổi kho nguồn -> reset dòng hàng + cache NCC.
   useEffect(() => {
-    form.setFieldsValue({ lines: [{ designatedBatchId: AUTO }] })
+    form.setFieldsValue({ lines: [{ batchMode: 'FEFO' }] })
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSupByProduct({})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fromId])
 
@@ -217,8 +227,10 @@ function CreateTO({ onCreated }) {
       createdBy: user?.userId,
       lines: v.lines.map(l => ({
         productId: l.productId,
+        supplierId: l.supplierId ? l.supplierId : null,       // '' (không rõ NCC) -> null
         quantity: l.quantity,
-        designatedBatchId: l.designatedBatchId && l.designatedBatchId !== AUTO ? l.designatedBatchId : null,
+        batchMode: l.batchMode || 'FEFO',
+        designatedBatchId: l.batchMode === 'DESIGNATED' ? (l.designatedBatchId || null) : null,
       })),
     })
   }
@@ -227,7 +239,7 @@ function CreateTO({ onCreated }) {
 
   return (
     <Card title="Tạo phiếu điều chuyển">
-      <Form form={form} layout="vertical" initialValues={{ lines: [{ designatedBatchId: AUTO }] }}>
+      <Form form={form} layout="vertical" initialValues={{ lines: [{ batchMode: 'FEFO' }] }}>
         <Row gutter={16}>
           <Col xs={24} md={10}>
             <Form.Item name="fromWarehouseId" label="Kho nguồn" rules={[{ required: true, message: 'Chọn kho nguồn' }]}>
@@ -244,47 +256,71 @@ function CreateTO({ onCreated }) {
 
         <Divider orientation="left" style={{ margin: '4px 0 12px' }}>Dòng hàng</Divider>
         <Typography.Paragraph type="secondary" style={{ marginTop: -8 }}>
-          Mặc định để "Tự động (FEFO)" — picker quét lô ACTIVE bất kỳ. Nếu chọn "Chỉ định", picker buộc phải quét đúng lô đó.
+          Mỗi dòng chọn <b>sản phẩm · nhà cung cấp · số lượng · loại lô</b>. Loại lô: <b>FEFO</b> (hệ thống gán lô cứng, picker phải quét đúng lô), <b>Quét bất kỳ</b> (đúng SP + NCC), hoặc <b>Chỉ định</b> (chọn sẵn lô cụ thể).
         </Typography.Paragraph>
         <Form.List name="lines">
           {(fields, { add, remove }) => (
             <>
-              {fields.map(({ key, name, ...rest }) => (
+              {fields.map(({ key, name, ...rest }) => {
+                const lp = lines?.[name] || {}
+                const supList = supByProduct[lp.productId] || []
+                return (
                 <Row gutter={8} key={key} align="top" style={{ marginBottom: 4 }}>
-                  <Col flex="260px">
+                  <Col flex="220px">
                     <Form.Item {...rest} name={[name, 'productId']} rules={[{ required: true, message: 'Chọn SP' }]}>
                       <Select showSearch optionFilterProp="label"
                         disabled={!fromId}
                         loading={!!fromId && invInWh.isFetching}
-                        placeholder={fromId ? (invInWh.isFetching ? 'Đang tải sản phẩm…' : 'Sản phẩm') : 'Chọn kho nguồn trước'}
-                        notFoundContent={fromId && !invInWh.isFetching ? 'Kho nguồn không có sản phẩm tồn' : null}
-                        options={productOptions(availableProducts)} />
+                        placeholder={fromId ? (invInWh.isFetching ? 'Đang tải…' : 'Sản phẩm') : 'Chọn kho nguồn trước'}
+                        notFoundContent={fromId && !invInWh.isFetching ? 'Kho nguồn không có hàng bán được' : null}
+                        options={productOptions(availableProducts)}
+                        onChange={(pid) => {
+                          form.setFieldValue(['lines', name, 'supplierId'], undefined)
+                          form.setFieldValue(['lines', name, 'designatedBatchId'], undefined)
+                          loadSuppliers(pid)
+                        }} />
                     </Form.Item>
                   </Col>
-                  <Col flex="110px">
+                  <Col flex="180px">
+                    <Form.Item {...rest} name={[name, 'supplierId']} rules={[{ required: true, message: 'Chọn NCC' }]}>
+                      <Select placeholder={lp.productId ? 'Nhà cung cấp' : 'Chọn SP trước'}
+                        disabled={!lp.productId} notFoundContent="Không có NCC còn tồn"
+                        options={supList.map(s => ({ value: supValue(s), label: `${s.supplierName || '— Không rõ NCC'} (tồn ${s.availableQuantity})` }))}
+                        onChange={() => form.setFieldValue(['lines', name, 'designatedBatchId'], undefined)} />
+                    </Form.Item>
+                  </Col>
+                  <Col flex="90px">
                     <Form.Item {...rest} name={[name, 'quantity']} rules={[{ required: true, message: 'SL' }]}>
-                      <InputNumber min={1} placeholder="Số lượng" style={{ width: '100%' }} />
+                      <InputNumber min={1} placeholder="SL" style={{ width: '100%' }} />
+                    </Form.Item>
+                  </Col>
+                  <Col flex="200px">
+                    <Form.Item {...rest} name={[name, 'batchMode']} rules={[{ required: true, message: 'Chọn loại lô' }]}>
+                      <Select placeholder="Loại lô" options={[
+                        { value: 'FEFO', label: 'FEFO — gán lô cứng' },
+                        { value: 'ANY', label: 'Quét lô bất kỳ (đúng SP+NCC)' },
+                        { value: 'DESIGNATED', label: 'Chỉ định lô cụ thể' },
+                      ]} />
                     </Form.Item>
                   </Col>
                   <Col flex="auto">
-                    <Form.Item noStyle shouldUpdate>
-                      {() => (
-                        <Form.Item {...rest} name={[name, 'designatedBatchId']}>
-                          <BatchLineSelect
-                            fromWarehouseId={fromId}
-                            productId={form.getFieldValue(['lines', name, 'productId'])}
-                            quantity={form.getFieldValue(['lines', name, 'quantity'])}
-                            binMap={binMap} />
-                        </Form.Item>
-                      )}
-                    </Form.Item>
+                    {lp.batchMode === 'DESIGNATED' && (
+                      <Form.Item {...rest} name={[name, 'designatedBatchId']} rules={[{ required: true, message: 'Chọn lô' }]}>
+                        <BatchLineSelect
+                          fromWarehouseId={fromId}
+                          productId={lp.productId}
+                          quantity={lp.quantity}
+                          binMap={binMap} />
+                      </Form.Item>
+                    )}
                   </Col>
                   <Col flex="40px">
                     <Button danger type="text" icon={<DeleteOutlined />} disabled={fields.length === 1} onClick={() => remove(name)} />
                   </Col>
                 </Row>
-              ))}
-              <Button type="dashed" block icon={<PlusOutlined />} onClick={() => add({ designatedBatchId: AUTO })}>Thêm dòng</Button>
+                )
+              })}
+              <Button type="dashed" block icon={<PlusOutlined />} onClick={() => add({ batchMode: 'FEFO' })}>Thêm dòng</Button>
             </>
           )}
         </Form.List>

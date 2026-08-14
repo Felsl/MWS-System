@@ -34,10 +34,15 @@ public class GetAllWarehousesUseCase {
         List<String> allowedIds = WarehouseScopeContext.get();
 
         if (allowedIds.isEmpty()) {
-            // Admin hoặc role không bị giới hạn scope → trả tất cả
-            return warehouseRepository.findAllActive();
+            // Admin/không giới hạn scope: chế độ thường CHỈ trả kho ACTIVE (kho đã đóng ẩn đi;
+            // muốn xem kho đóng thì bật "Hiện kho đã đóng" -> GetAllWarehousesAdminUseCase).
+            return warehouseRepository.findAllActive().stream()
+                    .filter(Warehouse::isActive)
+                    .toList();
         }
-        // User bị giới hạn scope → chỉ trả kho trong danh sách được phép
-        return warehouseRepository.findByIds(allowedIds);
+        // User bị giới hạn scope → chỉ trả kho được phép VÀ đang ACTIVE.
+        return warehouseRepository.findByIds(allowedIds).stream()
+                .filter(Warehouse::isActive)
+                .toList();
     }
 }

@@ -150,7 +150,9 @@ public class PickingDomainService {
                         "Không tìm thấy dòng nhặt: " + pickingListDetailId));
 
         PickingListDetail shortDetail = findDetail(pl, pickingListDetailId);
-        InventoryBatch scanned = resolveExpectedBatchForScan(shortDetail, scannedBatchNumber);
+        // [Báo thiếu] Cho phép lô THAY THẾ khác lô FEFO chỉ định, miễn: tồn tại + ACTIVE +
+        // đúng kho + đúng sản phẩm + đúng NCC (cùng NCC với lô cần xuất). FE gửi batchId đã chọn.
+        InventoryBatch scanned = resolveSubstituteBatchForShort(shortDetail, scannedBatchNumber);
         String productId = shortDetail.getProductId();
 
         // (1) Xác nhận short-pick (kiểm tra lệch lô + biên độ số lượng nằm trong confirmShort)
@@ -277,6 +279,49 @@ public class PickingDomainService {
                     + "cần xuất (" + expected.getBatchNumber() + "). Vui lòng kiểm tra lại!");
         }
         return expected;
+    }
+
+    /**
+     * [Báo thiếu] Tra lô THAY THẾ mà người lấy thực sự lấy (có thể khác lô FEFO chỉ định).
+     * Hợp lệ khi: lô tồn tại + ACTIVE + đúng kho + đúng sản phẩm + đúng NCC (cùng NCC với lô cần xuất).
+     * FE gửi batchId (duy nhất) nên tra theo id; vẫn chấp nhận quét bằng batch_number nếu khớp id.
+     */
+    private InventoryBatch resolveSubstituteBatchForShort(PickingListDetail detail, String scanned) {
+        InventoryBatch expected = batchRepository.findById(detail.getBatchId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Không tìm thấy lô cần xuất (id=" + detail.getBatchId() + ")"));
+        InventoryBatch picked = batchRepository.findById(scanned).orElse(null);
+        if (picked == null) {
+            throw new IllegalArgumentException("Lô bạn chọn không tồn tại trong hệ thống");
+        }
+        if (picked.getStatus() != InventoryBatch.Status.ACTIVE) {
+            throw new IllegalArgumentException("Lô " + picked.getBatchNumber() + " không ở trạng thái ACTIVE");
+        }
+        if (!java.util.Objects.equals(picked.getWarehouseId(), expected.getWarehouseId())) {
+            throw new IllegalArgumentException("Lô thay thế phải ở đúng kho của lệnh nhặt");
+        }
+        if (!java.util.Objects.equals(picked.getProductId(), detail.getProductId())) {
+            throw new IllegalArgumentException("Lô thay thế phải cùng sản phẩm");
+        }
+        if (!java.util.Objects.equals(picked.getSupplierId(), expected.getSupplierId())) {
+            throw new IllegalArgumentException("Lô thay thế phải cùng nhà cung cấp với lô cần xuất");
+        }
+        return picked;
+    }
+
+    /**
+     * [Báo thiếu] Danh sách lô ACTIVE (chưa hết hạn) người lấy có thể chọn cho một dòng nhặt:
+     * cùng sản phẩm + NCC + kho với lô FEFO chỉ định.
+     */
+    public java.util.List<InventoryBatch> candidateBatchesForShort(String pickingListDetailId) {
+        PickingList pl = pickingRepository.findByDetailId(pickingListDetailId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy dòng nhặt: " + pickingListDetailId));
+        PickingListDetail detail = findDetail(pl, pickingListDetailId);
+        InventoryBatch expected = batchRepository.findById(detail.getBatchId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Không tìm thấy lô cần xuất (id=" + detail.getBatchId() + ")"));
+        return batchRepository.findActiveBatchesForPickingBySupplier(
+                detail.getProductId(), expected.getWarehouseId(), expected.getSupplierId());
     }
 
     private PickingListDetail findDetail(PickingList pl, String detailId) {

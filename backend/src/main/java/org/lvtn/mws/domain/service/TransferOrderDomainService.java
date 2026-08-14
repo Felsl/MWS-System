@@ -129,6 +129,8 @@ public class TransferOrderDomainService {
                     .quantity(line.getQuantity())
                     .quantityReceived(0)
                     .designatedBatchId(line.getDesignatedBatchId())
+                    .supplierId(line.getSupplierId())
+                    .batchMode(line.getBatchMode())
                     .build());
         }
 

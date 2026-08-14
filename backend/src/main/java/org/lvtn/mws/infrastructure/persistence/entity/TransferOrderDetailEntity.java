@@ -27,6 +27,12 @@ public class TransferOrderDetailEntity {
     @Column(name = "designated_batch_id", length = 20)
     private String designatedBatchId;
 
+    @Column(name = "supplier_id", length = 20)
+    private String supplierId;
+
+    @Column(name = "batch_mode", length = 20)
+    private String batchMode;
+
     @Column(name = "quantity", nullable = false)
     private Integer quantity;
 

@@ -59,10 +59,11 @@ public class TransferPickingDomainService {
                 .build();
 
         for (TransferOrderDetail line : transfer.getDetails()) {
-            if (line.getDesignatedBatchId() != null && !line.getDesignatedBatchId().isBlank()) {
-                addDesignatedLine(pickingList, line, fromWh);
-            } else {
-                addFefoSuggestedLines(pickingList, line, fromWh);
+            String mode = effectiveBatchMode(line);
+            switch (mode) {
+                case "DESIGNATED" -> addDesignatedLine(pickingList, line, fromWh);
+                case "FEFO"       -> addFefoLines(pickingList, line, fromWh, true);   // FEFO gán lô CỨNG (khoá)
+                default            -> addFefoLines(pickingList, line, fromWh, false); // ANY: gợi ý FEFO, quét bất kỳ (đúng NCC)
             }
         }
 
@@ -109,10 +110,23 @@ public class TransferPickingDomainService {
                 .build());
     }
 
-    /** Dòng không chỉ định: gợi ý FEFO (không khoá), picker được quét lô khác lúc pick. */
-    private void addFefoSuggestedLines(PickingList pickingList, TransferOrderDetail line, String fromWh) {
+    /** Chế độ lô hiệu dụng của dòng (tương thích ngược: dòng cũ suy theo designatedBatchId). */
+    private String effectiveBatchMode(TransferOrderDetail line) {
+        String m = line.getBatchMode();
+        if (m != null && !m.isBlank()) return m;
+        return (line.getDesignatedBatchId() != null && !line.getDesignatedBatchId().isBlank())
+                ? "DESIGNATED" : "ANY";
+    }
+
+    /**
+     * Dòng FEFO/ANY: gom theo FEFO trong phạm vi NCC của dòng (null = mọi NCC).
+     * lock=true (FEFO): khoá requiredBatchId = phải quét đúng lô FEFO đã gán.
+     * lock=false (ANY): requiredBatchId=null, picker quét lô bất kỳ nhưng phải ĐÚNG NCC (chặn ở resolveScannedBatch).
+     */
+    private void addFefoLines(PickingList pickingList, TransferOrderDetail line, String fromWh, boolean lock) {
         int remaining = line.getQuantity();
-        for (InventoryBatch batch : batchRepository.findActiveBatchesForPicking(line.getProductId(), fromWh)) {
+        for (InventoryBatch batch : batchRepository.findActiveBatchesForPickingBySupplier(
+                line.getProductId(), fromWh, line.getSupplierId())) {
             if (remaining <= 0) break;
             int available = batch.getQuantity();
             if (available <= 0) continue;
@@ -121,8 +135,8 @@ public class TransferPickingDomainService {
                     .id(idGenerator.generate())
                     .pickingListId(pickingList.getId())
                     .productId(line.getProductId())
-                    .batchId(batch.getId())      // gợi ý FEFO
-                    // requiredBatchId = null -> cho quét tự do
+                    .batchId(batch.getId())                       // gợi ý FEFO
+                    .requiredBatchId(lock ? batch.getId() : null) // FEFO: khoá; ANY: tự do
                     .binLocationId(batch.getBinLocationId())
                     .quantityToPick(take)
                     .build());
@@ -188,16 +202,23 @@ public class TransferPickingDomainService {
             return req;
         }
 
-        // Gợi ý FEFO: nhận bất kỳ lô hợp lệ; ưu tiên lô ở đúng ô kệ được gợi ý.
+        // Gợi ý FEFO (mode ANY): nhận bất kỳ lô hợp lệ nhưng phải ĐÚNG NCC của lô gợi ý.
+        String requiredSupplier = detail.getBatchId() == null ? null
+                : batchRepository.findById(detail.getBatchId()).map(InventoryBatch::getSupplierId).orElse(null);
         InventoryBatch chosen = candidates.stream()
+                .filter(b -> requiredSupplier == null
+                        || java.util.Objects.equals(requiredSupplier, b.getSupplierId()))
                 .filter(b -> detail.getBinLocationId() != null
                         && detail.getBinLocationId().equals(b.getBinLocationId()))
                 .findFirst()
-                .orElse(candidates.stream().findFirst().orElse(null));
+                .orElse(candidates.stream()
+                        .filter(b -> requiredSupplier == null
+                                || java.util.Objects.equals(requiredSupplier, b.getSupplierId()))
+                        .findFirst().orElse(null));
         if (chosen == null) {
             throw new IllegalArgumentException(
                     "Không tìm thấy lô ACTIVE còn tồn khớp '" + scanned
-                            + "' cho sản phẩm này tại kho nguồn.");
+                            + "' đúng nhà cung cấp cho sản phẩm này tại kho nguồn.");
         }
         ensureEnough(chosen, detail);
         return chosen;

@@ -13,6 +13,8 @@ public class TransferOrderDetail {
     private final String productId;
     private String batchId;            // FEFO điền ở bước approve
     private final String designatedBatchId; // Lô do người lập/duyệt CHỈ ĐỊNH (null = chỉ gợi ý FEFO)
+    private final String supplierId;   // [Điều chuyển theo NCC] NCC chọn cho dòng (nullable)
+    private final String batchMode;    // [Điều chuyển] FEFO | ANY | DESIGNATED (null -> suy theo designatedBatchId)
     private final int quantity;        // số lượng bốc đi tại kho nguồn (> 0)
     private int quantityReceived;      // số lượng thực nhận tại kho đích
     private String fromBinLocationId;  // FEFO điền ở bước approve
@@ -24,6 +26,8 @@ public class TransferOrderDetail {
         this.productId         = Objects.requireNonNull(b.productId, "productId is required");
         this.batchId           = b.batchId;
         this.designatedBatchId = b.designatedBatchId;
+        this.supplierId       = b.supplierId;
+        this.batchMode        = b.batchMode;
         this.quantity          = b.quantity;
         this.quantityReceived  = b.quantityReceived;
         this.fromBinLocationId = b.fromBinLocationId;
@@ -39,6 +43,8 @@ public class TransferOrderDetail {
         private String productId;
         private String batchId;
         private String designatedBatchId;
+        private String supplierId;
+        private String batchMode;
         private int quantity;
         private int quantityReceived = 0;
         private String fromBinLocationId;
@@ -51,6 +57,8 @@ public class TransferOrderDetail {
         public Builder designatedBatchId(String v){ this.designatedBatchId = v; return this; }
         public Builder quantity(int v)            { this.quantity = v; return this; }
         public Builder quantityReceived(int v)    { this.quantityReceived = v; return this; }
+        public Builder supplierId(String v)       { this.supplierId = v; return this;    }
+        public Builder batchMode(String v)          { this.batchMode = v; return this;}
         public Builder fromBinLocationId(String v){ this.fromBinLocationId = v; return this; }
         public Builder binLocationId(String v)    { this.binLocationId = v; return this; }
 
@@ -86,6 +94,8 @@ public class TransferOrderDetail {
     public String getProductId()         { return productId; }
     public String getBatchId()           { return batchId; }
     public String getDesignatedBatchId() { return designatedBatchId; }
+    public String getSupplierId()        { return supplierId; }
+    public String getBatchMode()         { return batchMode; }
     public int getQuantity()             { return quantity; }
     public int getQuantityReceived()     { return quantityReceived; }
     public String getFromBinLocationId() { return fromBinLocationId; }

@@ -3,7 +3,7 @@ import { useProducts } from '../../hooks/useProducts'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useBinLabels } from '../../hooks/useBinLabels'
 import {
-  Card, Button, Input, List, Typography, Tag, Empty, Space, Progress, Modal,
+  Card, Button, Input, List, Typography, Tag, Empty, Space, Progress, Modal, Select,
   InputNumber, Form, Alert, App as AntdApp,
 } from 'antd'
 import {
@@ -196,7 +196,7 @@ function ScanRunner({ pickId, onBack }) {
             <Space size="large" style={{ marginTop: 6, fontSize: 14 }} wrap>
               <span>Ô kệ: <b style={{ fontSize: 18 }}>{labelOf(current.binLocationId)}</b></span>
               <span>SL: <b style={{ fontSize: 18 }}>{current.quantityToPick}</b></span>
-              {current.batchId && <span style={{ fontSize: 12 }}>Lô: {current.batchId}</span>}
+              {(current.batchNumber || current.batchId) && <span style={{ fontSize: 12 }}>Lô: {current.batchNumber || current.batchId}</span>}
             </Space>
           </div>
 
@@ -283,7 +283,18 @@ function ManualEntry({ ref, onSubmit, disabled, autoFocusOn }) {
 
 function ShortModal({ line, onClose, confirmedBy, onDone }) {
   const { message } = AntdApp.useApp()
+  const { map: productMap } = useProducts()
   const [form] = Form.useForm()
+  // Lô ứng viên: cùng SP + NCC + kho với lô cần xuất (ACTIVE). Cho chọn lô KHÁC lô FEFO.
+  const cand = useQuery({
+    queryKey: ['short-candidates', line?.id],
+    queryFn: () => pickingListsApi.candidateBatches(line.id),
+    enabled: !!line?.id,
+  })
+  const options = (cand.data || []).map(b => ({
+    value: b.batchId,
+    label: `${b.batchNumber} · ${productMap[line?.productId]?.name || line?.productId}${b.supplierName ? ` · ${b.supplierName}` : ''} (tồn ${b.quantity})`,
+  }))
   const mut = useMutation({
     mutationFn: (v) => pickingListsApi.reportShort(line.id, {
       scannedBatchNumber: v.scannedBatchNumber, actualQty: v.actualQty, reason: v.reason, confirmedBy,
@@ -294,11 +305,12 @@ function ShortModal({ line, onClose, confirmedBy, onDone }) {
   return (
     <Modal title="Báo thiếu hàng" open={!!line} onCancel={onClose}
       onOk={async () => mut.mutate(await form.validateFields())} confirmLoading={mut.isPending}
-      afterOpenChange={(o) => { if (o) form.setFieldsValue({ scannedBatchNumber: '', actualQty: line?.quantityToPick, reason: '' }) }}
+      afterOpenChange={(o) => { if (o) form.setFieldsValue({ scannedBatchNumber: undefined, actualQty: line?.quantityToPick, reason: '' }) }}
       destroyOnClose>
       <Form form={form} layout="vertical">
-        <Form.Item name="scannedBatchNumber" label="Số lô đã quét" rules={[{ required: true, message: 'Nhập số lô' }]}>
-          <Input autoFocus />
+        <Form.Item name="scannedBatchNumber" label="Lô thực lấy" rules={[{ required: true, message: 'Chọn lô' }]}>
+          <Select showSearch optionFilterProp="label" placeholder="Chọn lô đã lấy (cùng SP + NCC)"
+            loading={cand.isLoading} notFoundContent="Không có lô phù hợp" options={options} autoFocus />
         </Form.Item>
         <Form.Item name="actualQty" label="Số lượng thực lấy" rules={[{ required: true, message: 'Nhập SL' }]}>
           <InputNumber min={0} max={line?.quantityToPick} style={{ width: '100%' }} />

@@ -119,10 +119,8 @@ public class PickingListDetail {
         if (this.confirmed) {
             throw new IllegalStateException("Dòng này đã được xác nhận trước đó");
         }
-        if (!this.batchId.equals(scannedBatchId)) {
-            throw new IllegalArgumentException(
-                    "Sai mã lô hàng! Lô hàng bạn vừa quét không phải là lô cần xuất. Vui lòng kiểm tra lại!");
-        }
+        // [Báo thiếu] KHÔNG bắt buộc trùng lô FEFO chỉ định: người lấy có thể lấy từ lô khác
+        // (cùng sản phẩm + NCC + kho) — tính hợp lệ của lô thay thế được kiểm ở tầng service.
         if (actualQty < 0 || actualQty >= this.quantityToPick) {
             throw new IllegalArgumentException(
                     "Số lượng short-pick phải trong [0, " + (this.quantityToPick - 1) + "]; "

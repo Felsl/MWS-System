@@ -15,4 +15,7 @@ public class TransferLineItemRequest {
 
     /** (Tùy chọn) Lô do người lập/duyệt CHỈ ĐỊNH; bỏ trống = chỉ gợi ý FEFO, picker quét tự do. */
     private String designatedBatchId;
+
+    private String supplierId;   // [Điều chuyển theo NCC]
+    private String batchMode;    // FEFO | ANY | DESIGNATED
 }

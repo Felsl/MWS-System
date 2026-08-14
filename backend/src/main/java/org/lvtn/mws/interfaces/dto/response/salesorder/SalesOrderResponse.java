@@ -15,6 +15,7 @@ public record SalesOrderResponse(
         int priority,
         LocalDate requiredDate,
         String createdBy,
+        String createdByName,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
         List<SalesOrderDetailResponse> details) {

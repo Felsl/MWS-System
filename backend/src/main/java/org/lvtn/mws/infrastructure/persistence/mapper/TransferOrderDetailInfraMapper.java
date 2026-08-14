@@ -15,6 +15,8 @@ public interface TransferOrderDetailInfraMapper {
         e.setProductId(d.getProductId());
         e.setBatchId(d.getBatchId());
         e.setDesignatedBatchId(d.getDesignatedBatchId());
+        e.setSupplierId(d.getSupplierId());
+        e.setBatchMode(d.getBatchMode());
         e.setQuantity(d.getQuantity());
         e.setQuantityReceived(d.getQuantityReceived());
         e.setFromBinLocationId(d.getFromBinLocationId());
@@ -30,6 +32,8 @@ public interface TransferOrderDetailInfraMapper {
                 .productId(e.getProductId())
                 .batchId(e.getBatchId())
                 .designatedBatchId(e.getDesignatedBatchId())
+                .supplierId(e.getSupplierId())
+                .batchMode(e.getBatchMode())
                 .quantity(e.getQuantity() != null ? e.getQuantity() : 0)
                 .quantityReceived(e.getQuantityReceived() != null ? e.getQuantityReceived() : 0)
                 .fromBinLocationId(e.getFromBinLocationId())

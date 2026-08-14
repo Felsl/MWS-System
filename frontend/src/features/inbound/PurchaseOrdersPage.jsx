@@ -400,8 +400,14 @@ function CreatePO({ onCreated }) {
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="expectedDate" label="Ngày dự kiến">
-              <DatePicker style={{ width: "100%" }} format="DD/MM/YYYY" />
+            <Form.Item name="expectedDate" label="Ngày dự kiến"
+              rules={[{
+                validator: (_, v) => (!v || v.isAfter(dayjs(), 'day'))
+                  ? Promise.resolve()
+                  : Promise.reject(new Error('Ngày dự kiến phải sau ngày hiện tại')),
+              }]}>
+              <DatePicker style={{ width: "100%" }} format="DD/MM/YYYY"
+                disabledDate={(d) => d && d <= dayjs().endOf('day')} />
             </Form.Item>
           </Col>
         </Row>
@@ -636,7 +642,7 @@ function PODetail({ id }) {
             </Can>
           )}
           {s === "PENDING_REVIEW" && (
-            <Can permission={P.INBOUND_CREATE_PO}>
+            <Can permission={P.INBOUND_SUBMIT_PO}>
               <Button
                 type="primary"
                 icon={<SendOutlined />}

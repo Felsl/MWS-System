@@ -87,7 +87,7 @@ function SOList({ onOpen, onCreate }) {
     { title: 'Khách hàng', dataIndex: 'customerId', render: (v) => customerMap[v]?.name || v },
     { title: 'Kho', dataIndex: 'warehouseId', render: (v) => warehouseMap[v]?.name || v, width: 150 },
     { title: 'Cần giao', dataIndex: 'requiredDate', width: 120, sorter: true, sortOrder: columnSortOrder(sorter, 'requiredDate'), render: (v) => v ? dayjs(v).format('DD/MM/YYYY') : '—' },
-    { title: 'Người tạo', dataIndex: 'createdBy', width: 130 },
+    { title: 'Người tạo', dataIndex: 'createdByName', width: 130, render: (v, r) => v || r.createdBy || '—' },
     { title: 'Tạo lúc', dataIndex: 'createdAt', width: 150, sorter: true, sortOrder: columnSortOrder(sorter, 'createdAt'), render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
   ]
 
@@ -394,7 +394,7 @@ function SODetail({ id }) {
           { key: 'wh', label: 'Kho xuất', children: warehouseMap[so.warehouseId]?.name || so.warehouseId },
           { key: 'req', label: 'Cần giao', children: so.requiredDate ? dayjs(so.requiredDate).format('DD/MM/YYYY') : '—' },
           { key: 'disc', label: 'Giảm giá', children: so.discountAmount != null ? Number(so.discountAmount).toLocaleString('vi-VN') : '—' },
-          { key: 'cb', label: 'Người tạo', children: so.createdBy || '—' },
+          { key: 'cb', label: 'Người tạo', children: so.createdByName || so.createdBy || '—' },
           { key: 'ca', label: 'Tạo lúc', children: so.createdAt ? dayjs(so.createdAt).format('DD/MM/YYYY HH:mm') : '—' },
         ]} />
       <Table style={{ marginTop: 16 }} rowKey="id" size="small" pagination={false}

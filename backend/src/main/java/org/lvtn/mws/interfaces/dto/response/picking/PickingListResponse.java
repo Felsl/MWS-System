@@ -8,6 +8,7 @@ public record PickingListResponse(
         String pickNumber,
         String soId,
         String assignedTo,
+        String assignedToName,
         String status,
         LocalDateTime startedAt,
         LocalDateTime completedAt,

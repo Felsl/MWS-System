@@ -80,7 +80,7 @@ public class PurchaseOrderController {
         return ResponseEntity.ok(buildResponse(submitForReviewUseCase.execute(id)));
     }
 
-    @PreAuthorize("hasAuthority('INBOUND_CREATE_PO')")
+    @PreAuthorize("hasAuthority('INBOUND_SUBMIT_PO')")
     @PostMapping("/{id}/submit-approval")
     public ResponseEntity<PurchaseOrderResponse> submitForApproval(@PathVariable String id) {
         return ResponseEntity.ok(buildResponse(submitForApprovalUseCase.execute(id)));
