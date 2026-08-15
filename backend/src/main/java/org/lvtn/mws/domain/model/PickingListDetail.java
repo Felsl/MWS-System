@@ -121,10 +121,9 @@ public class PickingListDetail {
         }
         // [Báo thiếu] KHÔNG bắt buộc trùng lô FEFO chỉ định: người lấy có thể lấy từ lô khác
         // (cùng sản phẩm + NCC + kho) — tính hợp lệ của lô thay thế được kiểm ở tầng service.
-        if (actualQty < 0 || actualQty >= this.quantityToPick) {
+        if (actualQty < 1 || actualQty > this.quantityToPick) {
             throw new IllegalArgumentException(
-                    "Số lượng short-pick phải trong [0, " + (this.quantityToPick - 1) + "]; "
-                            + "nếu lấy đủ " + this.quantityToPick + " hãy dùng xác nhận thường");
+                    "Số lượng thực lấy phải trong [1, " + this.quantityToPick + "]");
         }
         this.actualBatchId  = scannedBatchId;
         this.quantityPicked = actualQty;

@@ -13,7 +13,7 @@ public class DeleteWarehouseUseCase {
     private final WarehouseDomainService warehouseDomainService;
 
     @Transactional
-    @CacheEvict(value = "warehouses", allEntries = true)
+    @CacheEvict(value = {"warehouses", "warehouses-all"}, allEntries = true)
     public void execute(String id) {
         warehouseDomainService.delete(id);
     }

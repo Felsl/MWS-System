@@ -14,7 +14,7 @@ public class UpdateWarehouseUseCase {
     private final WarehouseDomainService warehouseDomainService;
 
     @Transactional
-    @CacheEvict(value = "warehouses", allEntries = true)
+    @CacheEvict(value = {"warehouses", "warehouses-all"}, allEntries = true)
     public Warehouse execute(String id, String code, String name, String address) {
         return warehouseDomainService.update(id, code, name, address);
     }

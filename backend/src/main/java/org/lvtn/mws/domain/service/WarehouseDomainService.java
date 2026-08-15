@@ -35,6 +35,10 @@ public class WarehouseDomainService {
                 .orElseThrow(() -> new RuntimeException("Warehouse not found: " + id));
     }
 
+    public List<Warehouse> findAll() {
+        return warehouseRepository.findAll();
+    }
+
     public List<Warehouse> findAllActive() {
         return warehouseRepository.findAllActive();
     }

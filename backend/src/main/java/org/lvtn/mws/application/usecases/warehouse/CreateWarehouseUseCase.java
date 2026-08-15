@@ -16,7 +16,7 @@ public class CreateWarehouseUseCase {
     private final IIdGenerator           idGenerator;
 
     @Transactional
-    @CacheEvict(value = "warehouses", allEntries = true)
+    @CacheEvict(value = {"warehouses", "warehouses-all"}, allEntries = true)
     public Warehouse execute(String code, String name, String address) {
         return warehouseDomainService.create(idGenerator.generate(), code, name, address);
     }

@@ -10,6 +10,8 @@ public interface IWarehouseRepository {
     Optional<Warehouse> findById(String id);
     Optional<Warehouse> findByCode(String code);
     List<Warehouse> findAllActive();
+    /** [Kho đã đóng] TẤT CẢ kho gồm cả kho xoá mềm (deletedAt != null) — cho admin xem kho đã đóng. */
+    List<Warehouse> findAll();
     List<Warehouse> findByIds(List<String> ids);
     boolean existsById(String id);
     boolean existsByCode(String code);

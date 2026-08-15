@@ -313,7 +313,7 @@ function ShortModal({ line, onClose, confirmedBy, onDone }) {
             loading={cand.isLoading} notFoundContent="Không có lô phù hợp" options={options} autoFocus />
         </Form.Item>
         <Form.Item name="actualQty" label="Số lượng thực lấy" rules={[{ required: true, message: 'Nhập SL' }]}>
-          <InputNumber min={0} max={line?.quantityToPick} style={{ width: '100%' }} />
+          <InputNumber min={1} max={line?.quantityToPick} style={{ width: '100%' }} />
         </Form.Item>
         <Form.Item name="reason" label="Lý do" rules={[{ required: true, message: 'Nhập lý do' }]}>
           <Input.TextArea rows={2} />

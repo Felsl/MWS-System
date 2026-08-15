@@ -22,6 +22,6 @@ public class GetAllWarehousesAdminUseCase {
 
     @Cacheable(value = "warehouses-all")
     public List<Warehouse> execute() {
-        return warehouseDomainService.findAllActive();
+        return warehouseDomainService.findAll();   // gồm cả kho đã đóng (xoá mềm)
     }
 }

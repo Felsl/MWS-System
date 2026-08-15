@@ -39,6 +39,13 @@ public class WarehouseRepositoryImpl implements IWarehouseRepository {
     }
 
     @Override
+    public List<Warehouse> findAll() {
+        // JpaRepository.findAll() trả MỌI dòng (không có @Where lọc mềm) -> gồm kho đã đóng.
+        return jpaRepository.findAll()
+                .stream().map(mapper::toDomain).collect(Collectors.toList());
+    }
+
+    @Override
     public List<Warehouse> findByIds(List<String> ids) {
         if (ids == null || ids.isEmpty()) return List.of();
         return jpaRepository.findByIdInAndDeletedAtIsNull(ids)

@@ -543,6 +543,9 @@ function PODetail({ id }) {
       message.success(okMsg);
       qc.setQueryData(["po", id], updated);
       qc.invalidateQueries({ queryKey: ["po-list"] });
+      // Duyệt/từ chối PO xoá thông báo "PO chờ duyệt" ở BE -> làm mới chuông ngay.
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+      qc.invalidateQueries({ queryKey: ["notif-unread"] });
     },
     onError: (e) => message.error(getErrorMessage(e)),
   });

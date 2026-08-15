@@ -159,12 +159,14 @@ public class PickingDomainService {
         shortDetail.confirmShort(scanned.getId(), actualQty, confirmedBy);
         int shortfall = shortDetail.shortfall();
 
-        // (2) Ghi thẻ kho ADJUST cho phần lệch
-        StockMovement adjust = StockMovement.adjustmentForShortPick(
-                idGenerator.generate(), productId, scanned.getWarehouseId(), scanned.getId(),
-                scanned.getBinLocationId(),
-                shortfall, scanned.getQuantity(), pl.getId(), reason, confirmedBy);
-        stockMovementRepository.save(adjust);
+        // (2) Ghi thẻ kho ADJUST cho phần lệch (chỉ khi thực sự thiếu; lấy đủ = max thì bỏ qua)
+        if (shortfall > 0) {
+            StockMovement adjust = StockMovement.adjustmentForShortPick(
+                    idGenerator.generate(), productId, scanned.getWarehouseId(), scanned.getId(),
+                    scanned.getBinLocationId(),
+                    shortfall, scanned.getQuantity(), pl.getId(), reason, confirmedBy);
+            stockMovementRepository.save(adjust);
+        }
 
         // (3) Tự bù phần thiếu từ lô FEFO kế tiếp
         if (shortfall > 0) {
