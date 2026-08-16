@@ -291,9 +291,12 @@ function ShortModal({ line, onClose, confirmedBy, onDone }) {
     queryFn: () => pickingListsApi.candidateBatches(line.id),
     enabled: !!line?.id,
   })
+  const productName = productMap[line?.productId]?.name || line?.productId
+  const maxQty = line?.quantityToPick
+  // Mỗi lựa chọn hiển thị: số lô - tên hàng - NCC (kèm tồn để người lấy biết lô còn đủ không).
   const options = (cand.data || []).map(b => ({
     value: b.batchId,
-    label: `${b.batchNumber} · ${productMap[line?.productId]?.name || line?.productId}${b.supplierName ? ` · ${b.supplierName}` : ''} (tồn ${b.quantity})`,
+    label: `${b.batchNumber} - ${productName} - ${b.supplierName || '—'} (tồn ${b.quantity})`,
   }))
   const mut = useMutation({
     mutationFn: (v) => pickingListsApi.reportShort(line.id, {
@@ -304,16 +307,49 @@ function ShortModal({ line, onClose, confirmedBy, onDone }) {
   })
   return (
     <Modal title="Báo thiếu hàng" open={!!line} onCancel={onClose}
-      onOk={async () => mut.mutate(await form.validateFields())} confirmLoading={mut.isPending}
+      onOk={async () => {
+        try {
+          // Chặn: sai số lượng (không trong [1, max]) hoặc thiếu thông tin -> không gửi.
+          const v = await form.validateFields()
+          mut.mutate(v)
+        } catch {
+          message.warning(`Vui lòng nhập số lượng thực lấy trong khoảng 1–${maxQty ?? ''} và điền đủ thông tin.`)
+        }
+      }}
+      confirmLoading={mut.isPending}
       afterOpenChange={(o) => { if (o) form.setFieldsValue({ scannedBatchNumber: undefined, actualQty: line?.quantityToPick, reason: '' }) }}
       destroyOnClose>
       <Form form={form} layout="vertical">
-        <Form.Item name="scannedBatchNumber" label="Lô thực lấy" rules={[{ required: true, message: 'Chọn lô' }]}>
-          <Select showSearch optionFilterProp="label" placeholder="Chọn lô đã lấy (cùng SP + NCC)"
+        <Form.Item name="scannedBatchNumber" label="Lô thực lấy" rules={[{ required: true, message: 'Chọn lô thực lấy' }]}>
+          <Select showSearch optionFilterProp="label" placeholder="Chọn lô: số lô - tên hàng - NCC"
             loading={cand.isLoading} notFoundContent="Không có lô phù hợp" options={options} autoFocus />
         </Form.Item>
-        <Form.Item name="actualQty" label="Số lượng thực lấy" rules={[{ required: true, message: 'Nhập SL' }]}>
-          <InputNumber min={1} max={line?.quantityToPick} style={{ width: '100%' }} />
+        <Form.Item name="actualQty"
+          label={`Số lượng thực lấy${maxQty != null ? ` (1–${maxQty})` : ''}`}
+          rules={[
+            { required: true, message: 'Nhập số lượng thực lấy' },
+            {
+              // Chặn cứng: SL phải là số nguyên và nằm trong [1, max] (đúng ràng buộc BE).
+              validator: (_, v) => {
+                if (v == null || v === '') return Promise.resolve() // để rule required lo phần trống
+                if (typeof v !== 'number' || Number.isNaN(v) || !Number.isInteger(v)) {
+                  return Promise.reject(new Error('Số lượng phải là số nguyên'))
+                }
+                if (v < 1) return Promise.reject(new Error('Số lượng phải ≥ 1'))
+                if (maxQty != null && v > maxQty) {
+                  return Promise.reject(new Error(`Số lượng không được vượt quá ${maxQty}`))
+                }
+                return Promise.resolve()
+              },
+            },
+          ]}>
+          <InputNumber min={1} max={maxQty} precision={0} style={{ width: '100%' }}
+            onChange={(v) => {
+              // Thông báo ngay khi nhập ngoài khoảng [1, max] (dùng key để không chồng nhiều toast).
+              if (v != null && (v < 1 || (maxQty != null && v > maxQty))) {
+                message.warning({ key: 'short-qty', content: `Số lượng phải từ 1 đến ${maxQty}` })
+              }
+            }} />
         </Form.Item>
         <Form.Item name="reason" label="Lý do" rules={[{ required: true, message: 'Nhập lý do' }]}>
           <Input.TextArea rows={2} />

@@ -62,8 +62,24 @@ function KpiCard({ icon, title, q, to, hint }) {
 
 export default function DashboardPage() {
   const { user, hasPermission } = useAuth()
-  const { notifications } = useNotifications()
+  const { notifications, markRead } = useNotifications()
+  const navigate = useNavigate()
   const screens = Grid.useBreakpoint()
+
+  // Điều hướng tới đối tượng của thông báo (giống NotificationBell):
+  // "PO chờ duyệt" -> mở đúng phiếu PO đó; đơn bán -> mở đơn bán.
+  const routeOfNotif = (n) => {
+    if (!n?.referenceId) return null
+    if (n.referenceType === 'PURCHASE_ORDER') return `/purchase-orders/${n.referenceId}`
+    if (n.referenceType === 'SALES_ORDER') return `/sales-orders/${n.referenceId}`
+    return null
+  }
+  const onNotifClick = (n) => {
+    const to = routeOfNotif(n)
+    if (!to) return
+    if (!n.isRead) markRead(n.id)   // bấm vào coi như đã đọc
+    navigate(to)
+  }
 
   const has = (p) => hasPermission(p)
   const totalOf = (r) => r?.totalElements ?? 0
@@ -138,16 +154,26 @@ export default function DashboardPage() {
           ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có thông báo" />
           : (
             <List size="small" dataSource={notifications.slice(0, screens.lg ? 6 : 4)}
-              renderItem={(n) => (
-                <List.Item>
-                  <List.Item.Meta
-                    title={<span>{!n.isRead && <Tag color="blue">Mới</Tag>}{n.title || n.type || 'Thông báo'}</span>}
-                    description={n.message} />
-                  <Typography.Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
-                    {n.createdAt ? dayjs(n.createdAt).format('DD/MM HH:mm') : ''}
-                  </Typography.Text>
-                </List.Item>
-              )} />
+              renderItem={(n) => {
+                const to = routeOfNotif(n)  // có đối tượng đi kèm (PO/đơn bán) mới cho bấm
+                return (
+                  <List.Item
+                    className={to ? 'mws-line-clickable' : undefined}
+                    onClick={to ? () => onNotifClick(n) : undefined}
+                    role={to ? 'button' : undefined}
+                    tabIndex={to ? 0 : undefined}
+                    onKeyDown={to ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNotifClick(n) } } : undefined}
+                    aria-label={to ? `Mở ${n.title || n.type || 'thông báo'}` : undefined}>
+                    <List.Item.Meta
+                      title={<span>{!n.isRead && <Tag color="blue">Mới</Tag>}{n.title || n.type || 'Thông báo'}
+                        {to && <RightOutlined style={{ fontSize: 10, marginLeft: 6, opacity: 0.45 }} />}</span>}
+                      description={n.message} />
+                    <Typography.Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                      {n.createdAt ? dayjs(n.createdAt).format('DD/MM HH:mm') : ''}
+                    </Typography.Text>
+                  </List.Item>
+                )
+              }} />
           )}
       </Card>
     </div>

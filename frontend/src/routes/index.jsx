@@ -37,6 +37,7 @@ const BarcodeLabelsPage = lazy(() => import('../features/inventory/BarcodeLabels
 const StockMovementsPage = lazy(() => import('../features/inventory/StockMovementsPage'))
 const NotificationsPage = lazy(() => import('../features/notifications/NotificationsPage'))
 const DataIOPage = lazy(() => import('../features/data-io/DataIOPage'))
+const DebugPage = lazy(() => import('../features/debug/DebugPage'))
 
 function PageLoading() {
   return <div style={{ display: 'grid', placeItems: 'center', minHeight: 240 }}><Spin size="large" /></div>
@@ -67,6 +68,7 @@ export default function AppRoutes() {
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
             <Route index element={<DashboardPage />} />
+            <Route path="debug" element={<DebugPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
             <Route element={<ProtectedRoute permission={P.MASTER_PRODUCT_MANAGE} />}>
               <Route path="data-io" element={<DataIOPage />} />
