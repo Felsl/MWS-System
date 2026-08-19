@@ -174,13 +174,19 @@ public class SalesOrderDomainService {
             }
 
             if (allocated > 0) {
-                Inventory inv = inventoryRepository
-                        .findByProductIdAndWarehouseId(detail.getProductId(), so.getWarehouseId())
-                        .orElseThrow(() -> new IllegalStateException(
-                                "Chưa có bản ghi tồn kho cho sản phẩm " + detail.getProductId()
-                                        + " tại kho " + so.getWarehouseId()));
-                inv.reserve(allocated);
-                inventoryRepository.save(inv);
+                // Giữ chỗ ở TỒN TỔNG là best-effort: LÔ mới là nguồn sự thật để nhặt.
+                // Nếu tồn tổng lệch (reserved bị phồng do dữ liệu cũ) thì KẸP theo khả dụng,
+                // KHÔNG ném để tránh rollback cả phân bổ/nhu cầu/thông báo.
+                var invOpt = inventoryRepository
+                        .findByProductIdAndWarehouseId(detail.getProductId(), so.getWarehouseId());
+                if (invOpt.isPresent()) {
+                    Inventory inv = invOpt.get();
+                    int canReserve = Math.min(allocated, inv.availableQuantity());
+                    if (canReserve > 0) {
+                        inv.reserve(canReserve);
+                        inventoryRepository.save(inv);
+                    }
+                }
             }
             detail.allocate(allocated);
 
@@ -232,8 +238,11 @@ public class SalesOrderDomainService {
             var invOpt = inventoryRepository.findByProductIdAndWarehouseId(productId, warehouseId);
             if (invOpt.isPresent()) {
                 Inventory inv = invOpt.get();
-                inv.reserve(taken);
-                inventoryRepository.save(inv);
+                int canReserve = Math.min(taken, inv.availableQuantity());  // kẹp, không ném
+                if (canReserve > 0) {
+                    inv.reserve(canReserve);
+                    inventoryRepository.save(inv);
+                }
             }
 
             var soOpt = soRepository.findById(d.getSoId());

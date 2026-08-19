@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -119,7 +118,8 @@ class SalesOrderDomainServiceTest {
     }
 
     @Test
-    void allocateMissingInventoryThrows() {
+    void allocateMissingInventoryRow_stillAllocatesFromBatches() {
+        // Tồn tổng lệch/thiếu KHÔNG được làm rollback: LÔ là nguồn sự thật để nhặt.
         SalesOrder so = order(SalesOrder.Status.DRAFT, 5);
         InventoryBatch b = batch("BB", 5);
         when(soRepository.findById("SO1")).thenReturn(Optional.of(so));
@@ -127,11 +127,15 @@ class SalesOrderDomainServiceTest {
                 .thenReturn(List.of(b));
         when(batchRepository.save(any(InventoryBatch.class))).thenAnswer(i -> i.getArgument(0));
         when(inventoryRepository.findByProductIdAndWarehouseId("P1", "W1"))
-                .thenReturn(Optional.empty());
+                .thenReturn(Optional.empty());   // KHÔNG có bản ghi tồn tổng
+        when(soRepository.save(any(SalesOrder.class))).thenAnswer(i -> i.getArgument(0));
 
-        assertThatThrownBy(() -> service.allocate("SO1"))
-                .isInstanceOf(IllegalStateException.class);
-        verify(soRepository, never()).save(any());
+        SalesOrder result = service.allocate("SO1");
+
+        assertThat(result.getStatus()).isEqualTo(SalesOrder.Status.ALLOCATED);
+        assertThat(result.getDetails().get(0).getQuantityAllocated()).isEqualTo(5);
+        assertThat(b.getReservedQuantity()).isEqualTo(5);
+        verify(inventoryRepository, never()).save(any());   // bỏ qua tồn tổng, không ném
     }
 
     @Test
