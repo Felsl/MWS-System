@@ -204,7 +204,7 @@ function CreateSO({ onCreated }) {
         supplierId: l.supplierId ? l.supplierId : null,   // '' (không rõ NCC) -> null
         quantityOrdered: l.quantityOrdered,
         unitPrice: l.unitPrice,
-        discountPercent: l.discountPercent ?? null,
+        discountPercent: l.discountPercent ?? 0,
       })),
     })
   }
@@ -227,8 +227,13 @@ function CreateSO({ onCreated }) {
             </Form.Item>
           </Col>
           <Col xs={12} md={4}>
-            <Form.Item name="requiredDate" label="Cần giao">
-              <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+            <Form.Item name="requiredDate" label="Cần giao" rules={[{
+                validator: (_, v) => (!v || v.isAfter(dayjs(), 'day'))
+                  ? Promise.resolve()
+                  : Promise.reject(new Error('Ngày dự kiến phải sau ngày hiện tại')),
+              }]}>
+              <DatePicker style={{ width: "100%" }} format="DD/MM/YYYY"
+                disabledDate={(d) => d && d <= dayjs().endOf('day')} />
             </Form.Item>
           </Col>
           <Col xs={12} md={4}>
@@ -290,7 +295,7 @@ function CreateSO({ onCreated }) {
                   </Col>
                   <Col flex="110px">
                     <Form.Item {...rest} name={[name, 'discountPercent']}>
-                      <InputNumber min={0} max={100} placeholder="CK %" style={{ width: '100%' }} />
+                      <InputNumber min={0} max={100} placeholder="CK %" style={{ width: '100%' }} placeholder="0" />
                     </Form.Item>
                   </Col>
                   <Col flex="40px">

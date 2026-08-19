@@ -50,4 +50,5 @@ public class GetOpenDemandsUseCase {
                     d.getQuantityShort(), d.getCreatedAt());
         }).toList();
     }
+
 }

@@ -64,7 +64,7 @@ function PLList({ onOpen, onCreate }) {
     // Nguồn của lệnh: đơn bán (SO) HOẶC phiếu điều chuyển — dùng chung một danh sách.
     { title: 'Nguồn', key: 'source', render: (_, r) => r.soId
         ? <Link to={`/sales-orders/${r.soId}`}>{r.soNumber || numberOf(r.soId)}</Link>
-        : <Link to={`/purchase-orders/${r.toId}`}>{r.transferNumber || numberOf(r.transferOrderId)}</Link>
+        : <Link to={`/purchase-orders/${r.soId}`}>{r.transferNumber || numberOf(r.transferOrderId)}</Link>
        },
     { title: 'Người lấy', dataIndex: 'assignedToName', width: 140, render: (v, r) => v || r.assignedTo || '—' },
     { title: 'Bắt đầu', dataIndex: 'startedAt', width: 150, render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
