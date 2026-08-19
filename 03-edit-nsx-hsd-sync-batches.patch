@@ -1,0 +1,497 @@
+From ac9e7702a630ee282140007ad5ceb91a89de0c0c Mon Sep 17 00:00:00 2001
+From: c <c@c>
+Date: Wed, 19 Aug 2026 18:01:28 +0000
+Subject: [PATCH] feat: edit NSX/HSD of GRN detail and sync to
+ inventory_batches
+
+---
+ .../UpdateGoodsReceiptDetailDatesUseCase.java | 41 ++++++++
+ .../lvtn/mws/domain/model/InventoryBatch.java | 14 +++
+ .../IGoodsReceiptDetailRepository.java        |  3 +
+ .../service/GoodsReceiptDomainService.java    | 63 ++++++++++++
+ .../GoodsReceiptDetailRepositoryImpl.java     |  6 ++
+ .../UpdateDetailDatesRequest.java             | 12 +++
+ .../rest/GoodsReceiptController.java          | 22 +++++
+ ..._backfill_nsx_hsd_to_inventory_batches.sql | 62 ++++++++++++
+ frontend/src/api/goodsReceipts.api.js         |  2 +
+ .../features/inbound/GoodsReceiptsPage.jsx    | 95 ++++++++++++++++++-
+ 10 files changed, 319 insertions(+), 1 deletion(-)
+ create mode 100644 backend/src/main/java/org/lvtn/mws/application/usecases/goodsreceipt/UpdateGoodsReceiptDetailDatesUseCase.java
+ create mode 100644 backend/src/main/java/org/lvtn/mws/interfaces/dto/request/goodsreceipt/UpdateDetailDatesRequest.java
+ create mode 100644 db/migrations/2026_backfill_nsx_hsd_to_inventory_batches.sql
+
+diff --git a/backend/src/main/java/org/lvtn/mws/application/usecases/goodsreceipt/UpdateGoodsReceiptDetailDatesUseCase.java b/backend/src/main/java/org/lvtn/mws/application/usecases/goodsreceipt/UpdateGoodsReceiptDetailDatesUseCase.java
+new file mode 100644
+index 0000000..b4d4ba2
+--- /dev/null
++++ b/backend/src/main/java/org/lvtn/mws/application/usecases/goodsreceipt/UpdateGoodsReceiptDetailDatesUseCase.java
+@@ -0,0 +1,41 @@
++package org.lvtn.mws.application.usecases.goodsreceipt;
++
++import lombok.RequiredArgsConstructor;
++import org.lvtn.mws.domain.model.GoodsReceiptDetail;
++import org.lvtn.mws.domain.service.GoodsReceiptDomainService;
++import org.springframework.dao.OptimisticLockingFailureException;
++import org.springframework.stereotype.Service;
++import org.springframework.transaction.annotation.Transactional;
++
++import java.time.LocalDate;
++
++/**
++ * Sửa NSX + HSD của một dòng phiếu nhập (đã hoặc chưa complete) và đồng bộ
++ * xuống inventory_batches khớp. Không đụng SL/ô kệ/số lô/giá.
++ *
++ * @Transactional cho toàn bộ (grd + batches cùng commit); retry optimistic-lock
++ * vì InventoryBatchEntity có @Version — cùng lô có thể đang được picking/adjustment
++ * chỉnh sửa song song.
++ */
++@Service
++@RequiredArgsConstructor
++public class UpdateGoodsReceiptDetailDatesUseCase {
++
++    private final GoodsReceiptDomainService domainService;
++
++    @Transactional
++    public GoodsReceiptDetail execute(String grnId, String detailId,
++                                      LocalDate manufacturedDate, LocalDate expiryDate) {
++        int maxAttempts = 3;
++        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
++            try {
++                return domainService.updateDetailDates(grnId, detailId, manufacturedDate, expiryDate);
++            } catch (OptimisticLockingFailureException ex) {
++                if (attempt == maxAttempts) throw ex;
++                try { Thread.sleep(100L * attempt); }
++                catch (InterruptedException ie) { Thread.currentThread().interrupt(); throw ex; }
++            }
++        }
++        throw new IllegalStateException("Không thể cập nhật NSX/HSD sau " + maxAttempts + " lần thử");
++    }
++}
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/model/InventoryBatch.java b/backend/src/main/java/org/lvtn/mws/domain/model/InventoryBatch.java
+index 9663f86..ae98045 100644
+--- a/backend/src/main/java/org/lvtn/mws/domain/model/InventoryBatch.java
++++ b/backend/src/main/java/org/lvtn/mws/domain/model/InventoryBatch.java
+@@ -106,6 +106,20 @@ public class InventoryBatch {
+     public void hold()        { this.status = Status.HOLD; }
+     public void activate()    { this.status = Status.ACTIVE; }
+ 
++    /**
++     * Sửa NSX/HSD hậu-nhập — dùng khi người dùng sửa 2 cột ngày trên phiếu nhập
++     * đã complete và cần đồng bộ xuống lô. Không đụng SL/status/ô kệ để giữ
++     * domain method có phạm vi hẹp, dễ suy ra hậu quả.
++     */
++    public void updateDates(LocalDate manufacturedDate, LocalDate expiryDate) {
++        if (manufacturedDate != null && expiryDate != null
++                && manufacturedDate.isAfter(expiryDate)) {
++            throw new IllegalArgumentException("Ngày sản xuất không được sau hạn sử dụng");
++        }
++        this.manufacturedDate = manufacturedDate;
++        this.expiryDate = expiryDate;
++    }
++
+     public boolean isAvailable() { return this.status == Status.ACTIVE && this.quantity > 0; }
+ 
+     public String getId()               { return id; }
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/repository/IGoodsReceiptDetailRepository.java b/backend/src/main/java/org/lvtn/mws/domain/repository/IGoodsReceiptDetailRepository.java
+index 4afe0d0..24d5fb5 100644
+--- a/backend/src/main/java/org/lvtn/mws/domain/repository/IGoodsReceiptDetailRepository.java
++++ b/backend/src/main/java/org/lvtn/mws/domain/repository/IGoodsReceiptDetailRepository.java
+@@ -3,11 +3,14 @@ package org.lvtn.mws.domain.repository;
+ import org.lvtn.mws.domain.model.GoodsReceiptDetail;
+ import java.util.List;
+ import java.util.Map;
++import java.util.Optional;
+ 
+ public interface IGoodsReceiptDetailRepository {
+     GoodsReceiptDetail save(GoodsReceiptDetail detail);
+     void saveAll(List<GoodsReceiptDetail> details);
+     List<GoodsReceiptDetail> findByGrnId(String grnId);
++    /** Cho luồng sửa NSX/HSD hậu-complete — cần lấy đúng 1 dòng theo id. */
++    Optional<GoodsReceiptDetail> findById(String id);
+ 
+     /** Map số lô -> tên nhà cung cấp cho (sản phẩm, kho). Lô không truy được nguồn thì vắng mặt. */
+     Map<String, String> findBatchSuppliersByProductAndWarehouse(String productId, String warehouseId);
+diff --git a/backend/src/main/java/org/lvtn/mws/domain/service/GoodsReceiptDomainService.java b/backend/src/main/java/org/lvtn/mws/domain/service/GoodsReceiptDomainService.java
+index 22be329..d21ac49 100644
+--- a/backend/src/main/java/org/lvtn/mws/domain/service/GoodsReceiptDomainService.java
++++ b/backend/src/main/java/org/lvtn/mws/domain/service/GoodsReceiptDomainService.java
+@@ -265,6 +265,69 @@ public class GoodsReceiptDomainService {
+         return newBatch.getId();
+     }
+ 
++    // ── 3. Sửa NSX / HSD của phiếu đã complete (giữ đúng scope hẹp) ─────────
++    //
++    // Thiết kế: chỉ cho sửa 2 cột ngày. SL, số lô, ô kệ, giá... không đụng —
++    // sửa những cái đó phải điều chỉnh tồn/thẻ kho/PO cumulative, khác cấp độ.
++    //
++    // Đồng bộ xuống inventory_batches theo cùng bộ khóa nhận diện lô mà
++    // upsertBatch(...) dùng khi hoàn tất phiếu:
++    //     (product_id, warehouse_id, bin_location_id, batch_number, supplier_id)
++    // Vậy sửa ở phiếu và sửa ở lô luôn cùng đích. Dòng không có số lô -> không
++    // có lô để đồng bộ, chỉ update grd.
++    //
++    // Ghi đè giá trị cũ (kể cả khi mới nhập null) — người dùng chủ động sửa
++    // thì họ chịu trách nhiệm; không tự bảo tồn ngày cũ như backfill script.
++    public GoodsReceiptDetail updateDetailDates(String grnId, String detailId,
++                                                java.time.LocalDate manufacturedDate,
++                                                java.time.LocalDate expiryDate) {
++        if (manufacturedDate != null && expiryDate != null
++                && manufacturedDate.isAfter(expiryDate)) {
++            throw new IllegalArgumentException("Ngày sản xuất không được sau hạn sử dụng");
++        }
++
++        GoodsReceipt grn = findById(grnId);
++        GoodsReceiptDetail existing = grnDetailRepository.findById(detailId)
++                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy dòng phiếu: " + detailId));
++        // Chống nhầm URL: detailId phải thuộc grnId trên path.
++        if (!grnId.equals(existing.getGrnId())) {
++            throw new IllegalArgumentException("Dòng " + detailId + " không thuộc phiếu " + grnId);
++        }
++
++        // Domain immutable — dựng lại builder giữ nguyên các field khác.
++        GoodsReceiptDetail updated = GoodsReceiptDetail.builder()
++                .id(existing.getId())
++                .grnId(existing.getGrnId())
++                .productId(existing.getProductId())
++                .poDetailId(existing.getPoDetailId())
++                .quantity(existing.getQuantity())
++                .batchNumber(existing.getBatchNumber())
++                .expiryDate(expiryDate)
++                .manufacturedDate(manufacturedDate)
++                .binLocationId(existing.getBinLocationId())
++                .supplierId(existing.getSupplierId())
++                .unitPrice(existing.getUnitPrice())
++                .build();
++        GoodsReceiptDetail saved = grnDetailRepository.save(updated);
++
++        // Đồng bộ xuống lô kho — chỉ khi dòng có số lô (không thì upsertBatch
++        // đã tự sinh "LOT-<id>" và không thể re-derive nếu chỉ có 2 cột ngày).
++        if (saved.hasBatch()) {
++            java.util.List<InventoryBatch> matched = batchRepository
++                    .findByProductIdAndWarehouseId(saved.getProductId(), grn.getWarehouseId())
++                    .stream()
++                    .filter(b -> saved.getBatchNumber().equals(b.getBatchNumber())
++                            && saved.getBinLocationId().equals(b.getBinLocationId())
++                            && java.util.Objects.equals(saved.getSupplierId(), b.getSupplierId()))
++                    .toList();
++            for (InventoryBatch b : matched) {
++                b.updateDates(manufacturedDate, expiryDate);
++                batchRepository.save(b);
++            }
++        }
++        return saved;
++    }
++
+     private String generateGrnNumber() {
+         String number;
+         do {
+diff --git a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/goodsreceipt/GoodsReceiptDetailRepositoryImpl.java b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/goodsreceipt/GoodsReceiptDetailRepositoryImpl.java
+index 6160b9c..9ba9af6 100644
+--- a/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/goodsreceipt/GoodsReceiptDetailRepositoryImpl.java
++++ b/backend/src/main/java/org/lvtn/mws/infrastructure/persistence/repository/goodsreceipt/GoodsReceiptDetailRepositoryImpl.java
+@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
+ import java.util.HashMap;
+ import java.util.List;
+ import java.util.Map;
++import java.util.Optional;
+ 
+ @Repository
+ @RequiredArgsConstructor
+@@ -33,6 +34,11 @@ public class GoodsReceiptDetailRepositoryImpl implements IGoodsReceiptDetailRepo
+         return mapper.toDomainList(jpa.findByGrnId(grnId));
+     }
+ 
++    @Override
++    public Optional<GoodsReceiptDetail> findById(String id) {
++        return jpa.findById(id).map(mapper::toDomain);
++    }
++
+     @Override
+     public Map<String, String> findBatchSuppliersByProductAndWarehouse(String productId, String warehouseId) {
+         Map<String, String> result = new HashMap<>();
+diff --git a/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/goodsreceipt/UpdateDetailDatesRequest.java b/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/goodsreceipt/UpdateDetailDatesRequest.java
+new file mode 100644
+index 0000000..7f8728a
+--- /dev/null
++++ b/backend/src/main/java/org/lvtn/mws/interfaces/dto/request/goodsreceipt/UpdateDetailDatesRequest.java
+@@ -0,0 +1,12 @@
++package org.lvtn.mws.interfaces.dto.request.goodsreceipt;
++
++import lombok.Data;
++import java.time.LocalDate;
++
++/** Body cho PATCH /goods-receipts/{grnId}/details/{detailId}/dates.
++ *  Cả 2 field đều nullable — cho phép người dùng xóa ngày đã nhập nhầm. */
++@Data
++public class UpdateDetailDatesRequest {
++    private LocalDate manufacturedDate;
++    private LocalDate expiryDate;
++}
+diff --git a/backend/src/main/java/org/lvtn/mws/interfaces/rest/GoodsReceiptController.java b/backend/src/main/java/org/lvtn/mws/interfaces/rest/GoodsReceiptController.java
+index 3b86f5b..96cf8b0 100644
+--- a/backend/src/main/java/org/lvtn/mws/interfaces/rest/GoodsReceiptController.java
++++ b/backend/src/main/java/org/lvtn/mws/interfaces/rest/GoodsReceiptController.java
+@@ -5,14 +5,17 @@ import org.lvtn.mws.application.usecases.goodsreceipt.CompleteGoodsReceiptUseCas
+ import org.lvtn.mws.application.usecases.goodsreceipt.CreateGoodsReceiptUseCase;
+ import org.lvtn.mws.application.usecases.goodsreceipt.GetGoodsReceiptByIdUseCase;
+ import org.lvtn.mws.application.usecases.goodsreceipt.GetGoodsReceiptDetailsUseCase;
++import org.lvtn.mws.application.usecases.goodsreceipt.UpdateGoodsReceiptDetailDatesUseCase;
+ import org.lvtn.mws.domain.model.GoodsReceipt;
+ import org.lvtn.mws.interfaces.dto.request.goodsreceipt.CreateGoodsReceiptRequest;
++import org.lvtn.mws.interfaces.dto.request.goodsreceipt.UpdateDetailDatesRequest;
+ import org.lvtn.mws.interfaces.dto.response.goodsreceipt.GoodsReceiptResponse;
+ import org.lvtn.mws.interfaces.mapper.GoodsReceiptWebMapper;
+ import org.springframework.http.HttpStatus;
+ import org.springframework.http.ResponseEntity;
+ import org.springframework.security.core.Authentication;
+ import org.springframework.web.bind.annotation.GetMapping;
++import org.springframework.web.bind.annotation.PatchMapping;
+ import org.springframework.web.bind.annotation.PathVariable;
+ import org.springframework.web.bind.annotation.PostMapping;
+ import org.springframework.web.bind.annotation.RequestBody;
+@@ -33,6 +36,7 @@ public class GoodsReceiptController {
+     private final CompleteGoodsReceiptUseCase completeUseCase;
+     private final GetGoodsReceiptByIdUseCase getByIdUseCase;
+     private final GetGoodsReceiptDetailsUseCase getDetailsUseCase;
++    private final UpdateGoodsReceiptDetailDatesUseCase updateDetailDatesUseCase;
+     private final org.lvtn.mws.application.usecases.goodsreceipt.GetAllGoodsReceiptsUseCase getAllUseCase;
+     private final GoodsReceiptWebMapper webMapper;
+ 
+@@ -56,6 +60,24 @@ public class GoodsReceiptController {
+         return ResponseEntity.ok(buildResponse(completeUseCase.execute(id)));
+     }
+ 
++    /**
++     * Sửa NSX/HSD của 1 dòng phiếu nhập (thường dùng sau khi complete để bổ sung
++     * dữ liệu ngày còn thiếu). Đồng bộ luôn xuống inventory_batches khớp
++     * (product+warehouse+bin+batchNumber+supplier) — xem GoodsReceiptDomainService.
++     * Không cho sửa các field khác — muốn sửa số lượng/ô kệ/số lô thì hủy phiếu và làm lại.
++     */
++    @PreAuthorize("hasAuthority('INBOUND_COMPLETE_GRN')")
++    @PatchMapping("/{grnId}/details/{detailId}/dates")
++    public ResponseEntity<GoodsReceiptResponse> updateDetailDates(
++            @PathVariable String grnId,
++            @PathVariable String detailId,
++            @Valid @RequestBody UpdateDetailDatesRequest body) {
++        updateDetailDatesUseCase.execute(grnId, detailId,
++                body.getManufacturedDate(), body.getExpiryDate());
++        // Trả về response đầy đủ để FE cập nhật ngay không cần fetch lại.
++        return ResponseEntity.ok(buildResponse(getByIdUseCase.execute(grnId)));
++    }
++
+     /** [B4] Danh sách phiếu nhập có tìm kiếm + lọc + phân trang (header-only). */
+     @PreAuthorize("hasAuthority('INBOUND_VIEW_GRN')")
+     @GetMapping
+diff --git a/db/migrations/2026_backfill_nsx_hsd_to_inventory_batches.sql b/db/migrations/2026_backfill_nsx_hsd_to_inventory_batches.sql
+new file mode 100644
+index 0000000..71ac2fe
+--- /dev/null
++++ b/db/migrations/2026_backfill_nsx_hsd_to_inventory_batches.sql
+@@ -0,0 +1,62 @@
++-- ============================================================================
++-- Backfill NSX + HSD từ goods_receipt_details sang inventory_batches.
++--
++-- Bối cảnh: trước bản vá này GRN service truyền manufacturedDate=null xuống lô
++-- (comment cũ: "goods_receipt_details has no manufactured_date column"). HSD
++-- thì có truyền, nhưng vẫn nên đồng bộ lại cho khớp — phòng trường hợp lô
++-- được sửa tay hoặc dữ liệu lệch do bug cũ.
++--
++-- Nguyên tắc join lô ↔ dòng phiếu: khớp trên bộ khóa nhận diện lô đầy đủ
++--   (product_id, warehouse_id, bin_location_id, batch_number)
++-- Không join theo supplier_id vì lô cũ có thể chưa gắn supplier (nullable ở
++-- inventory_batches — comment ở entity nói rõ), tránh loại nhầm.
++-- warehouse_id của phiếu lấy từ goods_receipts (dòng chi tiết không có).
++--
++-- Chỉ ghi khi lô đang NULL — bảo vệ dữ liệu đã có (kể cả do người dùng sửa
++-- tay sau này). Nếu muốn OVERWRITE toàn bộ, đổi 2 điều kiện "b.xxx IS NULL"
++-- ở subquery WHERE và bỏ COALESCE ở UPDATE.
++--
++-- Chống mập mờ khi 1 lô match nhiều dòng phiếu (cùng số lô nhập nhiều lần
++-- vào cùng ô kệ): dùng MAX() — lấy ngày muộn hơn. Cả 2 chỉ số ngày thường
++-- giống nhau giữa các lần nhập cùng lô nên chọn MAX/MIN đều OK; MAX an toàn
++-- hơn khi có sai sót ngày sớm ở lần nhập trước.
++--
++-- CHẠY TRONG TRANSACTION. Backup trước cho chắc.
++-- ============================================================================
++
++START TRANSACTION;
++
++UPDATE inventory_batches b
++JOIN (
++    SELECT
++        grd.product_id,
++        gr.warehouse_id,
++        grd.bin_location_id,
++        grd.batch_number,
++        MAX(grd.manufactured_date) AS manufactured_date,
++        MAX(grd.expiry_date)       AS expiry_date
++    FROM goods_receipt_details grd
++    JOIN goods_receipts gr ON gr.id = grd.grn_id
++    WHERE grd.batch_number IS NOT NULL
++      AND (grd.manufactured_date IS NOT NULL OR grd.expiry_date IS NOT NULL)
++    GROUP BY grd.product_id, gr.warehouse_id, grd.bin_location_id, grd.batch_number
++) src
++  ON  src.product_id      = b.product_id
++  AND src.warehouse_id    = b.warehouse_id
++  AND src.bin_location_id = b.bin_location_id
++  AND src.batch_number    = b.batch_number
++SET
++    b.manufactured_date = COALESCE(b.manufactured_date, src.manufactured_date),
++    b.expiry_date       = COALESCE(b.expiry_date,       src.expiry_date)
++WHERE
++    (b.manufactured_date IS NULL AND src.manufactured_date IS NOT NULL)
++ OR (b.expiry_date       IS NULL AND src.expiry_date       IS NOT NULL);
++
++-- Kiểm tra trước khi commit: bao nhiêu lô đã được điền
++SELECT
++    SUM(manufactured_date IS NOT NULL) AS batches_with_nsx,
++    SUM(expiry_date       IS NOT NULL) AS batches_with_hsd,
++    COUNT(*)                           AS total_batches
++FROM inventory_batches;
++
++COMMIT;
+diff --git a/frontend/src/api/goodsReceipts.api.js b/frontend/src/api/goodsReceipts.api.js
+index 2493de1..aa655ee 100644
+--- a/frontend/src/api/goodsReceipts.api.js
++++ b/frontend/src/api/goodsReceipts.api.js
+@@ -7,4 +7,6 @@ export const goodsReceiptsApi = {
+   create: (body) => api.post(base, body).then(r => r.data),
+   get: (id) => api.get(`${base}/${id}`).then(r => r.data),
+   complete: (id) => api.post(`${base}/${id}/complete`).then(r => r.data),
++  updateDetailDates: (grnId, detailId, body) =>
++    api.patch(`${base}/${grnId}/details/${detailId}/dates`, body).then(r => r.data),
+ }
+diff --git a/frontend/src/features/inbound/GoodsReceiptsPage.jsx b/frontend/src/features/inbound/GoodsReceiptsPage.jsx
+index a0a5f4d..8be9d4b 100644
+--- a/frontend/src/features/inbound/GoodsReceiptsPage.jsx
++++ b/frontend/src/features/inbound/GoodsReceiptsPage.jsx
+@@ -14,7 +14,7 @@ import {
+ } from 'antd'
+ import {
+   PlusOutlined, SearchOutlined, DeleteOutlined, CheckCircleOutlined,
+-  ReloadOutlined, ArrowLeftOutlined, ArrowUpOutlined, CalendarOutlined,
++  ReloadOutlined, ArrowLeftOutlined, ArrowUpOutlined, CalendarOutlined, EditOutlined,
+ } from '@ant-design/icons'
+ import dayjs from 'dayjs'
+ import Can from '../../components/Can'
+@@ -423,6 +423,7 @@ function CreateGRN({ initialPoId, onCreated }) {
+ function GRNDetail({ id }) {
+   const { message } = AntdApp.useApp()
+   const qc = useQueryClient()
++  const { hasPermission } = useAuth()
+   const { map: productMap } = useProductMap()
+   const { labelOf } = useBinLabels()
+   const suppliers = useQuery({ queryKey: ['suppliers'], queryFn: suppliersApi.list })
+@@ -442,6 +443,20 @@ function GRNDetail({ id }) {
+     },
+     onError: (e) => message.error(getErrorMessage(e)),
+   })
++  // Sửa NSX/HSD — cùng quyền INBOUND_COMPLETE_GRN với hành động hoàn thành phiếu.
++  // BE đồng bộ luôn xuống inventory_batches khớp (cùng bộ khóa như lúc upsert).
++  const editDatesMut = useMutation({
++    mutationFn: ({ detailId, manufacturedDate, expiryDate }) =>
++      goodsReceiptsApi.updateDetailDates(id, detailId, { manufacturedDate, expiryDate }),
++    onSuccess: (updated) => {
++      message.success('Đã cập nhật NSX/HSD (đồng bộ xuống lô kho)')
++      qc.setQueryData(['grn', id], updated)
++      // Vô hiệu queries lô để BatchView cập nhật ngay khi chuyển sang xem.
++      qc.invalidateQueries({ queryKey: ['batches'] })
++    },
++    onError: (e) => message.error(getErrorMessage(e)),
++  })
++  const canEditDates = hasPermission(P.INBOUND_COMPLETE_GRN)
+ 
+   if (isLoading) return <Card loading />
+   if (isError) return <Card><Empty description={getErrorMessage(error, 'Không tìm thấy phiếu nhập')} /></Card>
+@@ -455,6 +470,20 @@ function GRNDetail({ id }) {
+     { title: 'NSX', dataIndex: 'manufacturedDate', width: 120, render: (v) => v ? dayjs(v).format('DD/MM/YYYY') : '—' },
+     { title: 'HSD', dataIndex: 'expiryDate', width: 120, render: (v) => v ? dayjs(v).format('DD/MM/YYYY') : '—' },
+     { title: 'Ô kệ', dataIndex: 'binLocationId', width: 140, render: (v) => labelOf(v) },
++    ...(canEditDates ? [{
++      title: '', key: '_edit', width: 50, fixed: 'right',
++      render: (_v, row) => (
++        <EditDatesPopover
++          initialNsx={row.manufacturedDate}
++          initialHsd={row.expiryDate}
++          onSave={(nsx, hsd) => editDatesMut.mutateAsync({
++            detailId: row.id,
++            manufacturedDate: nsx,
++            expiryDate: hsd,
++          })}
++        />
++      ),
++    }] : []),
+   ]
+ 
+   return (
+@@ -527,3 +556,67 @@ function BulkDatesPopover({ onApply }) {
+     </Popover>
+   )
+ }
++
++/**
++ * Popover cho phép sửa NSX + HSD của MỘT dòng phiếu nhập (hậu-nhập). Khi Save,
++ * BE đồng bộ luôn xuống inventory_batches khớp — người dùng không cần bấm gì thêm.
++ * Có "Xoá NSX" / "Xoá HSD" để xoá ngày đã nhập nhầm (BE nhận null).
++ */
++function EditDatesPopover({ initialNsx, initialHsd, onSave }) {
++  const [open, setOpen] = useState(false)
++  const [nsx, setNsx] = useState(initialNsx ? dayjs(initialNsx) : null)
++  const [hsd, setHsd] = useState(initialHsd ? dayjs(initialHsd) : null)
++  const [saving, setSaving] = useState(false)
++
++  // Reset về giá trị hiện tại mỗi khi mở lại — nếu người dùng đổi ý và huỷ,
++  // lần mở sau không kẹt giá trị nháp.
++  const handleOpenChange = (o) => {
++    if (o) {
++      setNsx(initialNsx ? dayjs(initialNsx) : null)
++      setHsd(initialHsd ? dayjs(initialHsd) : null)
++    }
++    setOpen(o)
++  }
++
++  const save = async () => {
++    setSaving(true)
++    try {
++      await onSave(
++        nsx ? nsx.format('YYYY-MM-DD') : null,
++        hsd ? hsd.format('YYYY-MM-DD') : null,
++      )
++      setOpen(false)
++    } finally {
++      setSaving(false)
++    }
++  }
++
++  const content = (
++    <Space direction="vertical" style={{ minWidth: 240 }}>
++      <div>
++        <div style={{ fontSize: 12, marginBottom: 4 }}>NSX</div>
++        <DatePicker value={nsx} onChange={setNsx} format="DD/MM/YYYY"
++          allowClear style={{ width: '100%' }} />
++      </div>
++      <div>
++        <div style={{ fontSize: 12, marginBottom: 4 }}>HSD</div>
++        <DatePicker value={hsd} onChange={setHsd} format="DD/MM/YYYY"
++          allowClear style={{ width: '100%' }} />
++      </div>
++      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
++        <Button size="small" onClick={() => setOpen(false)}>Huỷ</Button>
++        <Button size="small" type="primary" loading={saving} onClick={save}>Lưu</Button>
++      </div>
++      <Typography.Text type="secondary" style={{ fontSize: 11 }}>
++        Lưu sẽ cập nhật cả phiếu nhập và lô kho khớp với dòng này.
++      </Typography.Text>
++    </Space>
++  )
++
++  return (
++    <Popover open={open} onOpenChange={handleOpenChange} trigger="click" content={content}
++      title="Sửa NSX / HSD" placement="left">
++      <Tooltip title="Sửa NSX/HSD"><Button type="text" size="small" icon={<EditOutlined />} /></Tooltip>
++    </Popover>
++  )
++}
+-- 
+2.43.0
+

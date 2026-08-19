@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Repository
 @RequiredArgsConstructor
@@ -31,6 +32,11 @@ public class GoodsReceiptDetailRepositoryImpl implements IGoodsReceiptDetailRepo
     @Override
     public List<GoodsReceiptDetail> findByGrnId(String grnId) {
         return mapper.toDomainList(jpa.findByGrnId(grnId));
+    }
+
+    @Override
+    public Optional<GoodsReceiptDetail> findById(String id) {
+        return jpa.findById(id).map(mapper::toDomain);
     }
 
     @Override

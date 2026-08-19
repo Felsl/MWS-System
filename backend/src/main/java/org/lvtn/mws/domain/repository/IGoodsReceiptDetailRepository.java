@@ -3,11 +3,14 @@ package org.lvtn.mws.domain.repository;
 import org.lvtn.mws.domain.model.GoodsReceiptDetail;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 public interface IGoodsReceiptDetailRepository {
     GoodsReceiptDetail save(GoodsReceiptDetail detail);
     void saveAll(List<GoodsReceiptDetail> details);
     List<GoodsReceiptDetail> findByGrnId(String grnId);
+    /** Cho luồng sửa NSX/HSD hậu-complete — cần lấy đúng 1 dòng theo id. */
+    Optional<GoodsReceiptDetail> findById(String id);
 
     /** Map số lô -> tên nhà cung cấp cho (sản phẩm, kho). Lô không truy được nguồn thì vắng mặt. */
     Map<String, String> findBatchSuppliersByProductAndWarehouse(String productId, String warehouseId);

@@ -106,6 +106,20 @@ public class InventoryBatch {
     public void hold()        { this.status = Status.HOLD; }
     public void activate()    { this.status = Status.ACTIVE; }
 
+    /**
+     * Sửa NSX/HSD hậu-nhập — dùng khi người dùng sửa 2 cột ngày trên phiếu nhập
+     * đã complete và cần đồng bộ xuống lô. Không đụng SL/status/ô kệ để giữ
+     * domain method có phạm vi hẹp, dễ suy ra hậu quả.
+     */
+    public void updateDates(LocalDate manufacturedDate, LocalDate expiryDate) {
+        if (manufacturedDate != null && expiryDate != null
+                && manufacturedDate.isAfter(expiryDate)) {
+            throw new IllegalArgumentException("Ngày sản xuất không được sau hạn sử dụng");
+        }
+        this.manufacturedDate = manufacturedDate;
+        this.expiryDate = expiryDate;
+    }
+
     public boolean isAvailable() { return this.status == Status.ACTIVE && this.quantity > 0; }
 
     public String getId()               { return id; }

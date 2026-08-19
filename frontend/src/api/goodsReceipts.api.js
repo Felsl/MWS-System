@@ -7,4 +7,6 @@ export const goodsReceiptsApi = {
   create: (body) => api.post(base, body).then(r => r.data),
   get: (id) => api.get(`${base}/${id}`).then(r => r.data),
   complete: (id) => api.post(`${base}/${id}/complete`).then(r => r.data),
+  updateDetailDates: (grnId, detailId, body) =>
+    api.patch(`${base}/${grnId}/details/${detailId}/dates`, body).then(r => r.data),
 }

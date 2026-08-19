@@ -14,7 +14,7 @@ import {
 } from 'antd'
 import {
   PlusOutlined, SearchOutlined, DeleteOutlined, CheckCircleOutlined,
-  ReloadOutlined, ArrowLeftOutlined, ArrowUpOutlined, CalendarOutlined,
+  ReloadOutlined, ArrowLeftOutlined, ArrowUpOutlined, CalendarOutlined, EditOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import Can from '../../components/Can'
@@ -423,6 +423,7 @@ function CreateGRN({ initialPoId, onCreated }) {
 function GRNDetail({ id }) {
   const { message } = AntdApp.useApp()
   const qc = useQueryClient()
+  const { hasPermission } = useAuth()
   const { map: productMap } = useProductMap()
   const { labelOf } = useBinLabels()
   const suppliers = useQuery({ queryKey: ['suppliers'], queryFn: suppliersApi.list })
@@ -442,6 +443,20 @@ function GRNDetail({ id }) {
     },
     onError: (e) => message.error(getErrorMessage(e)),
   })
+  // Sửa NSX/HSD — cùng quyền INBOUND_COMPLETE_GRN với hành động hoàn thành phiếu.
+  // BE đồng bộ luôn xuống inventory_batches khớp (cùng bộ khóa như lúc upsert).
+  const editDatesMut = useMutation({
+    mutationFn: ({ detailId, manufacturedDate, expiryDate }) =>
+      goodsReceiptsApi.updateDetailDates(id, detailId, { manufacturedDate, expiryDate }),
+    onSuccess: (updated) => {
+      message.success('Đã cập nhật NSX/HSD (đồng bộ xuống lô kho)')
+      qc.setQueryData(['grn', id], updated)
+      // Vô hiệu queries lô để BatchView cập nhật ngay khi chuyển sang xem.
+      qc.invalidateQueries({ queryKey: ['batches'] })
+    },
+    onError: (e) => message.error(getErrorMessage(e)),
+  })
+  const canEditDates = hasPermission(P.INBOUND_COMPLETE_GRN)
 
   if (isLoading) return <Card loading />
   if (isError) return <Card><Empty description={getErrorMessage(error, 'Không tìm thấy phiếu nhập')} /></Card>
@@ -455,6 +470,20 @@ function GRNDetail({ id }) {
     { title: 'NSX', dataIndex: 'manufacturedDate', width: 120, render: (v) => v ? dayjs(v).format('DD/MM/YYYY') : '—' },
     { title: 'HSD', dataIndex: 'expiryDate', width: 120, render: (v) => v ? dayjs(v).format('DD/MM/YYYY') : '—' },
     { title: 'Ô kệ', dataIndex: 'binLocationId', width: 140, render: (v) => labelOf(v) },
+    ...(canEditDates ? [{
+      title: '', key: '_edit', width: 50, fixed: 'right',
+      render: (_v, row) => (
+        <EditDatesPopover
+          initialNsx={row.manufacturedDate}
+          initialHsd={row.expiryDate}
+          onSave={(nsx, hsd) => editDatesMut.mutateAsync({
+            detailId: row.id,
+            manufacturedDate: nsx,
+            expiryDate: hsd,
+          })}
+        />
+      ),
+    }] : []),
   ]
 
   return (
@@ -524,6 +553,70 @@ function BulkDatesPopover({ onApply }) {
     <Popover open={open} onOpenChange={setOpen} trigger="click" content={content}
       title="Áp dụng NSX / HSD hàng loạt" placement="bottomLeft">
       <Button size="small" icon={<CalendarOutlined />}>Áp dụng NSX/HSD hàng loạt</Button>
+    </Popover>
+  )
+}
+
+/**
+ * Popover cho phép sửa NSX + HSD của MỘT dòng phiếu nhập (hậu-nhập). Khi Save,
+ * BE đồng bộ luôn xuống inventory_batches khớp — người dùng không cần bấm gì thêm.
+ * Có "Xoá NSX" / "Xoá HSD" để xoá ngày đã nhập nhầm (BE nhận null).
+ */
+function EditDatesPopover({ initialNsx, initialHsd, onSave }) {
+  const [open, setOpen] = useState(false)
+  const [nsx, setNsx] = useState(initialNsx ? dayjs(initialNsx) : null)
+  const [hsd, setHsd] = useState(initialHsd ? dayjs(initialHsd) : null)
+  const [saving, setSaving] = useState(false)
+
+  // Reset về giá trị hiện tại mỗi khi mở lại — nếu người dùng đổi ý và huỷ,
+  // lần mở sau không kẹt giá trị nháp.
+  const handleOpenChange = (o) => {
+    if (o) {
+      setNsx(initialNsx ? dayjs(initialNsx) : null)
+      setHsd(initialHsd ? dayjs(initialHsd) : null)
+    }
+    setOpen(o)
+  }
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      await onSave(
+        nsx ? nsx.format('YYYY-MM-DD') : null,
+        hsd ? hsd.format('YYYY-MM-DD') : null,
+      )
+      setOpen(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const content = (
+    <Space direction="vertical" style={{ minWidth: 240 }}>
+      <div>
+        <div style={{ fontSize: 12, marginBottom: 4 }}>NSX</div>
+        <DatePicker value={nsx} onChange={setNsx} format="DD/MM/YYYY"
+          allowClear style={{ width: '100%' }} />
+      </div>
+      <div>
+        <div style={{ fontSize: 12, marginBottom: 4 }}>HSD</div>
+        <DatePicker value={hsd} onChange={setHsd} format="DD/MM/YYYY"
+          allowClear style={{ width: '100%' }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <Button size="small" onClick={() => setOpen(false)}>Huỷ</Button>
+        <Button size="small" type="primary" loading={saving} onClick={save}>Lưu</Button>
+      </div>
+      <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+        Lưu sẽ cập nhật cả phiếu nhập và lô kho khớp với dòng này.
+      </Typography.Text>
+    </Space>
+  )
+
+  return (
+    <Popover open={open} onOpenChange={handleOpenChange} trigger="click" content={content}
+      title="Sửa NSX / HSD" placement="left">
+      <Tooltip title="Sửa NSX/HSD"><Button type="text" size="small" icon={<EditOutlined />} /></Tooltip>
     </Popover>
   )
 }

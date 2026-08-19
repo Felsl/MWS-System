@@ -5,14 +5,17 @@ import org.lvtn.mws.application.usecases.goodsreceipt.CompleteGoodsReceiptUseCas
 import org.lvtn.mws.application.usecases.goodsreceipt.CreateGoodsReceiptUseCase;
 import org.lvtn.mws.application.usecases.goodsreceipt.GetGoodsReceiptByIdUseCase;
 import org.lvtn.mws.application.usecases.goodsreceipt.GetGoodsReceiptDetailsUseCase;
+import org.lvtn.mws.application.usecases.goodsreceipt.UpdateGoodsReceiptDetailDatesUseCase;
 import org.lvtn.mws.domain.model.GoodsReceipt;
 import org.lvtn.mws.interfaces.dto.request.goodsreceipt.CreateGoodsReceiptRequest;
+import org.lvtn.mws.interfaces.dto.request.goodsreceipt.UpdateDetailDatesRequest;
 import org.lvtn.mws.interfaces.dto.response.goodsreceipt.GoodsReceiptResponse;
 import org.lvtn.mws.interfaces.mapper.GoodsReceiptWebMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -33,6 +36,7 @@ public class GoodsReceiptController {
     private final CompleteGoodsReceiptUseCase completeUseCase;
     private final GetGoodsReceiptByIdUseCase getByIdUseCase;
     private final GetGoodsReceiptDetailsUseCase getDetailsUseCase;
+    private final UpdateGoodsReceiptDetailDatesUseCase updateDetailDatesUseCase;
     private final org.lvtn.mws.application.usecases.goodsreceipt.GetAllGoodsReceiptsUseCase getAllUseCase;
     private final GoodsReceiptWebMapper webMapper;
 
@@ -54,6 +58,24 @@ public class GoodsReceiptController {
     @PostMapping("/{id}/complete")
     public ResponseEntity<GoodsReceiptResponse> complete(@PathVariable String id) {
         return ResponseEntity.ok(buildResponse(completeUseCase.execute(id)));
+    }
+
+    /**
+     * Sửa NSX/HSD của 1 dòng phiếu nhập (thường dùng sau khi complete để bổ sung
+     * dữ liệu ngày còn thiếu). Đồng bộ luôn xuống inventory_batches khớp
+     * (product+warehouse+bin+batchNumber+supplier) — xem GoodsReceiptDomainService.
+     * Không cho sửa các field khác — muốn sửa số lượng/ô kệ/số lô thì hủy phiếu và làm lại.
+     */
+    @PreAuthorize("hasAuthority('INBOUND_COMPLETE_GRN')")
+    @PatchMapping("/{grnId}/details/{detailId}/dates")
+    public ResponseEntity<GoodsReceiptResponse> updateDetailDates(
+            @PathVariable String grnId,
+            @PathVariable String detailId,
+            @Valid @RequestBody UpdateDetailDatesRequest body) {
+        updateDetailDatesUseCase.execute(grnId, detailId,
+                body.getManufacturedDate(), body.getExpiryDate());
+        // Trả về response đầy đủ để FE cập nhật ngay không cần fetch lại.
+        return ResponseEntity.ok(buildResponse(getByIdUseCase.execute(grnId)));
     }
 
     /** [B4] Danh sách phiếu nhập có tìm kiếm + lọc + phân trang (header-only). */

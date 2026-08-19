@@ -1,0 +1,52 @@
+From 1c4a32a03dee4be6d8c14d467c44a8bb12db3966 Mon Sep 17 00:00:00 2001
+From: c <c@c>
+Date: Wed, 19 Aug 2026 18:05:10 +0000
+Subject: [PATCH] fix: read supplier directly from batch.supplier_id, fallback
+ to legacy grd lookup
+
+---
+ .../interfaces/rest/InventoryController.java  | 20 ++++++++++++++++---
+ 1 file changed, 17 insertions(+), 3 deletions(-)
+
+diff --git a/backend/src/main/java/org/lvtn/mws/interfaces/rest/InventoryController.java b/backend/src/main/java/org/lvtn/mws/interfaces/rest/InventoryController.java
+index 8f4f0fb..73bd76f 100644
+--- a/backend/src/main/java/org/lvtn/mws/interfaces/rest/InventoryController.java
++++ b/backend/src/main/java/org/lvtn/mws/interfaces/rest/InventoryController.java
+@@ -33,6 +33,7 @@ public class InventoryController {
+     private final GetExpiringBatchesUseCase getExpiringBatchesUseCase;
+     private final org.lvtn.mws.application.usecases.warehouse.GetBinLocationCodesUseCase getBinLocationCodesUseCase;
+     private final UpdateBatchStatusUseCase updateBatchStatusUseCase;
++    private final org.lvtn.mws.domain.repository.ISupplierRepository supplierRepository;
+     private final InventoryWebMapper mapper;
+ 
+     // ── Inventory aggregate ───────────────────────────────────────────────
+@@ -127,10 +128,23 @@ public class InventoryController {
+     public List<InventoryBatchResponse> getBatches(@RequestParam String productId,
+                                                    @RequestParam String warehouseId) {
+         Map<String, String> binCodes = getBinLocationCodesUseCase.executeByWarehouse(warehouseId);
+-        Map<String, String> batchSuppliers = getBatchSuppliersUseCase.executeByProductAndWarehouse(productId, warehouseId);
++        // Nguồn NCC ưu tiên: cột supplier_id đóng trên chính bản ghi inventory_batches
++        // (từ khi có tính năng "Bán theo NCC" — xem GoodsReceiptDomainService.upsertBatch).
++        // Fallback (cho lô cũ hoặc lô tạo qua adjust/transfer chưa gắn supplier_id):
++        // truy ngược qua goods_receipt_details theo batchNumber. Nếu cả 2 đều null → "—" ở FE.
++        Map<String, String> supplierNamesById = supplierRepository.findAll().stream()
++                .collect(java.util.stream.Collectors.toMap(
++                        org.lvtn.mws.domain.model.Supplier::getId,
++                        org.lvtn.mws.domain.model.Supplier::getName,
++                        (a, b) -> a));
++        Map<String, String> batchSuppliersLegacy = getBatchSuppliersUseCase.executeByProductAndWarehouse(productId, warehouseId);
+         return getBatchesUseCase.execute(productId, warehouseId).stream()
+-                .map(b -> mapper.toBatchResponse(b, binCodes.get(b.getBinLocationId()),
+-                        batchSuppliers.get(b.getBatchNumber())))
++                .map(b -> {
++                    String name = b.getSupplierId() != null
++                            ? supplierNamesById.get(b.getSupplierId())
++                            : batchSuppliersLegacy.get(b.getBatchNumber());
++                    return mapper.toBatchResponse(b, binCodes.get(b.getBinLocationId()), name);
++                })
+                 .toList();
+     }
+ 
+-- 
+2.43.0
+

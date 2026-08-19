@@ -265,6 +265,69 @@ public class GoodsReceiptDomainService {
         return newBatch.getId();
     }
 
+    // ── 3. Sửa NSX / HSD của phiếu đã complete (giữ đúng scope hẹp) ─────────
+    //
+    // Thiết kế: chỉ cho sửa 2 cột ngày. SL, số lô, ô kệ, giá... không đụng —
+    // sửa những cái đó phải điều chỉnh tồn/thẻ kho/PO cumulative, khác cấp độ.
+    //
+    // Đồng bộ xuống inventory_batches theo cùng bộ khóa nhận diện lô mà
+    // upsertBatch(...) dùng khi hoàn tất phiếu:
+    //     (product_id, warehouse_id, bin_location_id, batch_number, supplier_id)
+    // Vậy sửa ở phiếu và sửa ở lô luôn cùng đích. Dòng không có số lô -> không
+    // có lô để đồng bộ, chỉ update grd.
+    //
+    // Ghi đè giá trị cũ (kể cả khi mới nhập null) — người dùng chủ động sửa
+    // thì họ chịu trách nhiệm; không tự bảo tồn ngày cũ như backfill script.
+    public GoodsReceiptDetail updateDetailDates(String grnId, String detailId,
+                                                java.time.LocalDate manufacturedDate,
+                                                java.time.LocalDate expiryDate) {
+        if (manufacturedDate != null && expiryDate != null
+                && manufacturedDate.isAfter(expiryDate)) {
+            throw new IllegalArgumentException("Ngày sản xuất không được sau hạn sử dụng");
+        }
+
+        GoodsReceipt grn = findById(grnId);
+        GoodsReceiptDetail existing = grnDetailRepository.findById(detailId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy dòng phiếu: " + detailId));
+        // Chống nhầm URL: detailId phải thuộc grnId trên path.
+        if (!grnId.equals(existing.getGrnId())) {
+            throw new IllegalArgumentException("Dòng " + detailId + " không thuộc phiếu " + grnId);
+        }
+
+        // Domain immutable — dựng lại builder giữ nguyên các field khác.
+        GoodsReceiptDetail updated = GoodsReceiptDetail.builder()
+                .id(existing.getId())
+                .grnId(existing.getGrnId())
+                .productId(existing.getProductId())
+                .poDetailId(existing.getPoDetailId())
+                .quantity(existing.getQuantity())
+                .batchNumber(existing.getBatchNumber())
+                .expiryDate(expiryDate)
+                .manufacturedDate(manufacturedDate)
+                .binLocationId(existing.getBinLocationId())
+                .supplierId(existing.getSupplierId())
+                .unitPrice(existing.getUnitPrice())
+                .build();
+        GoodsReceiptDetail saved = grnDetailRepository.save(updated);
+
+        // Đồng bộ xuống lô kho — chỉ khi dòng có số lô (không thì upsertBatch
+        // đã tự sinh "LOT-<id>" và không thể re-derive nếu chỉ có 2 cột ngày).
+        if (saved.hasBatch()) {
+            java.util.List<InventoryBatch> matched = batchRepository
+                    .findByProductIdAndWarehouseId(saved.getProductId(), grn.getWarehouseId())
+                    .stream()
+                    .filter(b -> saved.getBatchNumber().equals(b.getBatchNumber())
+                            && saved.getBinLocationId().equals(b.getBinLocationId())
+                            && java.util.Objects.equals(saved.getSupplierId(), b.getSupplierId()))
+                    .toList();
+            for (InventoryBatch b : matched) {
+                b.updateDates(manufacturedDate, expiryDate);
+                batchRepository.save(b);
+            }
+        }
+        return saved;
+    }
+
     private String generateGrnNumber() {
         String number;
         do {
