@@ -8,11 +8,12 @@ import { suppliersApi, customersApi, carriersApi } from '../../api/partners.api'
 
 import { handleFormError } from '../../utils/formErrors'
 import { P } from '../../constants/permissions'
+import Can from '../../components/Can'
 
 const partnerPerms = {
-  create: P.MASTER_PARTNER_MANAGE,
-  update: P.MASTER_PARTNER_MANAGE,
-  remove: P.MASTER_PARTNER_MANAGE,
+  create: P.INBOUND_APPROVE_PO,
+  update: P.INBOUND_APPROVE_PO,
+  remove: P.INBOUND_APPROVE_PO,
 }
 
 const statusCol = {
@@ -110,9 +111,11 @@ function Carriers() {
     <>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
         <Button icon={<ReloadOutlined />} onClick={() => list.refetch()} loading={list.isFetching} style={{ marginRight: 8 }} />
+        <Can permission={P.INBOUND_APPROVE_PO}>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setOpen(true) }}>
           Thêm đơn vị vận chuyển
         </Button>
+        </Can>
       </div>
       <FitTable rowKey="id" size="middle" loading={list.isLoading} dataSource={list.data || []}
         columns={columns} scroll={{ x: 'max-content' }} pagination={{ pageSize: 10 }} />

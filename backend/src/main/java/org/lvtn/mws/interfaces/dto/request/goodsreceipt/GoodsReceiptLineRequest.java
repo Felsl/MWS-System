@@ -19,6 +19,7 @@ public class GoodsReceiptLineRequest {
 
     private String batchNumber;
     private LocalDate expiryDate;
+    private LocalDate manufacturedDate;
 
     @NotBlank(message = "binLocationId không được trống")
     private String binLocationId;

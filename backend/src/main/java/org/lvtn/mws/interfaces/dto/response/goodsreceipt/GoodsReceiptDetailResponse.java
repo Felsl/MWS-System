@@ -16,6 +16,7 @@ public class GoodsReceiptDetailResponse {
     private int quantity;
     private String batchNumber;
     private LocalDate expiryDate;
+    private LocalDate manufacturedDate;
     private String binLocationId;
     private String supplierId;
     private BigDecimal unitPrice;

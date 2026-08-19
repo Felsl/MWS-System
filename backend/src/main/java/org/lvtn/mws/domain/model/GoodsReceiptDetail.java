@@ -6,8 +6,8 @@ import java.util.Objects;
 
 /**
  * Line item of a goods receipt. Pure domain object.
- * Note: the goods_receipt_details table has no manufactured_date column, so it
- * is intentionally absent here; batch creation supplies null for that field.
+ * manufacturedDate được thu thập tại thời điểm nhập kho và chuyển tiếp xuống lô
+ * (inventory_batches) khi hoàn thành phiếu — tránh phải nhập lại về sau.
  */
 public class GoodsReceiptDetail {
 
@@ -18,6 +18,7 @@ public class GoodsReceiptDetail {
     private final int quantity;
     private final String batchNumber;  // nullable
     private final LocalDate expiryDate; // nullable
+    private final LocalDate manufacturedDate; // nullable — NSX theo dòng
     private final String binLocationId;
     private final String supplierId;   // nullable — NCC chọn theo dòng
     private final BigDecimal unitPrice; // nullable — đơn giá (giá vốn) theo dòng
@@ -31,6 +32,12 @@ public class GoodsReceiptDetail {
         this.quantity      = b.quantity;
         this.batchNumber   = b.batchNumber;
         this.expiryDate    = b.expiryDate;
+        this.manufacturedDate = b.manufacturedDate;
+        // NSX phải trước HSD nếu có đủ cả hai — bắt sớm chứ để trôi xuống DB rồi mới lộ.
+        if (this.manufacturedDate != null && this.expiryDate != null
+                && this.manufacturedDate.isAfter(this.expiryDate)) {
+            throw new IllegalArgumentException("Ngày sản xuất không được sau hạn sử dụng");
+        }
         this.binLocationId = Objects.requireNonNull(b.binLocationId, "binLocationId is required");
         this.supplierId    = b.supplierId;
         this.unitPrice     = b.unitPrice;
@@ -44,6 +51,7 @@ public class GoodsReceiptDetail {
         private BigDecimal unitPrice;
         private int quantity;
         private LocalDate expiryDate;
+        private LocalDate manufacturedDate;
 
         public Builder id(String v)            { this.id = v; return this; }
         public Builder grnId(String v)         { this.grnId = v; return this; }
@@ -52,6 +60,7 @@ public class GoodsReceiptDetail {
         public Builder quantity(int v)         { this.quantity = v; return this; }
         public Builder batchNumber(String v)   { this.batchNumber = v; return this; }
         public Builder expiryDate(LocalDate v) { this.expiryDate = v; return this; }
+        public Builder manufacturedDate(LocalDate v) { this.manufacturedDate = v; return this; }
         public Builder binLocationId(String v) { this.binLocationId = v; return this; }
         public Builder supplierId(String v)    { this.supplierId = v; return this; }
         public Builder unitPrice(BigDecimal v) { this.unitPrice = v; return this; }
@@ -73,6 +82,7 @@ public class GoodsReceiptDetail {
     public int getQuantity()        { return quantity; }
     public String getBatchNumber()  { return batchNumber; }
     public LocalDate getExpiryDate(){ return expiryDate; }
+    public LocalDate getManufacturedDate(){ return manufacturedDate; }
     public String getBinLocationId(){ return binLocationId; }
     public String getSupplierId()   { return supplierId; }
     public BigDecimal getUnitPrice(){ return unitPrice; }

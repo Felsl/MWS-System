@@ -33,6 +33,9 @@ public class GoodsReceiptDetailEntity {
     @Column(name = "expiry_date")
     private LocalDate expiryDate;
 
+    @Column(name = "manufactured_date")
+    private LocalDate manufacturedDate;
+
     @Column(name = "bin_location_id", length = 20, nullable = false)
     private String binLocationId;
 

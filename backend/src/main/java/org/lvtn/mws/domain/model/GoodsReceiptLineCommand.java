@@ -10,18 +10,20 @@ public class GoodsReceiptLineCommand {
     private final int quantity;
     private final String batchNumber;  // nullable
     private final LocalDate expiryDate; // nullable
+    private final LocalDate manufacturedDate; // nullable
     private final String binLocationId;
     private final String supplierId;
     private final BigDecimal unitPrice;
 
     public GoodsReceiptLineCommand(String productId, String poDetailId, int quantity,
-                                   String batchNumber, LocalDate expiryDate, String binLocationId,
-                                   String supplierId, BigDecimal unitPrice) {
+                                   String batchNumber, LocalDate expiryDate, LocalDate manufacturedDate,
+                                   String binLocationId, String supplierId, BigDecimal unitPrice) {
         this.productId = productId;
         this.poDetailId = poDetailId;
         this.quantity = quantity;
         this.batchNumber = batchNumber;
         this.expiryDate = expiryDate;
+        this.manufacturedDate = manufacturedDate;
         this.binLocationId = binLocationId;
         this.supplierId = supplierId;
         this.unitPrice = unitPrice;
@@ -31,6 +33,7 @@ public class GoodsReceiptLineCommand {
     public int getQuantity()        { return quantity; }
     public String getBatchNumber()  { return batchNumber; }
     public LocalDate getExpiryDate(){ return expiryDate; }
+    public LocalDate getManufacturedDate(){ return manufacturedDate; }
     public String getBinLocationId(){ return binLocationId; }
     public String getSupplierId()   { return supplierId; }
     public BigDecimal getUnitPrice(){ return unitPrice; }

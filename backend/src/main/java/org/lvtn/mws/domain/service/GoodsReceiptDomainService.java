@@ -132,6 +132,7 @@ public class GoodsReceiptDomainService {
                     .quantity(line.getQuantity())
                     .batchNumber(line.getBatchNumber())
                     .expiryDate(line.getExpiryDate())
+                    .manufacturedDate(line.getManufacturedDate())
                     .binLocationId(line.getBinLocationId())
                     .supplierId(line.getSupplierId())
                     .unitPrice(line.getUnitPrice())
@@ -257,7 +258,7 @@ public class GoodsReceiptDomainService {
                 .supplierId(supplierId) // [Bán theo NCC] đóng dấu NCC lên lô
                 .quantity(detail.getQuantity())
                 .expiryDate(detail.getExpiryDate())
-                .manufacturedDate(null) // goods_receipt_details has no manufactured_date column
+                .manufacturedDate(detail.getManufacturedDate())
                 .status(InventoryBatch.Status.ACTIVE)
                 .build();
         batchRepository.save(newBatch);

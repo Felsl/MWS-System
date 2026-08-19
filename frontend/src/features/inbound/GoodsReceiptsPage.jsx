@@ -10,10 +10,11 @@ import { keepPreviousData, useQuery, useQueries, useMutation, useQueryClient } f
 import {
   Card, Button, Input, Form, Select, InputNumber, DatePicker, Row, Col,
   Table, Space, Typography, Tag, Descriptions, Empty, Divider, App as AntdApp, Alert,
+  Popover, Tooltip,
 } from 'antd'
 import {
   PlusOutlined, SearchOutlined, DeleteOutlined, CheckCircleOutlined,
-  ReloadOutlined, ArrowLeftOutlined,
+  ReloadOutlined, ArrowLeftOutlined, ArrowUpOutlined, CalendarOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import Can from '../../components/Can'
@@ -187,6 +188,7 @@ function CreateGRN({ initialPoId, onCreated }) {
         quantity: l.quantity,
         batchNumber: l.batchNumber || null,
         expiryDate: l.expiryDate ? l.expiryDate.format('YYYY-MM-DD') : null,
+        manufacturedDate: l.manufacturedDate ? l.manufacturedDate.format('YYYY-MM-DD') : null,
         binLocationId: l.binLocationId,
         supplierId: l.supplierId || null,
         unitPrice: l.unitPrice != null ? l.unitPrice : null,
@@ -251,6 +253,31 @@ function CreateGRN({ initialPoId, onCreated }) {
     form.setFieldsValue({ lines: next })
   }
 
+  // ── Nhập nhanh NSX/HSD ───────────────────────────────────────────────
+  // (a) Áp dụng hàng loạt: ghi đè NSX và/hoặc HSD cho toàn bộ dòng hiện có.
+  //     Nếu người dùng chỉ chọn 1 trong 2 ngày (để null cái còn lại) thì chỉ
+  //     ghi đè cái được chọn — tránh xoá dữ liệu đã nhập vô ý.
+  const bulkApplyDates = (nsx, hsd) => {
+    const cur = form.getFieldValue('lines') || []
+    const next = cur.map(l => ({
+      ...l,
+      ...(nsx ? { manufacturedDate: nsx } : {}),
+      ...(hsd ? { expiryDate: hsd } : {}),
+    }))
+    form.setFieldsValue({ lines: next })
+  }
+  // (b) Copy NSX+HSD (không copy số lô) từ dòng ngay TRÊN dòng đang bấm.
+  //     Số lô cố ý bỏ ra: mỗi lô thường có số riêng, copy nhầm dễ trộn tồn.
+  const copyDatesFromAbove = (index) => {
+    if (index <= 0) return
+    const cur = form.getFieldValue('lines') || []
+    const prev = cur[index - 1] || {}
+    const next = cur.map((l, i) => i === index
+      ? { ...l, manufacturedDate: prev.manufacturedDate || null, expiryDate: prev.expiryDate || null }
+      : l)
+    form.setFieldsValue({ lines: next })
+  }
+
   // Tự phân bổ MỘT LẦN khi nạp xong đơn mua + đã có danh sách ô kệ + tồn từng SP.
   const allocatedForPo = useRef(null)
   useEffect(() => {
@@ -294,19 +321,22 @@ function CreateGRN({ initialPoId, onCreated }) {
         {!warehouseId && <Typography.Text type="secondary">Chọn kho trước để nạp danh sách ô kệ.</Typography.Text>}
         {warehouseId && (
           <div style={{ marginBottom: 8 }}>
-            <Button size="small" onClick={runAllocate}
-              disabled={!bins.data?.length || !(lines || []).some(l => l?.productId && l?.quantity)}>
-              Tự phân bổ ô kệ
-            </Button>
-            <Typography.Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
-              Ưu tiên ô đã có cùng sản phẩm, tách sang ô khác khi đầy; sửa tay lại được. Không đủ chỗ sẽ hiện cảnh báo bên dưới.
+            <Space wrap size={8}>
+              <Button size="small" onClick={runAllocate}
+                disabled={!bins.data?.length || !(lines || []).some(l => l?.productId && l?.quantity)}>
+                Tự phân bổ ô kệ
+              </Button>
+              <BulkDatesPopover onApply={bulkApplyDates} />
+            </Space>
+            <Typography.Text type="secondary" style={{ fontSize: 12, marginLeft: 8, display: 'block', marginTop: 4 }}>
+              Phân bổ ô: ưu tiên ô đã có cùng sản phẩm, tách sang ô khác khi đầy; sửa tay lại được. Không đủ chỗ sẽ hiện cảnh báo bên dưới.
             </Typography.Text>
           </div>
         )}
         <Form.List name="lines">
           {(fields, { add, remove }) => (
             <>
-              {fields.map(({ key, name, ...rest }) => (
+              {fields.map(({ key, name, ...rest }, index) => (
                 <Row gutter={8} key={key} align="middle" style={{ marginBottom: 4 }}>
                   <Form.Item {...rest} name={[name, 'poDetailId']} hidden><Input /></Form.Item>
                   <Col flex="220px">
@@ -342,6 +372,11 @@ function CreateGRN({ initialPoId, onCreated }) {
                     </Form.Item>
                   </Col>
                   <Col flex="140px">
+                    <Form.Item {...rest} name={[name, 'manufacturedDate']}>
+                      <DatePicker placeholder="NSX" format="DD/MM/YYYY" style={{ width: '100%' }} />
+                    </Form.Item>
+                  </Col>
+                  <Col flex="140px">
                     <Form.Item {...rest} name={[name, 'expiryDate']}>
                       <DatePicker placeholder="HSD" format="DD/MM/YYYY" style={{ width: '100%' }} />
                     </Form.Item>
@@ -351,6 +386,13 @@ function CreateGRN({ initialPoId, onCreated }) {
                       <Select showSearch optionFilterProp="label" placeholder="Ô kệ"
                         options={binOptions} loading={bins.isFetching} disabled={!warehouseId} />
                     </Form.Item>
+                  </Col>
+                  <Col flex="40px">
+                    {/* Copy NSX+HSD (KHÔNG copy số lô) từ dòng ngay trên. Dòng đầu không có gì để copy. */}
+                    <Tooltip title="Copy NSX & HSD từ dòng trên">
+                      <Button type="text" icon={<ArrowUpOutlined />}
+                        disabled={index === 0} onClick={() => copyDatesFromAbove(index)} />
+                    </Tooltip>
                   </Col>
                   <Col flex="40px">
                     <Button danger type="text" icon={<DeleteOutlined />}
@@ -410,6 +452,7 @@ function GRNDetail({ id }) {
     { title: 'Đơn giá', dataIndex: 'unitPrice', width: 120, align: 'right', render: fmtVnd },
     { title: 'SL', dataIndex: 'quantity', width: 80, align: 'right' },
     { title: 'Số lô', dataIndex: 'batchNumber', width: 130, render: (v) => v || '—' },
+    { title: 'NSX', dataIndex: 'manufacturedDate', width: 120, render: (v) => v ? dayjs(v).format('DD/MM/YYYY') : '—' },
     { title: 'HSD', dataIndex: 'expiryDate', width: 120, render: (v) => v ? dayjs(v).format('DD/MM/YYYY') : '—' },
     { title: 'Ô kệ', dataIndex: 'binLocationId', width: 140, render: (v) => labelOf(v) },
   ]
@@ -434,5 +477,53 @@ function GRNDetail({ id }) {
       <Table style={{ marginTop: 16 }} rowKey="id" size="small" pagination={false}
         dataSource={grn.details || []} columns={columns} scroll={{ x: 'max-content' }} />
     </Card>
+  )
+}
+
+/**
+ * Popover cho phép chọn 1 cặp NSX + HSD rồi bấm "Áp dụng" để ghi đè vào TẤT CẢ
+ * dòng đang có. Nếu chỉ chọn 1 trong 2 ngày, chỉ ghi đè cái được chọn — tránh
+ * xoá dữ liệu người dùng đã nhập vô ý ở cột còn lại.
+ */
+function BulkDatesPopover({ onApply }) {
+  const [open, setOpen] = useState(false)
+  const [nsx, setNsx] = useState(null)
+  const [hsd, setHsd] = useState(null)
+
+  const canApply = !!nsx || !!hsd
+
+  const apply = () => {
+    onApply(nsx, hsd)
+    setOpen(false)
+    setNsx(null); setHsd(null)
+  }
+
+  const content = (
+    <Space direction="vertical" style={{ minWidth: 240 }}>
+      <div>
+        <div style={{ fontSize: 12, marginBottom: 4 }}>NSX (để trống = không đổi)</div>
+        <DatePicker value={nsx} onChange={setNsx} format="DD/MM/YYYY" style={{ width: '100%' }} />
+      </div>
+      <div>
+        <div style={{ fontSize: 12, marginBottom: 4 }}>HSD (để trống = không đổi)</div>
+        <DatePicker value={hsd} onChange={setHsd} format="DD/MM/YYYY" style={{ width: '100%' }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <Button size="small" onClick={() => setOpen(false)}>Huỷ</Button>
+        <Button size="small" type="primary" disabled={!canApply} onClick={apply}>
+          Áp dụng cho tất cả dòng
+        </Button>
+      </div>
+      <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+        Sẽ GHI ĐÈ giá trị hiện có ở các dòng — dùng khi cả lô nhập chung ngày.
+      </Typography.Text>
+    </Space>
+  )
+
+  return (
+    <Popover open={open} onOpenChange={setOpen} trigger="click" content={content}
+      title="Áp dụng NSX / HSD hàng loạt" placement="bottomLeft">
+      <Button size="small" icon={<CalendarOutlined />}>Áp dụng NSX/HSD hàng loạt</Button>
+    </Popover>
   )
 }

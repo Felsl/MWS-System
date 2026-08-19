@@ -64,7 +64,7 @@ public class SalesOrderController {
     }
 
     /** DRAFT -> ALLOCATED: giữ chỗ tồn kho cho từng dòng (rollback nếu thiếu). */
-    @PreAuthorize("hasAuthority('OUTBOUND_PICK')")
+    @PreAuthorize("hasAuthority('OUTBOUND_CREATE_SO')")
     @PostMapping("/{id}/allocate")
     public ResponseEntity<SalesOrderResponse> allocate(@PathVariable String id) {
         return ResponseEntity.ok(mapper.toResponse(allocateSalesOrderUseCase.execute(id)));

@@ -4,9 +4,9 @@ import { useProducts } from '../../hooks/useProducts'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Tabs, Select, Space, Typography, Tag, Empty, Button, Tooltip, theme, App as AntdApp,
+  Tabs, Select, Space, Typography, Tag, Empty, Button, Tooltip, theme, Input, App as AntdApp,
 } from 'antd'
-import { ReloadOutlined, HistoryOutlined, WarningOutlined } from '@ant-design/icons'
+import { ReloadOutlined, HistoryOutlined, WarningOutlined, SearchOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import Can from '../../components/Can'
 import { useAuth } from '../../auth/AuthContext'
@@ -115,6 +115,8 @@ function BatchView() {
   const { products, warehouses, productList } = useLookups()
   const [productId, setProductId] = useState()
   const [warehouseId, setWarehouseId] = useState()
+  // Search theo mã lô — LIKE %..%, không phân biệt hoa/thường. Bấm Search / Enter để áp.
+  const [batchKeyword, setBatchKeyword] = useState('')
 
   const enabled = !!productId && !!warehouseId
   const batches = useQuery({
@@ -122,6 +124,15 @@ function BatchView() {
     queryFn: () => inventoryApi.getBatches(productId, warehouseId),
     enabled,
   })
+
+  // Filter client-side: data đã load hết theo (product, warehouse) rồi nên không
+  // cần vòng thêm về BE — trả về ngay khi user gõ, đỡ tốn call.
+  const filteredData = (() => {
+    const rows = batches.data || []
+    const kw = batchKeyword.trim().toLowerCase()
+    if (!kw) return rows
+    return rows.filter(r => (r.batchNumber || '').toLowerCase().includes(kw))
+  })()
 
   const statusMut = useMutation({
     mutationFn: ({ batchId, status }) => inventoryApi.updateBatchStatus(batchId, status),
@@ -137,15 +148,24 @@ function BatchView() {
   const nearExpiry = (d) => d && daysLeft(d) <= EXPIRY_WARN_DAYS
 
   const columns = [
-    { title: 'Số lô', dataIndex: 'batchNumber', width: 150 },
-    // Nhà cung cấp suy ra ở BE lúc query (GRN -> PO -> supplier); '—' khi lô không
-    // truy được nguồn (tạo tay / điều chuyển / điều chỉnh, không qua phiếu nhập).
-    { title: 'Nhà cung cấp', dataIndex: 'supplierName', width: 200, ellipsis: true, render: (v) => v || '—' },
+    { title: 'Số lô', dataIndex: 'batchNumber', width: 150,
+      sorter: (a, b) => (a.batchNumber || '').localeCompare(b.batchNumber || '') },
+    // Nhà cung cấp suy ra ở BE lúc query (GRN.supplier trực tiếp hoặc qua PO -> supplier);
+    // '—' khi lô không truy được nguồn (tạo tay / điều chuyển / điều chỉnh).
+    { title: 'Nhà cung cấp', dataIndex: 'supplierName', width: 200, ellipsis: true, render: (v) => v || '—',
+      sorter: (a, b) => (a.supplierName || '').localeCompare(b.supplierName || '') },
     { title: 'Ô kệ', dataIndex: 'binLocation', width: 150, render: (v, r) => v || r.binLocationId || '—' },
     { title: 'SL', dataIndex: 'quantity', width: 90, align: 'right' },
     { title: 'NSX', dataIndex: 'manufacturedDate', width: 120, render: (v) => v ? dayjs(v).format('DD/MM/YYYY') : '—' },
     {
       title: 'HSD', dataIndex: 'expiryDate', width: 130,
+      // Sort theo timestamp; lô không có HSD (null) đẩy xuống cuối ở cả 2 chiều để
+      // không lấn chỗ lô có ngày thực — người dùng cần thấy lô cận date trước tiên.
+      sorter: (a, b) => {
+        const va = a.expiryDate ? dayjs(a.expiryDate).valueOf() : Number.POSITIVE_INFINITY
+        const vb = b.expiryDate ? dayjs(b.expiryDate).valueOf() : Number.POSITIVE_INFINITY
+        return va - vb
+      },
       render: (v) => {
         if (!v) return '—'
         const text = dayjs(v).format('DD/MM/YYYY')
@@ -182,6 +202,12 @@ function BatchView() {
         <Select showSearch optionFilterProp="label" placeholder="Chọn kho" style={{ width: 220 }}
           loading={warehouses.isLoading} value={warehouseId} onChange={setWarehouseId}
           options={(warehouses.data || []).map(w => ({ value: w.id, label: `${w.name} (${w.code})` }))} />
+        {enabled && (
+          <Input.Search allowClear placeholder="Tìm theo mã lô"
+            prefix={<SearchOutlined />} style={{ width: 220 }}
+            onSearch={(v) => setBatchKeyword(v || '')}
+            onChange={(e) => { if (!e.target.value) setBatchKeyword('') }} />
+        )}
         {enabled && <Button icon={<ReloadOutlined />} onClick={() => batches.refetch()} loading={batches.isFetching} />}
         {productId && hasPermission(P.AUDIT_VIEW_MOVEMENTS) && (
           <Link to={`/stock-movements?productId=${productId}${warehouseId ? `&warehouseId=${warehouseId}` : ''}`}><HistoryOutlined /> Thẻ kho SP này</Link>
@@ -189,7 +215,7 @@ function BatchView() {
       </Space>
       {!enabled
         ? <Empty description="Chọn sản phẩm và kho để xem lô" />
-        : <FitTable rowKey="id" loading={batches.isLoading} dataSource={batches.data || []} columns={columns}
+        : <FitTable rowKey="id" loading={batches.isLoading} dataSource={filteredData} columns={columns}
             scroll={{ x: 'max-content' }} pagination={{ pageSize: 20 }} />}
       {enabled && !canAdjust && (
         <Typography.Text type="secondary">* Cần quyền INVENTORY_ADJUST để niêm phong / mở lô.</Typography.Text>

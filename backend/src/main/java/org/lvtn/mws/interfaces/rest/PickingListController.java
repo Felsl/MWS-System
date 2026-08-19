@@ -46,7 +46,7 @@ public class PickingListController {
     }
 
     /** Sinh lệnh gom hàng theo FEFO cho đơn đã ALLOCATED; chuyển SO -> PICKING. */
-    @PreAuthorize("hasAuthority('OUTBOUND_PICK')")
+    @PreAuthorize("hasAuthority('OUTBOUND_CREATE_SO')")
     @PostMapping
     public ResponseEntity<PickingListResponse> create(@Valid @RequestBody CreatePickingListRequest req) {
         var pl = createPickingListUseCase.execute(req.soId());
@@ -64,7 +64,7 @@ public class PickingListController {
     }
 
     /** Giao việc cho nhân viên kho (PENDING -> PICKING). */
-    @PreAuthorize("hasAuthority('OUTBOUND_PICK')")
+    @PreAuthorize("hasAuthority('INBOUND_SUBMIT_PO')")
     @PostMapping("/{id}/assign")
     public ResponseEntity<PickingListResponse> assign(@PathVariable String id,
                                                       @Valid @RequestBody AssignPickingRequest req) {

@@ -365,13 +365,13 @@ function SODetail({ id }) {
       extra={
         <Space wrap>
           {s === 'DRAFT' && (
-            <Can permission={P.OUTBOUND_PICK}>
+            <Can permission={P.OUTBOUND_CREATE_SO}>
               <Button type="primary" icon={<ThunderboltOutlined />} loading={allocateMut.isPending}
                 onClick={() => allocateMut.mutate()}>Phân bổ tồn</Button>
             </Can>
           )}
           {s === 'ALLOCATED' && (
-            <Can permission={P.OUTBOUND_PICK}>
+            <Can permission={P.OUTBOUND_CREATE_SO}>
               <Button type="primary" icon={<ProfileOutlined />} loading={createPickMut.isPending}
                 onClick={() => createPickMut.mutate()}>Tạo lệnh lấy hàng</Button>
             </Can>
