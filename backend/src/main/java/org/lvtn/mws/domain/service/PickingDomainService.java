@@ -23,18 +23,21 @@ public class PickingDomainService {
     private final IPickingListRepository pickingRepository;
     private final IUserRepository userRepository;
     private final ISalesOrderRepository soRepository;
+    private final ITransferOrderRepository transferRepository;
     private final IInventoryBatchRepository batchRepository;
     private final IStockMovementRepository stockMovementRepository;
     private final IIdGenerator idGenerator;
 
     public PickingDomainService(IPickingListRepository pickingRepository,
                                 ISalesOrderRepository soRepository,
+                                ITransferOrderRepository transferRepository,
                                 IInventoryBatchRepository batchRepository,
                                 IStockMovementRepository stockMovementRepository,
                                 IIdGenerator idGenerator,
                                 IUserRepository iUserRepository) {
         this.pickingRepository       = pickingRepository;
         this.soRepository            = soRepository;
+        this.transferRepository      = transferRepository;
         this.batchRepository         = batchRepository;
         this.stockMovementRepository = stockMovementRepository;
         this.userRepository          = iUserRepository;
@@ -170,10 +173,19 @@ public class PickingDomainService {
 
         // (3) Tự bù phần thiếu từ lô FEFO kế tiếp
         if (shortfall > 0) {
-            SalesOrder so = soRepository.findById(pl.getSoId())
-                    .orElseThrow(() -> new IllegalStateException(
-                            "Không tìm thấy đơn của lệnh gom: " + pl.getSoId()));
-            String warehouseId = so.getWarehouseId();
+            // Kho nguồn để bù thiếu: đơn bán -> kho của SO; điều chuyển -> kho nguồn của phiếu chuyển.
+            final String warehouseId;
+            if (pl.getSoId() != null) {
+                warehouseId = soRepository.findById(pl.getSoId())
+                        .orElseThrow(() -> new IllegalStateException(
+                                "Không tìm thấy đơn của lệnh gom: " + pl.getSoId()))
+                        .getWarehouseId();
+            } else {
+                warehouseId = transferRepository.findById(pl.getTransferOrderId())
+                        .orElseThrow(() -> new IllegalStateException(
+                                "Không tìm thấy phiếu chuyển của lệnh gom: " + pl.getTransferOrderId()))
+                        .getFromWarehouseId();
+            }
 
             // Tổng số đã phân bổ cho lệnh này theo từng lô (gồm cả lô vừa thiếu -> tự loại trừ)
             Map<String, Integer> allocatedByBatch = new HashMap<>();

@@ -5,6 +5,7 @@ public record AdjustmentVoucherDetailResponse(
         String voucherId,
         String productId,
         String batchId,
+        String batchNumber,
         String binLocationId,
         int quantityChange,
         int beforeQuantity,

@@ -9,5 +9,6 @@ public record StocktakeSessionResponse(
         LocalDateTime freezeStartedAt,
         LocalDateTime freezeEndedAt,
         String createdBy,
+        String createdByName,
         LocalDateTime createdAt) {
 }

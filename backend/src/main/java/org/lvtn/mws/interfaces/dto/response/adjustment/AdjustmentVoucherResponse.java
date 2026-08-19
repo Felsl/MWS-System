@@ -11,7 +11,9 @@ public record AdjustmentVoucherResponse(
         String reason,
         String status,
         String createdBy,
+        String createdByName,
         String approvedBy,
+        String approvedByName,
         LocalDateTime createdAt,
         double maxVariancePercent,
         List<AdjustmentVoucherDetailResponse> details) {

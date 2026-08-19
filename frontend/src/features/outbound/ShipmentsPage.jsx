@@ -63,7 +63,7 @@ function SHList({ onOpen, onCreate }) {
   const columns = [
     { title: 'Mã vận đơn', dataIndex: 'shipmentNumber', render: (v, r) => <RowLink onClick={() => onOpen(r.id)}>{v || r.id}</RowLink> },
     { title: 'Trạng thái', dataIndex: 'status', width: 130, render: shTag },
-    { title: 'Đơn bán', dataIndex: 'salesOrderId', render: (v) => v || '—' },
+    { title: 'Đơn bán', dataIndex: 'salesOrderId', render: (v, r) => r.salesOrderNumber || v || '—' },
     { title: 'ĐVVC', dataIndex: 'carrierId', width: 150, render: (v) => carrierMap[v]?.name || v || '—' },
     { title: 'Mã tracking', dataIndex: 'trackingNumber', width: 150, render: (v) => v || '—' },
     { title: 'Xuất lúc', dataIndex: 'shippedAt', width: 150, render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
@@ -163,8 +163,8 @@ function SHDetail({ id }) {
     >
       <Descriptions size="small" column={{ xs: 1, sm: 2 }} bordered
         items={[
-          { key: 'so', label: 'Đơn bán', children: sh.salesOrderId || '—' },
-          { key: 'to', label: 'Phiếu điều chuyển', children: sh.transferOrderId || '—' },
+          { key: 'so', label: 'Đơn bán', children: sh.salesOrderNumber || sh.salesOrderId || '—' },
+          { key: 'to', label: 'Phiếu điều chuyển', children: sh.transferNumber || sh.transferOrderId || '—' },
           { key: 'ca', label: 'ĐVVC', children: carrierMap[sh.carrierId]?.name || sh.carrierId || '—' },
           { key: 'tr', label: 'Mã tracking', children: sh.trackingNumber || '—' },
           { key: 'sp', label: 'Xuất lúc', children: sh.shippedAt ? dayjs(sh.shippedAt).format('DD/MM/YYYY HH:mm') : '—' },

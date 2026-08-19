@@ -11,6 +11,7 @@ public record PickingListDetailResponse(
         String requiredBatchId,
         String actualBatchId,
         String binLocationId,
+        String binLocationLabel,
         int quantityToPick,
         int quantityPicked,
         boolean confirmed,

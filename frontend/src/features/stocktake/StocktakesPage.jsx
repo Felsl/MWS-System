@@ -79,7 +79,7 @@ function STList({ onOpen, onCreate }) {
     { title: 'Trạng thái', dataIndex: 'status', sorter: true, sortOrder: columnSortOrder(sorter, 'status'), width: 150, render: stTag },
     { title: 'Kho', dataIndex: 'warehouseId', render: (v) => warehouseMap[v]?.name || v },
     { title: 'Đóng băng từ', dataIndex: 'freezeStartedAt', sorter: true, sortOrder: columnSortOrder(sorter, 'freezeStartedAt'), width: 160, render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
-    { title: 'Người tạo', dataIndex: 'createdBy', width: 130 },
+    { title: 'Người tạo', dataIndex: 'createdBy', width: 130, render: (v, r) => r.createdByName || v || '—' },
     { title: 'Tạo lúc', dataIndex: 'createdAt', sorter: true, sortOrder: columnSortOrder(sorter, 'createdAt'), width: 150, render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
   ]
   return (
@@ -169,7 +169,7 @@ function STDetail({ id }) {
   const columns = [
     { title: 'Sản phẩm', dataIndex: 'productId', render: (pid) => productMap[pid]?.name || pid },
     { title: 'Ô kệ', dataIndex: 'binLocationId', width: 130, render: (v) => labelOf(v) },
-    { title: 'Lô', dataIndex: 'batchId', width: 120, render: (v) => v || '—' },
+    { title: 'Lô', dataIndex: 'batchId', width: 120, render: (v, r) => r.batchNumber || v || '—' },
     { title: 'Tồn hệ thống', dataIndex: 'systemQuantity', width: 110, align: 'right' },
     { title: 'Đếm thực', dataIndex: 'countedQuantity', width: 100, align: 'right', render: (v) => v ?? '—' },
     {
@@ -225,7 +225,7 @@ function STDetail({ id }) {
       <Descriptions size="small" column={{ xs: 1, sm: 2, md: 3 }} bordered
         items={[
           { key: 'wh', label: 'Kho', children: warehouseMap[session.warehouseId]?.name || session.warehouseId },
-          { key: 'cb', label: 'Người tạo', children: session.createdBy || '—' },
+          { key: 'cb', label: 'Người tạo', children: session.createdByName || session.createdBy || '—' },
           { key: 'fs', label: 'Đóng băng từ', children: session.freezeStartedAt ? dayjs(session.freezeStartedAt).format('DD/MM/YYYY HH:mm') : '—' },
           { key: 'fe', label: 'Mở băng lúc', children: session.freezeEndedAt ? dayjs(session.freezeEndedAt).format('DD/MM/YYYY HH:mm') : '—' },
         ]} />

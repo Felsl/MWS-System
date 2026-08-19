@@ -79,13 +79,14 @@ public class DomainServiceConfig {
     public PickingDomainService pickingDomainService(
             IPickingListRepository pickingListRepository,
             ISalesOrderRepository salesOrderRepository,
+            ITransferOrderRepository transferOrderRepository,
             IInventoryBatchRepository inventoryBatchRepository,
             IStockMovementRepository stockMovementRepository,
             IIdGenerator idGenerator,
             IUserRepository iUserRepository
     ) {
         return new PickingDomainService(
-                pickingListRepository, salesOrderRepository, inventoryBatchRepository,
+                pickingListRepository, salesOrderRepository,transferOrderRepository, inventoryBatchRepository,
                 stockMovementRepository, idGenerator,iUserRepository);
     }
 

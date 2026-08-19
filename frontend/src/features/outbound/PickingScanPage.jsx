@@ -65,7 +65,7 @@ function PickPicker({ onPick }) {
                   <List.Item.Meta
                     title={<b>{p.pickNumber || p.id}</b>}
                     description={<Tag color={PL_STATUS[p.status]?.color}>{PL_STATUS[p.status]?.label || p.status}</Tag>} />
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>SO: {numberOf(p.soId)}</Typography.Text>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>{p.soId ? `SO: ${p.soNumber || numberOf(p.soId)}` : `TO: ${p.transferNumber || p.transferOrderId || '—'}`}</Typography.Text>
                 </List.Item>
               )} />}
       </Card>
@@ -143,8 +143,9 @@ function ScanRunner({ pickId, onBack }) {
 
   // Sắp theo toạ độ ô kệ: thủ kho đi theo tuyến đường trong kho, không đi theo
   // thứ tự BE trả về. Sắp xếp ở FE nên không ảnh hưởng logic BE.
+  const binLabel = (d) => d.binLocationLabel || labelOf(d.binLocationId)
   const details = [...(pl.details || [])].sort((a, b) =>
-    String(labelOf(a.binLocationId)).localeCompare(String(labelOf(b.binLocationId)), 'vi', { numeric: true }))
+    String(binLabel(a)).localeCompare(String(binLabel(b)), 'vi', { numeric: true }))
 
   const done = details.filter(d => d.confirmed).length
   const pending = details.filter(d => !d.confirmed)
@@ -194,7 +195,7 @@ function ScanRunner({ pickId, onBack }) {
             )}
             {/* Ô kệ và số lượng là 2 thứ người lấy hàng nhìn nhiều nhất => cho to hẳn */}
             <Space size="large" style={{ marginTop: 6, fontSize: 14 }} wrap>
-              <span>Ô kệ: <b style={{ fontSize: 18 }}>{labelOf(current.binLocationId)}</b></span>
+              <span>Ô kệ: <b style={{ fontSize: 18 }}>{binLabel(current)}</b></span>
               <span>SL: <b style={{ fontSize: 18 }}>{current.quantityToPick}</b></span>
               {(current.batchNumber || current.batchId) && <span style={{ fontSize: 12 }}>Lô: {current.batchNumber || current.batchId}</span>}
             </Space>
@@ -233,7 +234,7 @@ function ScanRunner({ pickId, onBack }) {
               onClick={() => { if (!d.confirmed) { setActiveId(d.id); refocus() } }}>
               <List.Item.Meta
                 title={productMap[d.productId]?.name || d.productId}
-                description={`Ô ${labelOf(d.binLocationId)} · SL ${d.quantityToPick}`} />
+                description={`Ô ${binLabel(d)} · SL ${d.quantityToPick}`} />
               {d.confirmed
                 ? <Tag color="green">Đã lấy</Tag>
                 : isCurrent ? <Tag color="blue">Đang quét</Tag> : <Tag>Chưa</Tag>}

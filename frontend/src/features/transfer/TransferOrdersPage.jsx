@@ -6,6 +6,7 @@ import FitTable from '../../components/FitTable'
 import { useEffect, useMemo, useState } from 'react'
 import { useProducts } from '../../hooks/useProducts'
 import { useRecordView } from '../../hooks/useRecordView'
+import { useNavigate } from 'react-router-dom'
 import { useListParams } from '../../hooks/useListParams'
 import { keepPreviousData, useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -117,9 +118,9 @@ function TOList({ onOpen, onCreate }) {
   const columns = [
     { title: 'Mã phiếu', dataIndex: 'transferNumber', sorter: true, sortOrder: columnSortOrder(sorter, 'transferNumber'), render: (v, r) => <RowLink onClick={() => onOpen(r.id)}>{v || r.id}</RowLink> },
     { title: 'Trạng thái', dataIndex: 'status', sorter: true, sortOrder: columnSortOrder(sorter, 'status'), width: 140, render: toTag },
-    { title: 'Kho nguồn', dataIndex: 'fromWarehouseId', render: (v) => warehouseMap[v]?.name || v },
-    { title: 'Kho đích', dataIndex: 'toWarehouseId', render: (v) => warehouseMap[v]?.name || v },
-    { title: 'Người tạo', dataIndex: 'createdBy', width: 130 },
+    { title: 'Kho nguồn', dataIndex: 'fromWarehouseId', render: (v, r) => r.fromWarehouseName || warehouseMap[v]?.name || v },
+    { title: 'Kho đích', dataIndex: 'toWarehouseId', render: (v, r) => r.toWarehouseName || warehouseMap[v]?.name || v },
+    { title: 'Người tạo', dataIndex: 'createdBy', width: 130, render: (v, r) => r.createdByName || v || '—' },
     { title: 'Tạo lúc', dataIndex: 'createdAt', sorter: true, sortOrder: columnSortOrder(sorter, 'createdAt'), width: 150, render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
   ]
   return (
@@ -335,6 +336,7 @@ function CreateTO({ onCreated }) {
 
 function TODetail({ id }) {
   const { message } = AntdApp.useApp()
+  const navigate = useNavigate()
   const { user } = useAuth()
   const qc = useQueryClient()
   const { warehouseMap } = useNameMaps()
@@ -377,7 +379,7 @@ function TODetail({ id }) {
     },
     { title: 'SL nhận', dataIndex: 'quantityReceived', width: 90, align: 'right' },
     { title: 'Hao hụt', dataIndex: 'lostQuantity', width: 90, align: 'right', render: (v) => v > 0 ? <Tag color="red">{v}</Tag> : v },
-    { title: 'Ô kệ đích', dataIndex: 'binLocationId', width: 140, render: (v) => (v ? (binMapDest[v] || v) : '—') },
+    { title: 'Ô kệ đích', dataIndex: 'binLocationId', width: 140, render: (v, r) => (v ? (r.binLocationLabel || binMapDest[v] || v) : '—') },
   ]
 
   return (
@@ -406,8 +408,18 @@ function TODetail({ id }) {
           )}
           {s === 'APPROVED' && (
             <Can permission={P.TRANSFER_DISPATCH}>
-              <Button type="primary" icon={<ProfileOutlined />} loading={genPickMut.isPending}
+              {/* Phiếu mới duyệt xong đã tự có lệnh lấy (PICKING). Nút này chỉ dùng cho phiếu CŨ còn kẹt ở APPROVED. */}
+              <Button icon={<ProfileOutlined />} loading={genPickMut.isPending}
                 onClick={() => genPickMut.mutate()}>Tạo lệnh gom hàng</Button>
+            </Can>
+          )}
+          {s === 'PICKING' && (
+            <Can permission={P.TRANSFER_DISPATCH}>
+              {to.pickingListId && (
+                <Button icon={<ProfileOutlined />}
+                  onClick={() => navigate(`/picking-lists/${to.pickingListId}`)}>Mở lệnh lấy hàng</Button>
+              )}
+              <Button type="primary" icon={<CarOutlined />} onClick={() => setDispatchOpen(true)}>Xuất chuyển</Button>
             </Can>
           )}
           {s === 'IN_TRANSIT' && (
@@ -429,10 +441,10 @@ function TODetail({ id }) {
     >
       <Descriptions size="small" column={{ xs: 1, sm: 2, md: 3 }} bordered
         items={[
-          { key: 'from', label: 'Kho nguồn', children: warehouseMap[to.fromWarehouseId]?.name || to.fromWarehouseId },
-          { key: 'to', label: 'Kho đích', children: warehouseMap[to.toWarehouseId]?.name || to.toWarehouseId },
-          { key: 'cb', label: 'Người tạo', children: to.createdBy || '—' },
-          { key: 'ab', label: 'Người duyệt', children: to.approvedBy || '—' },
+          { key: 'from', label: 'Kho nguồn', children: to.fromWarehouseName || warehouseMap[to.fromWarehouseId]?.name || to.fromWarehouseId },
+          { key: 'to', label: 'Kho đích', children: to.toWarehouseName || warehouseMap[to.toWarehouseId]?.name || to.toWarehouseId },
+          { key: 'cb', label: 'Người tạo', children: to.createdByName || to.createdBy || '—' },
+          { key: 'ab', label: 'Người duyệt', children: to.approvedByName || to.approvedBy || '—' },
           { key: 'aa', label: 'Duyệt lúc', children: to.approvedAt ? dayjs(to.approvedAt).format('DD/MM/YYYY HH:mm') : '—' },
           { key: 'ca', label: 'Tạo lúc', children: to.createdAt ? dayjs(to.createdAt).format('DD/MM/YYYY HH:mm') : '—' },
         ]} />
@@ -440,8 +452,10 @@ function TODetail({ id }) {
         dataSource={to.details || []} columns={columns} scroll={{ x: 'max-content' }} />
 
       {s === 'PICKING' && (
-        <TransferPickingPanel transferId={id} fromWarehouseId={to.fromWarehouseId}
-          productMap={productMap} onDispatch={() => setDispatchOpen(true)} />
+        <Typography.Paragraph type="secondary" style={{ marginTop: 16 }}>
+          Gom hàng (gán người lấy · quét/xác nhận · báo thiếu) nay thực hiện trong màn <b>Lệnh lấy hàng</b> chung với đơn bán.
+          Bấm <b>Mở lệnh lấy hàng</b> ở trên để xử lý; gom xong quay lại bấm <b>Xuất chuyển</b>.
+        </Typography.Paragraph>
       )}
 
       <DispatchModal open={dispatchOpen} onClose={() => setDispatchOpen(false)} toId={id} onDone={refresh} />
@@ -461,7 +475,7 @@ function TransferPickingPanel({ transferId, fromWarehouseId, productMap, onDispa
 
   const columns = [
     { title: 'Sản phẩm', dataIndex: 'productId', render: (pid) => productMap[pid]?.name || pid },
-    { title: 'Ô kệ', dataIndex: 'binLocationId', width: 130, render: (v) => (v ? (binMap[v] || v) : '—') },
+    { title: 'Ô kệ', dataIndex: 'binLocationId', width: 130, render: (v, r) => (v ? (r.binLocationLabel || binMap[v] || v) : '—') },
     {
       title: 'Yêu cầu lô', dataIndex: 'requiredBatchId', width: 160,
       render: (v) => v ? <Tag color="purple" icon={<LockOutlined />}>{batchMap[v] || v}</Tag> : <Tag>Lô ACTIVE bất kỳ</Tag>,
@@ -523,7 +537,7 @@ function TransferScanModal({ open, onClose, transferId, productMap, binMap = {},
           <div style={{ marginBottom: 8 }}>
             <div style={{ fontWeight: 600 }}>{productMap[current.productId]?.name || current.productId}</div>
             <Space size="large" style={{ fontSize: 13 }}>
-              <span>Ô kệ: <b>{binMap[current.binLocationId] || current.binLocationId}</b></span>
+              <span>Ô kệ: <b>{current.binLocationLabel || binMap[current.binLocationId] || current.binLocationId}</b></span>
               <span>SL: <b>{current.quantityToPick}</b></span>
             </Space>
             <div style={{ marginTop: 4 }}>

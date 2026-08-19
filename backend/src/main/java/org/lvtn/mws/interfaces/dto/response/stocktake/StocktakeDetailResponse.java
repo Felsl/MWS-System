@@ -8,6 +8,7 @@ public record StocktakeDetailResponse(
         String productId,
         String binLocationId,
         String batchId,
+        String batchNumber,
         int systemQuantity,
         Integer countedQuantity,
         Integer difference,

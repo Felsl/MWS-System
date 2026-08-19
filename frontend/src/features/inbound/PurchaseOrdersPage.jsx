@@ -263,7 +263,7 @@ function POList({ onOpen, onCreate }) {
           pageSize: pageData?.size ?? 20,
           total: pageData?.totalElements ?? 0,
           showSizeChanger: true,
-          showTotal: (t) => `Tổng ${t}`,
+          showTotal: (t) => `Tổng ${t} đơn`,
           onChange: (p, s) => setPager(p - 1, s),
         }}
       />

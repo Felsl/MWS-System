@@ -71,7 +71,7 @@ function AVList({ onOpen }) {
     { title: 'Kho', dataIndex: 'warehouseId', render: (v) => warehouseMap[v]?.name || v },
     { title: 'Phiên kiểm kê', dataIndex: 'sessionId', render: (v) => v || '—' },
     { title: 'Lý do', dataIndex: 'reason', render: (v) => v || '—' },
-    { title: 'Người tạo', dataIndex: 'createdBy', width: 120 },
+    { title: 'Người tạo', dataIndex: 'createdBy', width: 120, render: (v, r) => r.createdByName || v || '—' },
     { title: 'Tạo lúc', dataIndex: 'createdAt', sorter: true, sortOrder: columnSortOrder(sorter, 'createdAt'), width: 150, render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
   ]
   return (
@@ -120,7 +120,7 @@ function AVDetail({ id }) {
   const columns = [
     { title: 'Sản phẩm', dataIndex: 'productId', render: (pid) => productMap[pid]?.name || pid },
     { title: 'Ô kệ', dataIndex: 'binLocationId', width: 130, render: (v) => labelOf(v) },
-    { title: 'Lô', dataIndex: 'batchId', width: 120, render: (v) => v || '—' },
+    { title: 'Lô', dataIndex: 'batchId', width: 120, render: (v, r) => r.batchNumber || v || '—' },
     { title: 'Tồn trước', dataIndex: 'beforeQuantity', width: 100, align: 'right' },
     { title: 'Thay đổi', dataIndex: 'quantityChange', width: 100, align: 'right',
       render: (v) => <Tag color={v === 0 ? 'default' : v > 0 ? 'green' : 'red'}>{v > 0 ? `+${v}` : v}</Tag> },
@@ -146,8 +146,8 @@ function AVDetail({ id }) {
           { key: 'wh', label: 'Kho', children: warehouseMap[av.warehouseId]?.name || av.warehouseId },
           { key: 'ss', label: 'Phiên kiểm kê', children: av.sessionId || '—' },
           { key: 're', label: 'Lý do', children: av.reason || '—' },
-          { key: 'cb', label: 'Người tạo', children: av.createdBy || '—' },
-          { key: 'ab', label: 'Người duyệt', children: av.approvedBy || '—' },
+          { key: 'cb', label: 'Người tạo', children: av.createdByName || av.createdBy || '—' },
+          { key: 'ab', label: 'Người duyệt', children: av.approvedByName || av.approvedBy || '—' },
           { key: 'ca', label: 'Tạo lúc', children: av.createdAt ? dayjs(av.createdAt).format('DD/MM/YYYY HH:mm') : '—' },
         ]} />
       <Table style={{ marginTop: 16 }} rowKey="id" size="small" pagination={false}

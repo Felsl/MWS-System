@@ -61,8 +61,11 @@ function PLList({ onOpen, onCreate }) {
   const columns = [
     { title: 'Mã lệnh', dataIndex: 'pickNumber', render: (_, r) => <RowLink onClick={() => onOpen(r.id)}>{r.pickNumber || r.id}</RowLink> },
     { title: 'Trạng thái', dataIndex: 'status', width: 130, render: plTag },
-    // /sales-orders/<id> là URL THẬT nên dùng <Link> (mở tab mới được), không RowLink.
-    { title: 'Đơn bán (SO)', dataIndex: 'soId', render: (v) => v ? <Link to={`/sales-orders/${v}`}>{numberOf(v)}</Link> : '—' },
+    // Nguồn của lệnh: đơn bán (SO) HOẶC phiếu điều chuyển — dùng chung một danh sách.
+    { title: 'Nguồn', key: 'source', render: (_, r) => r.soId
+        ? <Link to={`/sales-orders/${r.soId}`}>{r.soNumber || numberOf(r.soId)}</Link>
+        : <Link to={`/purchase-orders/${r.toId}`}>{r.transferNumber || numberOf(r.transferOrderId)}</Link>
+       },
     { title: 'Người lấy', dataIndex: 'assignedToName', width: 140, render: (v, r) => v || r.assignedTo || '—' },
     { title: 'Bắt đầu', dataIndex: 'startedAt', width: 150, render: (v) => v ? dayjs(v).format('DD/MM/YYYY HH:mm') : '—' },
   ]
@@ -133,7 +136,7 @@ function PLDetail({ id }) {
 
   const columns = [
     { title: 'Sản phẩm', dataIndex: 'productId', render: (pid) => productMap[pid]?.name || pid },
-    { title: 'Ô kệ', dataIndex: 'binLocationId', width: 130, render: (v) => labelOf(v) },
+    { title: 'Ô kệ', dataIndex: 'binLocationId', width: 130, render: (v, r) => r.binLocationLabel || labelOf(v) },
     { title: 'Lô cần lấy', dataIndex: 'batchNumber', width: 130, render: (v, r) => v || r.batchId || '—' },
     { title: 'Lô thực lấy', dataIndex: 'actualBatchId', width: 130, render: (v) => v || '—' },
     { title: 'SL cần', dataIndex: 'quantityToPick', width: 90, align: 'right' },
@@ -166,7 +169,7 @@ function PLDetail({ id }) {
         items={[
           {
             key: 'so', label: 'Đơn bán',
-            children: pl.soId ? <Link to={`/sales-orders/${pl.soId}`}>{numberOf(pl.soId)}</Link> : '—',
+            children: pl.soId ? <Link to={`/sales-orders/${pl.soId}`}>{pl.soNumber || numberOf(pl.soId)}</Link> : '—',
           },
           { key: 'as', label: 'Người lấy', children: pl.assignedToName || pl.assignedTo || '— (chưa gán)' },
           { key: 'st', label: 'Bắt đầu', children: pl.startedAt ? dayjs(pl.startedAt).format('DD/MM/YYYY HH:mm') : '—' },
